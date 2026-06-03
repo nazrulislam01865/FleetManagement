@@ -13,11 +13,11 @@
         </x-fleetman.topbar>
 
         <x-fleetman.title-card
-            title="Add Trip - Large List Optimized"
-            subtitle="Designed for 30+ vehicles and 70+ drivers. Instead of long dropdowns, it uses searchable selectors with recent picks."
+            title="Add Trip"
+            subtitle="Create trips dynamically using saved vehicles from the vehicle table and saved drivers from the driver table."
         >
             <x-slot:action>
-                <button type="button" class="btn secondary" id="loadTripSampleBtn">Use sample data</button>
+                <button type="button" class="btn secondary" id="loadTripSampleBtn">Use existing trip data</button>
             </x-slot:action>
         </x-fleetman.title-card>
 
@@ -25,7 +25,7 @@
             <div>
                 <x-fleetman.section-card
                     title="1. Basic Trip Information"
-                    description="For large master lists, vehicle and driver are chosen through a searchable selector. This is faster and cleaner than a very long dropdown."
+                    description="Vehicle and driver selectors are populated from your saved vehicle and driver tables."
                 >
                     <div class="grid3">
                         <x-fleetman.input id="tripId" label="Trip ID" required readonly />
@@ -37,7 +37,7 @@
                         <label>Vehicle <span class="req">*</span></label>
                         <div class="picker-field">
                             <div class="picker-value" id="tripVehicleSummary">
-                                <div><b>No vehicle selected</b><small>Tap the button to search and choose from many vehicles</small></div>
+                                <div><b>No vehicle selected</b><small>Tap the button to search and choose from saved vehicles</small></div>
                             </div>
                             <button type="button" class="btn secondary" id="selectTripVehicleBtn">Select Vehicle</button>
                         </div>
@@ -48,7 +48,7 @@
                         <label>Driver <span class="req">*</span></label>
                         <div class="picker-field">
                             <div class="picker-value" id="tripDriverSummary">
-                                <div><b>No driver selected</b><small>Tap the button to search and choose from many drivers</small></div>
+                                <div><b>No driver selected</b><small>Tap the button to search and choose from saved drivers</small></div>
                             </div>
                             <button type="button" class="btn secondary" id="selectTripDriverBtn">Select Driver</button>
                         </div>
@@ -119,13 +119,12 @@
             </div>
 
             <aside>
-                <x-fleetman.side-note title="Best UX when lists become large">
+                <x-fleetman.side-note title="Dynamic trip assignment">
                     <ul>
-                        <li><b>Do not use long dropdowns</b> for 30+ vehicles or 70+ drivers.</li>
-                        <li>Use a <b>searchable selector / bottom sheet</b>.</li>
-                        <li>Keep <b>recent selections</b> visible for faster reuse.</li>
-                        <li>Use <b>compact list rows</b>, not giant cards, when the dataset grows.</li>
-                        <li>Server-side search and pagination can be added later without changing this UI structure.</li>
+                        <li><b>Vehicles</b> are loaded from the saved vehicle table.</li>
+                        <li><b>Drivers</b> are loaded from the saved driver table.</li>
+                        <li>Use the searchable selector when the saved list becomes large.</li>
+                        <li>Recent selections stay visible for faster repeat trip entry.</li>
                     </ul>
                 </x-fleetman.side-note>
                 <div class="required-box"><b>Required before save:</b><br>Trip ID, start date, end date, vehicle, driver, status, trip around, trip period, odo start, and details.</div>
@@ -150,7 +149,7 @@
 
         <x-fleetman.title-card
             title="Trip List"
-            subtitle="A simple list page with sample trip data, quick search, filters, and common actions. Suitable for office and mobile review."
+            subtitle="Saved trips with quick search, filters, export, and edit/delete actions."
         >
             <x-slot:action>
                 <div class="pillbar"><div class="pill active">All Trips</div><div class="pill">Running</div><div class="pill">Completed</div></div>

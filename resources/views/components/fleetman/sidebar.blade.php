@@ -19,14 +19,54 @@
             <div class="menu-title">{{ $group['title'] }}</div>
             @foreach ($group['items'] as $item)
                 @php
+                    $children = $item['children'] ?? [];
+                    $hasChildren = count($children) > 0;
+                    $isChildActive = false;
+
+                    foreach ($children as $child) {
+                        if ($activeMenu === ($child['key'] ?? null)) {
+                            $isChildActive = true;
+                            break;
+                        }
+                    }
+
                     $isActive = $activeMenu === $item['key'];
+                    $isOpen = $isActive || $isChildActive;
                     $href = ! empty($item['route']) && Route::has($item['route']) ? route($item['route']) : '#';
                 @endphp
-                <a href="{{ $href }}" class="menu-item {{ $isActive ? 'active' : '' }}">
-                    <span>{{ $item['icon'] }}</span>
-                    <span>{{ $item['label'] }}</span>
-                </a>
+
+                <div class="menu-block {{ $isOpen ? 'open' : '' }}">
+                    <a href="{{ $href }}" class="menu-item {{ $isOpen ? 'active' : '' }} {{ $hasChildren ? 'has-children' : '' }}">
+                        <span>{{ $item['icon'] }}</span>
+                        <span>{{ $item['label'] }}</span>
+                        @if($hasChildren)
+                            <span class="submenu-arrow">▾</span>
+                        @endif
+                    </a>
+
+                    @if($hasChildren)
+                        <div class="submenu">
+                            @foreach($children as $child)
+                                @php
+                                    $childHref = ! empty($child['route']) && Route::has($child['route']) ? route($child['route']) : '#';
+                                    $childActive = $activeMenu === ($child['key'] ?? null);
+                                @endphp
+                                <a href="{{ $childHref }}" class="submenu-item {{ $childActive ? 'active' : '' }}">
+                                    <span>{{ $child['icon'] ?? '↳' }}</span>
+                                    <span>{{ $child['label'] }}</span>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
             @endforeach
         @endforeach
     </nav>
+
+    @auth
+        <form method="POST" action="{{ route('logout') }}" class="logout-form logout-form-bottom">
+            @csrf
+            <button type="submit">↪ Logout</button>
+        </form>
+    @endauth
 </aside>

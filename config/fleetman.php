@@ -26,6 +26,74 @@ for ($i = 0; $i < 72; $i++) {
     ];
 }
 
+
+$fuelRechargeContracts = [
+    'CN-2026-011 | Metro Logistics',
+    'CN-2026-017 | City Transport Support',
+    'CN-2026-021 | North Zone Delivery',
+];
+$fuelRechargeCars = [
+    'Dhaka Metro-SA-12-0117',
+    'Dhaka Metro-TA-19-3364',
+    'Dhaka Metro-GA-22-2210',
+    'Dhaka Metro-KHA-18-4302',
+    'Dhaka Metro-NA-14-1456',
+    'Dhaka Pickup 01',
+    'Airport Van 02',
+];
+$fuelRechargeDrivers = [
+    'Md. Karim',
+    'Shahidul Islam',
+    'Rafiq Ahmed',
+    'Kamal Hossain',
+    'Jahangir Alam',
+    'Shafiqur Rahman',
+    'Mizanur Rahman',
+];
+$fuelRechargeSamples = [];
+$fuelRechargeDates = [];
+foreach (range(1, 31) as $day) {
+    $fuelRechargeDates[] = '2026-05-' . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
+}
+foreach (range(1, 3) as $day) {
+    $fuelRechargeDates[] = '2026-06-' . str_pad((string) $day, 2, '0', STR_PAD_LEFT);
+}
+foreach ($fuelRechargeDates as $dateIndex => $date) {
+    foreach (range(0, 4) as $vehicleIndex) {
+        if ((($dateIndex + $vehicleIndex) % 4) === 0) {
+            continue;
+        }
+        $diesel = $vehicleIndex === 1 ? 0 : round(18 + (($dateIndex + $vehicleIndex) % 12) * 2.35, 2);
+        $octane = $vehicleIndex === 1 ? round(9 + (($dateIndex + $vehicleIndex) % 6) * 1.75, 2) : (($vehicleIndex % 3) === 0 ? round(2 + ($dateIndex % 5) * 0.9, 2) : 0);
+        $gas = ($vehicleIndex % 2) === 0 ? round(420 + (($dateIndex * 83 + $vehicleIndex * 137) % 1800), 2) : 0;
+        $startKm = 124500 + ($dateIndex * 82) + ($vehicleIndex * 725);
+        $totalKm = (int) round(($diesel * 8.5) + ($octane * 6.8) + (($dateIndex + $vehicleIndex) % 5) * 12);
+        $endKm = $startKm + $totalKm;
+        $totalFuel = max($diesel + $octane, 1);
+        $fuelRechargeSamples[] = [
+            'rechargeId' => 'FR-' . str_replace('-', '', $date) . '-' . str_pad((string) ($vehicleIndex + 1), 2, '0', STR_PAD_LEFT),
+            'date' => $date,
+            'contract' => $fuelRechargeContracts[$vehicleIndex % count($fuelRechargeContracts)],
+            'vehicle' => $fuelRechargeCars[$vehicleIndex % count($fuelRechargeCars)],
+            'car' => $fuelRechargeCars[$vehicleIndex % count($fuelRechargeCars)],
+            'driver' => $fuelRechargeDrivers[$vehicleIndex % count($fuelRechargeDrivers)],
+            'driverStart' => str_pad((string) (7 + ($vehicleIndex % 3)), 2, '0', STR_PAD_LEFT) . ':' . str_pad((string) (($dateIndex * 10) % 60), 2, '0', STR_PAD_LEFT),
+            'driverEnd' => str_pad((string) (16 + ($vehicleIndex % 4)), 2, '0', STR_PAD_LEFT) . ':' . str_pad((string) (($dateIndex * 10) % 60), 2, '0', STR_PAD_LEFT),
+            'totalTime' => round(7.5 + (($dateIndex + $vehicleIndex) % 5) * 0.5, 2),
+            'diesel' => $diesel,
+            'gas' => $gas,
+            'octane' => $octane,
+            'startKm' => $startKm,
+            'endKm' => $endKm,
+            'totalKm' => $totalKm,
+            'mileage' => round($totalKm / $totalFuel, 2),
+            'status' => (($dateIndex + $vehicleIndex) % 9) === 0 ? 'Draft' : 'Submitted',
+            'submittedBy' => ['Admin User', 'Field Officer', 'Supervisor'][$vehicleIndex % 3],
+            'fuelType' => $diesel > 0 && $gas > 0 ? 'Diesel + CNG/LPG' : ($diesel > 0 ? 'Diesel' : 'Octane'),
+        ];
+    }
+}
+
 return [
     'brand' => [
         'name' => 'FleetMan',
@@ -43,10 +111,9 @@ return [
         [
             'title' => 'Operations',
             'items' => [
-                ['key' => 'dashboard', 'label' => 'Dashboard', 'icon' => '🏠', 'route' => 'fleet.vehicles'],
+                ['key' => 'dashboard', 'label' => 'Dashboard', 'icon' => '🏠', 'route' => 'fleet.dashboard'],
                 ['key' => 'trips', 'label' => 'Trips', 'icon' => '🧭', 'route' => 'fleet.trips'],
-                ['key' => 'drive-log', 'label' => 'Drive log', 'icon' => '📝', 'route' => null],
-                ['key' => 'add-drive-log', 'label' => 'Add Drive Log', 'icon' => '➕', 'route' => null],
+                ['key' => 'drive-log', 'label' => 'Drive log / Attendance', 'icon' => '📝', 'route' => 'fleet.driver-attendance'],
                 ['key' => 'yards', 'label' => 'Yards', 'icon' => '🅿️', 'route' => null],
             ],
         ],
@@ -56,33 +123,49 @@ return [
                 ['key' => 'vehicles', 'label' => 'Vehicles', 'icon' => '🚗', 'route' => 'fleet.vehicles'],
                 ['key' => 'fuel-recharge', 'label' => 'Fuel Recharge', 'icon' => '⛽', 'route' => 'fleet.fuel-recharge'],
                 ['key' => 'fuel-prices', 'label' => 'Fuel Prices', 'icon' => '⛽', 'route' => 'fleet.fuel-prices'],
-                ['key' => 'documents', 'label' => 'Documents', 'icon' => '🧾', 'route' => null],
-                ['key' => 'maintenance', 'label' => 'Maintenance', 'icon' => '🔧', 'route' => null],
             ],
         ],
         [
             'title' => 'Business',
             'items' => [
-                ['key' => 'contracts', 'label' => 'Contracts', 'icon' => '📄', 'route' => null],
-                ['key' => 'clients', 'label' => 'Clients', 'icon' => '👥', 'route' => null],
+                ['key' => 'contracts', 'label' => 'Contracts', 'icon' => '📄', 'route' => 'fleet.contracts'],
+                ['key' => 'clients', 'label' => 'Clients', 'icon' => '👥', 'route' => 'fleet.clients'],
             ],
         ],
         [
             'title' => 'People & Partners',
             'items' => [
-                ['key' => 'drivers', 'label' => 'Drivers', 'icon' => '👨‍✈️', 'route' => null],
+                ['key' => 'drivers', 'label' => 'Drivers', 'icon' => '👨‍✈️', 'route' => 'fleet.drivers'],
+                ['key' => 'employees', 'label' => 'Employees', 'icon' => '👥', 'route' => 'fleet.employees'],
                 ['key' => 'vendors', 'label' => 'Vendors & Parties', 'icon' => '🤝', 'route' => 'fleet.vendors'],
             ],
         ],
         [
             'title' => 'Finance & Reports',
             'items' => [
-                ['key' => 'reports', 'label' => 'Reports', 'icon' => '📊', 'route' => null],
+                ['key' => 'reports', 'label' => 'Reports', 'icon' => '📊', 'route' => 'fleet.reports'],
             ],
         ],
         [
             'title' => 'System',
             'items' => [
+                [
+                    'key' => 'master-data',
+                    'label' => 'Master Data',
+                    'icon' => '🗂️',
+                    'route' => 'fleet.master-data',
+                    'children' => [
+                        ['key' => 'master-data-vehicle-categories', 'label' => 'Vehicle Category Master', 'icon' => '↳', 'route' => 'fleet.master-data.vehicle-categories'],
+                        ['key' => 'master-data-vehicle-sub-categories', 'label' => 'Vehicle Sub Category Master', 'icon' => '↳', 'route' => 'fleet.master-data.vehicle-sub-categories'],
+                        ['key' => 'master-data-party-types', 'label' => 'Party Type Master', 'icon' => '↳', 'route' => 'fleet.master-data.party-types'],
+                        ['key' => 'master-data-document-names', 'label' => 'Document Name Master', 'icon' => '↳', 'route' => 'fleet.master-data.document-names'],
+                        ['key' => 'master-data-licence-types', 'label' => 'Licence Type Master', 'icon' => '↳', 'route' => 'fleet.master-data.licence-types'],
+                        ['key' => 'master-data-client-types', 'label' => 'Client Type Master', 'icon' => '↳', 'route' => 'fleet.master-data.client-types'],
+                        ['key' => 'master-data-contact-methods', 'label' => 'Contact Method Master', 'icon' => '↳', 'route' => 'fleet.master-data.contact-methods'],
+                        ['key' => 'master-data-fuel-types', 'label' => 'Fuel Type Master', 'icon' => '↳', 'route' => 'fleet.master-data.fuel-types'],
+                        ['key' => 'master-data-fuel-units', 'label' => 'Fuel Unit Master', 'icon' => '↳', 'route' => 'fleet.master-data.fuel-units'],
+                    ],
+                ],
                 ['key' => 'settings', 'label' => 'Settings', 'icon' => '⚙️', 'route' => null],
             ],
         ],
@@ -118,6 +201,22 @@ return [
         'trip_around' => ['Inside City', 'Outside City'],
         'trip_periods' => ['Within 24 Hours', 'Beyond 24 Hours'],
         'trip_purposes' => ['Client Visit', 'Staff Transport', 'Goods Delivery', 'Airport Drop', 'Official Duty'],
+
+        'driver_license_types' => ['Lite', 'Medium', 'Heavy', 'Professional', 'Other'],
+        'driver_salary_tenures' => ['Monthly', 'Weekly', 'Daily', 'Hourly', 'Contract', 'Other'],
+        'driver_statuses' => ['Active', 'On Leave', 'Inactive', 'Blacklisted', 'Draft'],
+        'driver_duty_types' => [
+            ['value' => 'Single shift', 'title' => 'Single shift', 'description' => 'Regular daily driving duty'],
+            ['value' => 'Spare driver', 'title' => 'Spare driver', 'description' => 'Used when main driver is absent'],
+        ],
+        'driver_document_templates' => ['NID Scan Copy', 'Driving License Copy', 'Police Verification', 'Medical Fitness Certificate', 'Appointment Letter', 'Training Certificate'],
+        'client_types' => ['Corporate', 'Individual', 'Government', 'NGO', 'Other'],
+        'client_statuses' => ['Active', 'Prospect', 'Inactive', 'Draft'],
+        'client_contact_methods' => ['Phone', 'WhatsApp', 'Email', 'Any'],
+        'attendance_statuses' => ['Initiated', 'Running', 'Completed'],
+        'employee_statuses' => ['Active', 'On Leave', 'Inactive', 'Draft'],
+        'employee_salary_tenures' => ['Monthly', 'Weekly', 'Daily', 'Hourly', 'Contract', 'Other'],
+        'employee_designations' => ['Office Assistant', 'Accounts Assistant', 'Supervisor', 'Admin Officer', 'HR Officer', 'Other'],
     ],
 
     'trip_masters' => [
@@ -125,6 +224,25 @@ return [
         'drivers' => $tripDrivers,
         'vehicle_types' => $vehicleTypes,
         'driver_areas' => $driverAreas,
+    ],
+
+
+    'attendance_masters' => [
+        'contracts' => [
+            ['id' => 'CNT26060137', 'name' => 'BRAC Staff Transport', 'vehicles' => ['VHL26060137 - Toyota Noah', 'VHL26060138 - Nissan Caravan']],
+            ['id' => 'CNT26060138', 'name' => 'City Office Support', 'vehicles' => ['VHL26060139 - Mitsubishi Pickup', 'VHL26060140 - Microbus']],
+            ['id' => 'CNT26060139', 'name' => 'Airport Duty Service', 'vehicles' => ['VHL26060141 - Hiace', 'VHL26060142 - Premio']],
+        ],
+        'vehicle_driver_map' => [
+            'VHL26060137 - Toyota Noah' => 'DVR26060137 - Kamal Hossain',
+            'VHL26060138 - Nissan Caravan' => 'DVR26060138 - Jahangir Alam',
+            'VHL26060139 - Mitsubishi Pickup' => 'DVR26060139 - Shafiqur Rahman',
+            'VHL26060140 - Microbus' => 'DVR26060140 - Mizanur Rahman',
+            'VHL26060141 - Hiace' => 'DVR26060141 - Rafiq Islam',
+            'VHL26060142 - Premio' => 'DVR26060142 - Masud Rana',
+        ],
+        'drivers' => ['DVR26060137 - Kamal Hossain', 'DVR26060138 - Jahangir Alam', 'DVR26060139 - Shafiqur Rahman', 'DVR26060140 - Mizanur Rahman', 'DVR26060141 - Rafiq Islam', 'DVR26060142 - Masud Rana'],
+        'yards' => ['Main Yard', 'Mirpur Yard', 'Airport Yard', 'Chattogram Yard'],
     ],
 
     'contracts' => [
@@ -220,6 +338,7 @@ return [
             ['fuelPriceId' => 'FPR26060138', 'fuelType' => 'Petrol/Octane', 'name' => 'Octane - Standard Rate', 'price' => '130', 'unit' => 'Per Liter', 'effectiveDate' => '2026-06-01', 'reference' => 'Market update', 'status' => 'Active', 'remarks' => 'Used for car and light vehicle recharge.'],
             ['fuelPriceId' => 'FPR26060139', 'fuelType' => 'CNG', 'name' => 'CNG - Corporate Rate', 'price' => '48', 'unit' => 'Per KG', 'effectiveDate' => '2026-05-15', 'reference' => 'Management approval', 'status' => 'Inactive', 'remarks' => 'Older rate kept for reference.'],
         ],
+        'fuel_recharges' => $fuelRechargeSamples,
         'parties' => [
             [
                 'partyId' => 'VND26060137',
@@ -283,10 +402,107 @@ return [
                 ],
             ],
         ],
+
+        'drivers' => [
+            [
+                'driverId' => 'DVR26060137', 'fullName' => 'Md. Karim Hossain', 'fatherName' => 'Md. Abdul Mannan', 'motherName' => 'Mst. Amena Begum', 'contact' => '01712000000', 'secondaryContact' => '01812000000', 'whatsapp' => '01712000000', 'email' => 'karim.driver@example.com', 'dob' => '1988-04-12', 'age' => '38', 'nid' => '19881234567890123', 'reference' => 'Ashish', 'licenseNo' => 'DL-DHK-443219', 'licenseType' => 'Heavy', 'licenseValidity' => '2030-12-31', 'salary' => '28000', 'salaryTenure' => 'Monthly', 'otRate' => '70', 'workingHour' => '270', 'vendor' => 'Own Payroll', 'status' => 'Active', 'duty' => 'Single shift', 'presentAddress' => 'Mirpur 11, Dhaka', 'permanentAddress' => 'Shibpur, Narsingdi', 'about' => 'Experienced bus and pickup driver.', 'documents' => [ ['name' => 'NID Scan Copy', 'number' => 'NID-19881234567890123', 'expiry' => ''], ['name' => 'Driving License Copy', 'number' => 'DL-DHK-443219', 'expiry' => '2030-12-31'], ['name' => 'Medical Fitness Certificate', 'number' => 'MF-2026-014', 'expiry' => '2027-06-30'] ],
+            ],
+            [
+                'driverId' => 'DVR26060138', 'fullName' => 'Shahidul Islam', 'fatherName' => 'Abdul Jalil', 'motherName' => 'Saleha Begum', 'contact' => '01933000000', 'secondaryContact' => '', 'whatsapp' => '01933000000', 'email' => '', 'dob' => '1991-01-20', 'age' => '35', 'nid' => '19911234567890123', 'reference' => 'Rahman Driver Supply', 'licenseNo' => 'DL-CTG-12902', 'licenseType' => 'Medium', 'licenseValidity' => '2026-08-15', 'salary' => '1500', 'salaryTenure' => 'Daily', 'otRate' => '60', 'workingHour' => '260', 'vendor' => 'Rahman Driver Supply', 'status' => 'Active', 'duty' => 'Spare driver', 'presentAddress' => 'Gazipur Sadar, Gazipur', 'permanentAddress' => 'Satkania, Chattogram', 'about' => 'Mostly assigned for spare duty.', 'documents' => [ ['name' => 'Driving License Copy', 'number' => 'DL-CTG-12902', 'expiry' => '2026-08-15'], ['name' => 'Police Verification', 'number' => 'PV-7741', 'expiry' => '2028-01-01'] ],
+            ],
+            [
+                'driverId' => 'DVR26060139', 'fullName' => 'Rafiq Ahmed', 'fatherName' => 'Late Harun Ahmed', 'motherName' => 'Rokeya Begum', 'contact' => '01644000000', 'secondaryContact' => '', 'whatsapp' => '', 'email' => 'rafiq@example.com', 'dob' => '1984-11-09', 'age' => '42', 'nid' => '19841234567890123', 'reference' => 'Vendor', 'licenseNo' => 'DL-SYL-55210', 'licenseType' => 'Lite', 'licenseValidity' => '2025-12-20', 'salary' => '24000', 'salaryTenure' => 'Monthly', 'otRate' => '50', 'workingHour' => '270', 'vendor' => 'ABC Transport Ltd.', 'status' => 'On Leave', 'duty' => 'Double shift', 'presentAddress' => 'Uttara, Dhaka', 'permanentAddress' => 'Beanibazar, Sylhet', 'about' => 'On leave for family reason.', 'documents' => [ ['name' => 'NID Scan Copy', 'number' => 'NID-19841234567890123', 'expiry' => ''], ['name' => 'Appointment Letter', 'number' => 'AL-2025-88', 'expiry' => ''] ],
+            ],
+        ],
+        'clients' => [
+            [
+                'clientId' => 'CLI26060137', 'clientName' => 'ABC Logistics Ltd.', 'email' => 'ops@abclogistics.com', 'phone' => '01711000001', 'whatsapp' => '01711000001', 'reference' => 'Ashiq from Sales', 'clientType' => 'Corporate', 'status' => 'Active', 'contactMethod' => 'Phone', 'address' => 'Tejgaon Industrial Area, Dhaka', 'about' => 'Large logistics and yard operations client. Requires monthly fleet support and quick response.', 'contacts' => [ ['name' => 'Kamrul Hasan', 'role' => 'Operations Manager', 'phone' => '01819000011', 'whatsapp' => '01819000011', 'email' => 'kamrul@abclogistics.com'], ['name' => 'Nusrat Jahan', 'role' => 'Accounts', 'phone' => '01819000012', 'whatsapp' => '', 'email' => 'accounts@abclogistics.com'] ],
+            ],
+            [
+                'clientId' => 'CLI26060138', 'clientName' => 'Rahman Builders', 'email' => '', 'phone' => '01922000002', 'whatsapp' => '01922000002', 'reference' => 'Vendor referral', 'clientType' => 'Corporate', 'status' => 'Prospect', 'contactMethod' => 'WhatsApp', 'address' => 'Gazipur Chowrasta, Gazipur', 'about' => 'Prospective construction client with 8+ heavy vehicles.', 'contacts' => [ ['name' => 'Md. Rashed', 'role' => 'Site Admin', 'phone' => '01788000021', 'whatsapp' => '01788000021', 'email' => ''] ],
+            ],
+            [
+                'clientId' => 'CLI26060139', 'clientName' => 'Green Field NGO', 'email' => 'fleet@greenfield.org', 'phone' => '01633000003', 'whatsapp' => '', 'reference' => 'Website inquiry', 'clientType' => 'NGO', 'status' => 'Active', 'contactMethod' => 'Email', 'address' => 'Banani, Dhaka', 'about' => 'NGO client managing field vehicles across districts.', 'contacts' => [ ['name' => 'Farhana Sultana', 'role' => 'Procurement', 'phone' => '01877000031', 'whatsapp' => '', 'email' => 'farhana@greenfield.org'], ['name' => 'Imran Hossain', 'role' => 'Field Coordinator', 'phone' => '01877000032', 'whatsapp' => '01877000032', 'email' => ''] ],
+            ],
+        ],
+        'employees' => [
+            [
+                'employeeId' => 'EMP26060137',
+                'fullName' => 'Md. Rafiq Islam',
+                'fatherName' => 'Abdul Karim',
+                'motherName' => 'Rokeya Begum',
+                'nid' => '1987654321001',
+                'contactNumber' => '01711000001',
+                'email' => 'rafiq@fleetman.com',
+                'reference' => 'Operations Team',
+                'designation' => 'Office Assistant',
+                'joiningDate' => '2026-06-01',
+                'status' => 'Active',
+                'socialMedia' => '',
+                'age' => '28',
+                'salary' => '18000',
+                'salaryTenure' => 'Monthly',
+                'overtimeRate' => '60',
+                'presentAddress' => 'Mirpur, Dhaka',
+                'permanentAddress' => 'Kishoreganj, Dhaka',
+                'about' => 'Supports daily office and fleet operations.',
+                'photoName' => 'employee-rafiq.jpg',
+            ],
+            [
+                'employeeId' => 'EMP26060138',
+                'fullName' => 'Shila Akter',
+                'fatherName' => 'Mohammad Ali',
+                'motherName' => 'Hasina Begum',
+                'nid' => '1994567890123',
+                'contactNumber' => '01822000002',
+                'email' => 'shila@fleetman.com',
+                'reference' => 'HR Referral',
+                'designation' => 'Accounts Assistant',
+                'joiningDate' => '2026-05-15',
+                'status' => 'Active',
+                'socialMedia' => '',
+                'age' => '30',
+                'salary' => '22000',
+                'salaryTenure' => 'Monthly',
+                'overtimeRate' => '0',
+                'presentAddress' => 'Uttara, Dhaka',
+                'permanentAddress' => 'Comilla',
+                'about' => 'Handles basic voucher and accounting support.',
+                'photoName' => 'employee-shila.jpg',
+            ],
+            [
+                'employeeId' => 'EMP26060139',
+                'fullName' => 'Saiful Islam',
+                'fatherName' => 'Nurul Islam',
+                'motherName' => 'Shirin Akter',
+                'nid' => '1976543210987',
+                'contactNumber' => '01933000003',
+                'email' => '',
+                'reference' => 'Supervisor recommendation',
+                'designation' => 'Supervisor',
+                'joiningDate' => '2026-04-20',
+                'status' => 'On Leave',
+                'socialMedia' => '',
+                'age' => '35',
+                'salary' => '26000',
+                'salaryTenure' => 'Monthly',
+                'overtimeRate' => '75',
+                'presentAddress' => 'Tongi, Gazipur',
+                'permanentAddress' => 'Mymensingh',
+                'about' => 'Field supervision for drivers and trips.',
+                'photoName' => 'employee-saiful.jpg',
+            ],
+        ],
+
+        'driver_attendance' => [
+            ['logId' => 'DL26060137', 'date' => '2026-06-02', 'contract' => 'CNT26060137 - BRAC Staff Transport', 'vehicle' => 'VHL26060137 - Toyota Noah', 'driver' => 'DVR26060137 - Kamal Hossain', 'yard' => 'Main Yard', 'startTime' => '09:00', 'endTime' => '17:00', 'status' => 'Completed', 'kmStart' => '12540', 'kmEnd' => '12605', 'distance' => '65', 'hours' => '8h 0m', 'notes' => 'Regular office movement and staff pickup.'],
+            ['logId' => 'DL26060138', 'date' => '2026-06-02', 'contract' => 'CNT26060138 - City Office Support', 'vehicle' => 'VHL26060139 - Mitsubishi Pickup', 'driver' => 'DVR26060139 - Shafiqur Rahman', 'yard' => 'Mirpur Yard', 'startTime' => '08:30', 'endTime' => '', 'status' => 'Running', 'kmStart' => '8740', 'kmEnd' => '', 'distance' => '0', 'hours' => '0h 0m', 'notes' => 'Field support duty still ongoing.'],
+            ['logId' => 'DL26060139', 'date' => '2026-06-01', 'contract' => 'CNT26060139 - Airport Duty Service', 'vehicle' => 'VHL26060141 - Hiace', 'driver' => 'DVR26060141 - Rafiq Islam', 'yard' => 'Airport Yard', 'startTime' => '06:15', 'endTime' => '13:45', 'status' => 'Completed', 'kmStart' => '22150', 'kmEnd' => '22205', 'distance' => '55', 'hours' => '7h 30m', 'notes' => 'Airport staff drop and pickup.'],
+        ],
         'trips' => [
-            ['tripId' => 'TRP26060137', 'startDate' => '2026-06-02', 'endDate' => '2026-06-02', 'vehicle' => 'VHL2606100 - Toyota Noah 1', 'driver' => 'DVR2606100 - Kamal Hossain', 'status' => 'Initiated', 'tripAround' => 'Inside City', 'tripPeriod' => 'Within 24 Hours', 'purpose' => 'Client Visit', 'fromLocation' => 'Head Office', 'toLocation' => 'Banani Client Office', 'odoStart' => '12540', 'odoEnd' => '12578', 'fuelCost' => '900', 'foodCost' => '250', 'tolls' => '0', 'otherCost' => '100', 'accommodationCost' => '0', 'totalCost' => '1250', 'details' => 'Vehicle assigned for client visit and return within same day.'],
-            ['tripId' => 'TRP26060138', 'startDate' => '2026-06-01', 'endDate' => '2026-06-03', 'vehicle' => 'VHL2606101 - Nissan Caravan 2', 'driver' => 'DVR2606101 - Jahangir Alam', 'status' => 'Running', 'tripAround' => 'Outside City', 'tripPeriod' => 'Beyond 24 Hours', 'purpose' => 'Staff Transport', 'fromLocation' => 'Dhaka', 'toLocation' => 'Chattogram', 'odoStart' => '22410', 'odoEnd' => '', 'fuelCost' => '4200', 'foodCost' => '900', 'tolls' => '500', 'otherCost' => '350', 'accommodationCost' => '1500', 'totalCost' => '7450', 'details' => 'Vehicle sent for staff transport to Chattogram. Trip still running.'],
-            ['tripId' => 'TRP26060139', 'startDate' => '2026-05-28', 'endDate' => '2026-05-28', 'vehicle' => 'VHL2606102 - Mitsubishi Pickup 3', 'driver' => 'DVR2606102 - Shafiqur Rahman', 'status' => 'Completed', 'tripAround' => 'Inside City', 'tripPeriod' => 'Within 24 Hours', 'purpose' => 'Goods Delivery', 'fromLocation' => 'Warehouse', 'toLocation' => 'Gulshan', 'odoStart' => '8730', 'odoEnd' => '8795', 'fuelCost' => '650', 'foodCost' => '150', 'tolls' => '0', 'otherCost' => '0', 'accommodationCost' => '0', 'totalCost' => '800', 'details' => 'Goods delivered successfully and trip completed.'],
+            ['tripId' => 'TRP26060137', 'startDate' => '2026-06-02', 'endDate' => '2026-06-02', 'vehicle' => 'VHL26060137 - Dhaka Pickup 01', 'vehicleId' => 'VHL26060137', 'driver' => 'DVR26060137 - Md. Karim Hossain', 'driverId' => 'DVR26060137', 'status' => 'Initiated', 'tripAround' => 'Inside City', 'tripPeriod' => 'Within 24 Hours', 'purpose' => 'Client Visit', 'fromLocation' => 'Head Office', 'toLocation' => 'Banani Client Office', 'odoStart' => '12540', 'odoEnd' => '12578', 'fuelCost' => '900', 'foodCost' => '250', 'tolls' => '0', 'otherCost' => '100', 'accommodationCost' => '0', 'totalCost' => '1250', 'details' => 'Vehicle assigned for client visit and return within same day.'],
+            ['tripId' => 'TRP26060138', 'startDate' => '2026-06-01', 'endDate' => '2026-06-03', 'vehicle' => 'VHL26060212 - Airport Van 02', 'vehicleId' => 'VHL26060212', 'driver' => 'DVR26060138 - Shahidul Islam', 'driverId' => 'DVR26060138', 'status' => 'Running', 'tripAround' => 'Outside City', 'tripPeriod' => 'Beyond 24 Hours', 'purpose' => 'Staff Transport', 'fromLocation' => 'Dhaka', 'toLocation' => 'Chattogram', 'odoStart' => '22410', 'odoEnd' => '', 'fuelCost' => '4200', 'foodCost' => '900', 'tolls' => '500', 'otherCost' => '350', 'accommodationCost' => '1500', 'totalCost' => '7450', 'details' => 'Vehicle sent for staff transport to Chattogram. Trip still running.'],
+            ['tripId' => 'TRP26060139', 'startDate' => '2026-05-28', 'endDate' => '2026-05-28', 'vehicle' => 'VHL26060137 - Dhaka Pickup 01', 'vehicleId' => 'VHL26060137', 'driver' => 'DVR26060139 - Rafiq Ahmed', 'driverId' => 'DVR26060139', 'status' => 'Completed', 'tripAround' => 'Inside City', 'tripPeriod' => 'Within 24 Hours', 'purpose' => 'Goods Delivery', 'fromLocation' => 'Warehouse', 'toLocation' => 'Gulshan', 'odoStart' => '8730', 'odoEnd' => '8795', 'fuelCost' => '650', 'foodCost' => '150', 'tolls' => '0', 'otherCost' => '0', 'accommodationCost' => '0', 'totalCost' => '800', 'details' => 'Goods delivered successfully and trip completed.'],
         ],
     ],
 ];

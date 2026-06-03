@@ -102,7 +102,7 @@
                         </div>
                     </div>
                     <div class="grid">
-                        <div class="field"><label for="image">Vehicle Image</label><input id="image" type="file" accept="image/*"><div class="hint">Allowed: jpg, png, webp. Recommended size below 2 MB.</div></div>
+                        <div class="field"><label for="image">Vehicle Image</label><input id="image" type="file" accept="image/*"><input id="vehicleImageData" type="hidden"><small class="upload-meta" id="vehicleImageUploadInfo">Choose image. It will be stored after Save Vehicle.</small><div class="hint">Allowed: jpg, png, webp. Recommended size below 5 MB.</div></div>
                         <div class="field"><label for="notes">Notes</label><textarea id="notes" placeholder="Any special note about vehicle condition or assignment"></textarea></div>
                     </div>
                 </div>

@@ -4,7 +4,7 @@
 @section('mobile-title', 'Vendors')
 
 @section('content')
-<div class="page-section">
+<div class="page-section vendor-party-page">
     <div id="vendorAddPage">
         <x-fleetman.topbar :items="[['label' => 'Add Vendor / Party']]">
             <x-slot:actions>
@@ -14,14 +14,14 @@
 
         <x-fleetman.title-card
             title="Add Vendor / Party"
-            subtitle="Standard wording: use Vendor / Party when this master stores all external parties. Use Vendor only when it stores suppliers or service providers only."
+            subtitle="Create vendors, suppliers, workshops, fuel stations, transport providers, and other external parties from one usable form."
         >
             <x-slot:action>
                 <button type="button" class="btn secondary" id="loadPartySampleBtn">Use sample data</button>
             </x-slot:action>
         </x-fleetman.title-card>
 
-        <div class="layout">
+        <div class="layout vendor-party-form-layout">
             <div>
                 <x-fleetman.section-card
                     title="1. Vendor / Party Information"
@@ -72,20 +72,6 @@
                 </x-fleetman.section-card>
             </div>
 
-            <aside>
-                <x-fleetman.side-note title="Standard naming suggestion">
-                    <ul>
-                        <li>For this screen, use <b>Vendor / Party</b>.</li>
-                        <li>Field label should be <b>Party Name</b>, not only Name.</li>
-                        <li>Menu can be <b>Vendors & Parties</b>.</li>
-                        <li>In contract screen, use <b>Contract With: Client / Vendor</b>.</li>
-                    </ul>
-                </x-fleetman.side-note>
-                <div class="required-box">
-                    <b>Required before save:</b><br>
-                    Party name, party type, phone number, address, status, and at least one contact person name + phone.
-                </div>
-            </aside>
         </div>
 
         <div class="save-bar">

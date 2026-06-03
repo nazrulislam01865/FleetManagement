@@ -1,0 +1,141 @@
+@extends('layouts.fleetman')
+
+@section('title', 'FleetMan Dashboard')
+@section('mobile-title', 'Dashboard')
+
+@section('content')
+    @php
+        $stats = $fleetman['dashboard']['stats'] ?? [];
+        $finance = $fleetman['dashboard']['finance'] ?? [];
+        $recent = $fleetman['dashboard']['recent'] ?? [];
+        $warnings = $fleetman['dashboard']['warnings'] ?? [];
+        $latestFuel = $finance['fuel_rate'] ?? null;
+    @endphp
+
+    <x-fleetman.topbar :items="[['label' => 'DASHBOARD']]">
+        <x-slot:actions>
+            <a class="btn light" href="{{ route('fleet.vehicles') }}">🚗 Vehicles</a>
+            <a class="btn primary" href="{{ route('fleet.trips') }}">＋ Add Trip</a>
+        </x-slot:actions>
+    </x-fleetman.topbar>
+
+    <section class="dashboard-hero">
+        <div>
+            <span class="dashboard-eyebrow">Fleet control center</span>
+            <h1>Welcome back, {{ auth()->user()->name ?? ($account['name'] ?? 'User') }}</h1>
+            <p>Monitor trips, vehicles, drivers, fuel, clients, vendors, employees, and attendance from one place. All numbers come from the FleetMan MySQL tables.</p>
+            <div class="hero-actions">
+                <a class="btn primary" href="{{ route('fleet.driver-attendance') }}">📝 Attendance</a>
+                <a class="btn secondary" href="{{ route('fleet.fuel-recharge') }}">⛽ Fuel Recharge</a>
+                <a class="btn light" href="{{ route('fleet.clients') }}">🏢 Clients</a>
+            </div>
+        </div>
+        <div class="dashboard-hero-card">
+            <small>Today</small>
+            <strong>{{ now()->format('d M Y') }}</strong>
+            <span>{{ now()->format('l') }}</span>
+            <div class="hero-mini-grid">
+                <div><b>৳ {{ number_format($finance['trip_cost'] ?? 0) }}</b><small>Trip cost</small></div>
+                <div><b>৳ {{ number_format($finance['payroll'] ?? 0) }}</b><small>Payroll base</small></div>
+            </div>
+        </div>
+    </section>
+
+    <div class="dashboard-kpis">
+        @foreach($stats as $stat)
+            <div class="dashboard-kpi-card">
+                <div class="dashboard-kpi-icon">{{ $stat['icon'] }}</div>
+                <div>
+                    <strong>{{ $stat['value'] }}</strong>
+                    <span>{{ $stat['label'] }}</span>
+                    <small>{{ $stat['helper'] }}</small>
+                </div>
+            </div>
+        @endforeach
+    </div>
+
+    <div class="dashboard-grid">
+        <x-fleetman.section-card title="Financial & Fuel Overview" description="Calculated from trip, payroll, attendance, and latest fuel price records." class="dashboard-panel">
+            <div class="finance-grid">
+                <div class="finance-box"><small>Total Trip Cost</small><b>৳ {{ number_format($finance['trip_cost'] ?? 0) }}</b></div>
+                <div class="finance-box"><small>Driver + Employee Salary</small><b>৳ {{ number_format($finance['payroll'] ?? 0) }}</b></div>
+                <div class="finance-box"><small>Attendance Distance</small><b>{{ number_format($finance['attendance_km'] ?? 0) }} km</b></div>
+                <div class="finance-box">
+                    <small>Latest Fuel Rate</small>
+                    <b>{{ $latestFuel ? (($latestFuel['fuelType'] ?? 'Fuel') . ' ৳' . number_format((float) ($latestFuel['price'] ?? 0), 2)) : '-' }}</b>
+                </div>
+            </div>
+        </x-fleetman.section-card>
+
+        <x-fleetman.section-card title="Operational Alerts" description="Fast reminders for operations users." class="dashboard-panel">
+            <div class="warning-list">
+                @foreach($warnings as $warning)
+                    <div class="warning-row">
+                        <div><b>{{ $warning['title'] }}</b><span>{{ $warning['description'] }}</span></div>
+                        <strong>{{ $warning['value'] }}</strong>
+                    </div>
+                @endforeach
+            </div>
+        </x-fleetman.section-card>
+    </div>
+
+    <div class="dashboard-grid dashboard-grid-wide">
+        <x-fleetman.section-card title="Recent Trips" description="Latest trip records saved in the database." class="dashboard-panel">
+            <div class="compact-list">
+                @forelse(($recent['trips'] ?? []) as $trip)
+                    <a href="{{ route('fleet.trips') }}" class="compact-row">
+                        <div class="compact-icon">🧭</div>
+                        <div><b>{{ $trip['tripId'] ?? '-' }} · {{ $trip['purpose'] ?? 'Trip' }}</b><span>{{ $trip['vehicle'] ?? '-' }} / {{ $trip['driver'] ?? '-' }}</span></div>
+                        <span class="badge {{ ($trip['status'] ?? '') === 'Running' ? 'warn' : (($trip['status'] ?? '') === 'Completed' ? 'ok' : 'soft') }}">{{ $trip['status'] ?? '-' }}</span>
+                    </a>
+                @empty
+                    <div class="empty compact-empty">No trips found.</div>
+                @endforelse
+            </div>
+        </x-fleetman.section-card>
+
+        <x-fleetman.section-card title="Recent Vehicles" description="Latest vehicle records saved in the database." class="dashboard-panel">
+            <div class="compact-list">
+                @forelse(($recent['vehicles'] ?? []) as $vehicle)
+                    <a href="{{ route('fleet.vehicles') }}" class="compact-row">
+                        <div class="compact-icon">🚗</div>
+                        <div><b>{{ $vehicle['name'] ?? '-' }}</b><span>{{ $vehicle['id'] ?? '-' }} / {{ $vehicle['regNo'] ?? '-' }}</span></div>
+                        <span class="badge soft">{{ $vehicle['category'] ?? 'Vehicle' }}</span>
+                    </a>
+                @empty
+                    <div class="empty compact-empty">No vehicles found.</div>
+                @endforelse
+            </div>
+        </x-fleetman.section-card>
+    </div>
+
+    <div class="dashboard-grid dashboard-grid-wide">
+        <x-fleetman.section-card title="Recent Drivers" description="Driver master records from MySQL." class="dashboard-panel">
+            <div class="compact-list">
+                @forelse(($recent['drivers'] ?? []) as $driver)
+                    <a href="{{ route('fleet.drivers') }}" class="compact-row">
+                        <div class="compact-icon">🧑‍✈️</div>
+                        <div><b>{{ $driver['fullName'] ?? '-' }}</b><span>{{ $driver['driverId'] ?? '-' }} / {{ $driver['contact'] ?? '-' }}</span></div>
+                        <span class="badge {{ ($driver['status'] ?? '') === 'Active' ? 'ok' : 'soft' }}">{{ $driver['status'] ?? '-' }}</span>
+                    </a>
+                @empty
+                    <div class="empty compact-empty">No drivers found.</div>
+                @endforelse
+            </div>
+        </x-fleetman.section-card>
+
+        <x-fleetman.section-card title="Recent Clients" description="Client records from MySQL." class="dashboard-panel">
+            <div class="compact-list">
+                @forelse(($recent['clients'] ?? []) as $client)
+                    <a href="{{ route('fleet.clients') }}" class="compact-row">
+                        <div class="compact-icon">🏢</div>
+                        <div><b>{{ $client['clientName'] ?? '-' }}</b><span>{{ $client['clientId'] ?? '-' }} / {{ $client['phone'] ?? '-' }}</span></div>
+                        <span class="badge {{ ($client['status'] ?? '') === 'Active' ? 'ok' : 'warn' }}">{{ $client['status'] ?? '-' }}</span>
+                    </a>
+                @empty
+                    <div class="empty compact-empty">No clients found.</div>
+                @endforelse
+            </div>
+        </x-fleetman.section-card>
+    </div>
+@endsection
