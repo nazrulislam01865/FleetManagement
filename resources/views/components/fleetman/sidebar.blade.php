@@ -1,4 +1,4 @@
-<aside class="sidebar">
+<aside class="sidebar" id="fleetSidebar">
     <div class="logo-card">
         <div class="logo-mark">
             🚙 {{ $brand['name'] ?? 'FleetMan' }}
@@ -35,17 +35,24 @@
                     $href = ! empty($item['route']) && Route::has($item['route']) ? route($item['route']) : '#';
                 @endphp
 
-                <div class="menu-block {{ $isOpen ? 'open' : '' }}">
-                    <a href="{{ $href }}" class="menu-item {{ $isOpen ? 'active' : '' }} {{ $hasChildren ? 'has-children' : '' }}">
+                <div class="menu-block {{ $isOpen ? 'open' : '' }}" data-menu-block data-menu-key="{{ $item['key'] }}">
+                    <a href="{{ $href }}"
+                       class="menu-item {{ $isOpen ? 'active' : '' }} {{ $hasChildren ? 'has-children' : '' }}"
+                       @if($hasChildren)
+                           data-submenu-toggle="{{ $item['key'] }}"
+                           aria-expanded="{{ $isOpen ? 'true' : 'false' }}"
+                           aria-controls="submenu-{{ $item['key'] }}"
+                       @endif
+                    >
                         <span>{{ $item['icon'] }}</span>
                         <span>{{ $item['label'] }}</span>
                         @if($hasChildren)
-                            <span class="submenu-arrow">▾</span>
+                            <span class="submenu-arrow" aria-hidden="true">▾</span>
                         @endif
                     </a>
 
                     @if($hasChildren)
-                        <div class="submenu">
+                        <div class="submenu" id="submenu-{{ $item['key'] }}">
                             @foreach($children as $child)
                                 @php
                                     $childHref = ! empty($child['route']) && Route::has($child['route']) ? route($child['route']) : '#';

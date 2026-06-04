@@ -1,3 +1,249 @@
+/* Shared record details modal for FleetMan entities. */
+window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+    'use strict';
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
+    const humanize = (key) => String(key || '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+    function currentRoleSlug() {
+        return String(window.FLEETMAN?.auth?.role?.slug || '').toLowerCase();
+    }
+
+    function canViewDetails() {
+        const auth = window.FLEETMAN?.auth || {};
+        const roleName = String(auth.role?.name || '').toLowerCase();
+        return Boolean(auth.isSuperAdmin) || ['super_admin', 'admin_user'].includes(currentRoleSlug()) || roleName === 'admin user';
+    }
+
+    function toast(message) {
+        const element = document.getElementById('toast');
+        if (!element) {
+            alert(message);
+            return;
+        }
+        element.textContent = message;
+        element.classList.add('show');
+        setTimeout(() => element.classList.remove('show'), 2800);
+    }
+
+    function ensureModal() {
+        let overlay = document.getElementById('fleetDetailOverlay');
+        if (overlay) return overlay;
+
+        overlay = document.createElement('div');
+        overlay.id = 'fleetDetailOverlay';
+        overlay.className = 'fleet-detail-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = `
+            <section class="fleet-detail-panel" role="dialog" aria-modal="true" aria-labelledby="fleetDetailTitle">
+                <div class="fleet-detail-head">
+                    <div>
+                        <span class="fleet-detail-kicker" id="fleetDetailKicker">Record Details</span>
+                        <h2 id="fleetDetailTitle">Details</h2>
+                        <p id="fleetDetailSubtitle"></p>
+                    </div>
+                    <button type="button" class="fleet-detail-close" data-fleet-detail-close aria-label="Close details">×</button>
+                </div>
+                <div class="fleet-detail-body" id="fleetDetailBody"></div>
+            </section>`;
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay || event.target.closest('[data-fleet-detail-close]')) close();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && overlay.classList.contains('show')) close();
+        });
+
+        return overlay;
+    }
+
+    function close() {
+        const overlay = document.getElementById('fleetDetailOverlay');
+        if (!overlay) return;
+        overlay.classList.remove('show');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('fleet-detail-open');
+    }
+
+    function fileUrl(file = {}) {
+        if (file.fileUrl || file.url) return String(file.fileUrl || file.url);
+        const path = String(file.filePath || file.path || '');
+        if (!path) return '';
+        if (/^https?:\/\//i.test(path) || path.startsWith('/')) return path;
+        return '/storage/' + path.replace(/^public\//, '').replace(/^storage\//, '');
+    }
+
+    function isFileLike(value) {
+        return value && typeof value === 'object' && !Array.isArray(value) && Boolean(value.fileUrl || value.filePath || value.url || value.path || value.originalName || value.fileName || value.mimeType);
+    }
+
+    function isImageFile(file = {}) {
+        const mime = String(file.mimeType || file.type || '').toLowerCase();
+        const name = String(file.originalName || file.fileName || file.filePath || file.url || '').toLowerCase();
+        return mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(name);
+    }
+
+    function collectFiles(record) {
+        const files = [];
+        const seen = new Set();
+
+        function push(file, label = '') {
+            if (!isFileLike(file)) return;
+            const url = fileUrl(file);
+            const name = file.originalName || file.fileName || label || 'Uploaded file';
+            const key = [url, name, file.mimeType || ''].join('|');
+            if (seen.has(key)) return;
+            seen.add(key);
+            files.push({
+                url,
+                name,
+                label: label || name,
+                mimeType: file.mimeType || '',
+                sizeBytes: file.sizeBytes || '',
+                uploadedAt: file.uploadedAt || '',
+                isImage: isImageFile(file),
+            });
+        }
+
+        function walk(node, context = '') {
+            if (!node || typeof node !== 'object') return;
+            if (isFileLike(node)) {
+                push(node, context);
+                return;
+            }
+            if (Array.isArray(node)) {
+                node.forEach((item, index) => walk(item, context ? `${context} ${index + 1}` : `Item ${index + 1}`));
+                return;
+            }
+            if (node.file && isFileLike(node.file)) {
+                push(node.file, node.name || node.title || node.type || node.reference || context || 'Document');
+            }
+            Object.entries(node).forEach(([key, value]) => {
+                if (key === 'file') return;
+                walk(value, node.name || node.title || node.type || humanize(key));
+            });
+        }
+
+        walk(record, 'Record');
+        return files;
+    }
+
+    function valueText(value) {
+        if (value === null || value === undefined || value === '') return '—';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (typeof value === 'number') return Number(value).toLocaleString();
+        return String(value);
+    }
+
+    function renderPrimitiveFields(record = {}) {
+        const skip = new Set(['photo', 'image', 'file', 'documents', 'docs', 'contacts', 'fuels', 'payments', 'photos', 'assignments']);
+        const fields = Object.entries(record)
+            .filter(([key, value]) => !skip.has(key) && (typeof value !== 'object' || value === null) && value !== '')
+            .map(([key, value]) => `
+                <div class="fleet-detail-field">
+                    <small>${escapeHtml(humanize(key))}</small>
+                    <strong>${escapeHtml(valueText(value))}</strong>
+                </div>`)
+            .join('');
+
+        return fields ? `<div class="fleet-detail-grid">${fields}</div>` : '<p class="fleet-detail-muted">No primary fields found for this record.</p>';
+    }
+
+    function renderArrayCards(title, rows) {
+        if (!Array.isArray(rows) || !rows.length) return '';
+        const cards = rows.map((item, index) => {
+            if (!item || typeof item !== 'object') return `<div class="fleet-detail-mini-card"><b>${index + 1}.</b> ${escapeHtml(valueText(item))}</div>`;
+            const parts = Object.entries(item)
+                .filter(([key]) => key !== 'file')
+                .map(([key, value]) => {
+                    if (value && typeof value === 'object') return '';
+                    return `<div><small>${escapeHtml(humanize(key))}</small><b>${escapeHtml(valueText(value))}</b></div>`;
+                })
+                .filter(Boolean)
+                .join('');
+            return `<div class="fleet-detail-mini-card"><div class="fleet-detail-mini-title">${escapeHtml(title)} ${index + 1}</div>${parts || '<span class="fleet-detail-muted">No extra data</span>'}</div>`;
+        }).join('');
+        return `<section class="fleet-detail-section"><h3>${escapeHtml(title)}</h3><div class="fleet-detail-mini-grid">${cards}</div></section>`;
+    }
+
+    function renderFiles(files) {
+        if (!files.length) return '';
+        const images = files.filter((file) => file.isImage && file.url);
+        const documents = files.filter((file) => !file.isImage || !file.url);
+        return `
+            ${images.length ? `<section class="fleet-detail-section"><h3>Uploaded Images</h3><div class="fleet-detail-image-grid">${images.map((file) => `
+                <a href="${escapeHtml(file.url)}" target="_blank" rel="noopener" class="fleet-detail-image-card">
+                    <img src="${escapeHtml(file.url)}" alt="${escapeHtml(file.label || file.name)}">
+                    <span>${escapeHtml(file.label || file.name)}</span>
+                </a>`).join('')}</div></section>` : ''}
+            ${documents.length ? `<section class="fleet-detail-section"><h3>Uploaded Documents / Files</h3><div class="fleet-detail-file-list">${documents.map((file) => `
+                <div class="fleet-detail-file-row">
+                    <div><b>${escapeHtml(file.label || file.name)}</b><small>${escapeHtml([file.name, file.mimeType, file.uploadedAt].filter(Boolean).join(' • ') || 'Saved file')}</small></div>
+                    ${file.url ? `<a href="${escapeHtml(file.url)}" target="_blank" rel="noopener" class="mini-btn">Open</a>` : '<span class="badge soft">No link</span>'}
+                </div>`).join('')}</div></section>` : ''}`;
+    }
+
+    function renderNestedSections(record = {}) {
+        const sections = [];
+        if (record.contacts) sections.push(renderArrayCards('Contact', record.contacts));
+        if (record.documents) sections.push(renderArrayCards('Document', record.documents));
+        if (record.docs) sections.push(renderArrayCards('Document', record.docs));
+        if (record.fuels) sections.push(renderArrayCards('Fuel', record.fuels));
+        if (record.payments) sections.push(renderArrayCards('Payment', record.payments));
+        if (record.assignments) sections.push(renderArrayCards('Assignment', record.assignments));
+        if (record.photos && typeof record.photos === 'object') sections.push(renderArrayCards('Photo', Object.entries(record.photos).map(([key, value]) => ({ type: key, ...(value || {}) }))));
+        return sections.filter(Boolean).join('');
+    }
+
+    function titleFor(type, record = {}) {
+        return record.fullName || record.clientName || record.partyName || record.name || record.tripId || record.id || record.employeeId || record.driverId || 'Record Details';
+    }
+
+    function subtitleFor(type, record = {}) {
+        const values = [];
+        if (record.id) values.push(record.id);
+        if (record.driverId) values.push(record.driverId);
+        if (record.employeeId) values.push(record.employeeId);
+        if (record.clientId) values.push(record.clientId);
+        if (record.partyId) values.push(record.partyId);
+        if (record.tripId) values.push(record.tripId);
+        if (record.status) values.push(record.status);
+        return values.join(' • ');
+    }
+
+    function show(type, record = {}) {
+        if (!canViewDetails()) {
+            toast('Only Super Admin and Admin User can view full details.');
+            return;
+        }
+        if (!record) return;
+
+        const overlay = ensureModal();
+        const files = collectFiles(record);
+        document.getElementById('fleetDetailKicker').textContent = type || 'Record Details';
+        document.getElementById('fleetDetailTitle').textContent = titleFor(type, record);
+        document.getElementById('fleetDetailSubtitle').textContent = subtitleFor(type, record);
+        document.getElementById('fleetDetailBody').innerHTML = `
+            <section class="fleet-detail-section">
+                <h3>Full Details</h3>
+                ${renderPrimitiveFields(record)}
+            </section>
+            ${renderNestedSections(record)}
+            ${renderFiles(files)}
+        `;
+        overlay.classList.add('show');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('fleet-detail-open');
+    }
+
+    return { show, close, canViewDetails };
+})();
+
+
 (function () {
     'use strict';
 
@@ -62,9 +308,72 @@
 
     function bindMobileDrawer() {
         const body = document.body;
-        $('#menuBtn')?.addEventListener('click', () => body.classList.add('drawer-open'));
-        $('#backdrop')?.addEventListener('click', () => body.classList.remove('drawer-open'));
-        $$('.menu-item').forEach((link) => link.addEventListener('click', () => body.classList.remove('drawer-open')));
+        const sidebar = $('.sidebar');
+        const menuButton = $('#menuBtn');
+        const backdrop = $('#backdrop');
+        const scrollKey = 'fleetman.sidebar.scrollTop';
+        const openKey = (key) => `fleetman.sidebar.open.${key}`;
+
+        function setDrawer(open) {
+            body.classList.toggle('drawer-open', open);
+            menuButton?.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        function setMenuOpen(block, open, persist = true) {
+            const key = block?.dataset?.menuKey || '';
+            const toggle = $('[data-submenu-toggle]', block);
+            if (!block || !toggle || !key) return;
+
+            block.classList.toggle('open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (persist) localStorage.setItem(openKey(key), open ? '1' : '0');
+        }
+
+        if (sidebar) {
+            requestAnimationFrame(() => {
+                const savedScroll = Number(localStorage.getItem(scrollKey) || 0);
+                if (savedScroll > 0) sidebar.scrollTop = savedScroll;
+            });
+
+            sidebar.addEventListener('scroll', () => {
+                localStorage.setItem(scrollKey, String(sidebar.scrollTop || 0));
+            }, { passive: true });
+        }
+
+        $$('[data-menu-block]').forEach((block) => {
+            const key = block.dataset.menuKey || '';
+            if (!key || !$('[data-submenu-toggle]', block)) return;
+
+            const saved = localStorage.getItem(openKey(key));
+            if (saved === '1') setMenuOpen(block, true, false);
+            if (saved === '0') setMenuOpen(block, false, false);
+        });
+
+        menuButton?.setAttribute('aria-controls', 'fleetSidebar');
+        menuButton?.setAttribute('aria-expanded', 'false');
+        menuButton?.addEventListener('click', () => setDrawer(!body.classList.contains('drawer-open')));
+        backdrop?.addEventListener('click', () => setDrawer(false));
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') setDrawer(false);
+        });
+
+        document.addEventListener('click', (event) => {
+            const submenuToggle = event.target.closest('[data-submenu-toggle]');
+            if (submenuToggle) {
+                if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+                    event.preventDefault();
+                    const block = submenuToggle.closest('[data-menu-block]');
+                    if (block) setMenuOpen(block, !block.classList.contains('open'));
+                }
+                return;
+            }
+
+            const menuLink = event.target.closest('.menu-item,.submenu-item');
+            if (menuLink && sidebar?.contains(menuLink)) {
+                localStorage.setItem(scrollKey, String(sidebar.scrollTop || 0));
+                if (window.matchMedia('(max-width: 1050px)').matches) setDrawer(false);
+            }
+        });
     }
 
     function setVisible(pageId) {
@@ -596,6 +905,12 @@
                 .join(', ');
         }
 
+        function viewVehicle(id) {
+            const vehicle = vehicles.find((item) => item.id === id);
+            if (!vehicle) return;
+            window.FleetmanDetailViewer?.show('Vehicle Details', vehicle);
+        }
+
         function renderTable() {
             const query = value('#vehicleSearch').toLowerCase();
             const category = value('#vehicleFilterCategory');
@@ -625,7 +940,7 @@
                     <td>${docs.length} document(s)<br><small>${docsWithFiles} uploaded file(s)${docsWithFiles ? ` · ${documentLinks(vehicle)}` : ''}</small></td>
                     <td>${Number(vehicle.rent || 0).toLocaleString()} BDT</td>
                     <td><span class="badge ${vehicle.status === 'Active' ? 'ok' : 'warn'}">${escapeHtml(vehicle.status || '-')}</span></td>
-                    <td><button type="button" class="mini-btn edit-vehicle" data-id="${escapeHtml(vehicle.id)}">Edit</button><button type="button" class="mini-btn danger delete-vehicle" data-id="${escapeHtml(vehicle.id)}">Delete</button></td>
+                    <td><button type="button" class="mini-btn view-vehicle" data-id="${escapeHtml(vehicle.id)}">View</button><button type="button" class="mini-btn edit-vehicle" data-id="${escapeHtml(vehicle.id)}">Edit</button><button type="button" class="mini-btn danger delete-vehicle" data-id="${escapeHtml(vehicle.id)}">Delete</button></td>
                 </tr>`;
             }).join('') : '<tr><td colspan="9" class="empty">No vehicles found.</td></tr>';
 
@@ -683,6 +998,8 @@
             if (pageTarget) { renderTable(); setVisible(pageTarget.dataset.pageTarget); }
             const remove = event.target.closest('.remove-row');
             if (remove) remove.parentElement.remove();
+            const view = event.target.closest('.view-vehicle');
+            if (view) viewVehicle(view.dataset.id);
             const edit = event.target.closest('.edit-vehicle');
             if (edit) editVehicle(edit.dataset.id);
             const del = event.target.closest('.delete-vehicle');
@@ -2045,7 +2362,7 @@
         function viewParty(id) {
             const party = parties.find((item) => item.partyId === id);
             if (!party) return;
-            alert(`${party.partyName}\nType: ${party.partyType}\nPhone: ${party.phone}\nStatus: ${party.status}\nPayment Terms: ${party.paymentTerms}\nContacts: ${(party.contacts || []).map((contact) => `${contact.name} (${contact.phone || '-'})`).join(', ')}\nDocuments: ${(party.documents || []).length}`);
+            window.FleetmanDetailViewer?.show('Vendor / Party Details', party);
         }
 
         function rowHtml(party) {
@@ -2462,7 +2779,7 @@
         function viewTrip(id) {
             const trip = trips.find((item) => item.tripId === id);
             if (!trip) return;
-            alert(`${trip.tripId}\nVehicle: ${trip.vehicle}\nDriver: ${trip.driver}\nDates: ${trip.startDate} to ${trip.endDate}\nRoute: ${trip.fromLocation || '-'} to ${trip.toLocation || '-'}\nStatus: ${trip.status}\nTotal Cost: ${trip.totalCost}`);
+            window.FleetmanDetailViewer?.show('Trip Details', trip);
         }
         function rowHtml(trip) {
             const cls = trip.status === 'Completed' ? 'ok' : trip.status === 'Running' ? 'warn' : trip.status === 'Initiated' || trip.status === 'Draft' ? 'soft' : 'danger';
@@ -2843,7 +3160,7 @@
             setVisible('driverAddPage'); 
         }
 
-        function viewDriver(id){ const row=drivers.find((r)=>r.driverId===id); if(row) alert(`${row.fullName}\nContact: ${row.contact}\nLicense: ${row.licenseType} - ${row.licenseNo}\nValidity: ${row.licenseValidity}\nDocuments: ${(row.documents||[]).map((doc)=>doc.name).join(', ')||'None'}`); }
+        function viewDriver(id){ const row=drivers.find((r)=>r.driverId===id); if(row) window.FleetmanDetailViewer?.show('Driver Details', row); }
         function deleteDriver(id){ if(!confirm('Delete this driver from prototype list?')) return; drivers=drivers.filter((row)=>row.driverId!==id); saveStore(); renderList(); toast('Driver deleted.'); }
         function exportDrivers(){ const rows=[['Driver ID','Full Name','Contact','NID','License No','License Type','License Validity','Salary','Salary Tenure','Working Hour','Vendor','Status','Documents']]; drivers.forEach((row)=>rows.push([row.driverId,row.fullName,row.contact,row.nid,row.licenseNo,row.licenseType,row.licenseValidity,row.salary,row.salaryTenure,row.workingHour,row.vendor,row.status,(row.documents||[]).map((doc)=>doc.name).join('; ')])); exportCsv(rows,'fleetman-driver-list.csv'); }
 
@@ -2883,7 +3200,7 @@
         function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b> <span class="badge soft" style="font-size:10px">${escapeHtml(main.type||'')}</span><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
         function renderList(){ const q=value('#clientSearch').toLowerCase(), status=value('#clientFilterStatus'), type=value('#clientFilterType'), method=value('#clientFilterMethod'); const rows=clients.filter((row)=>{ const people=(row.contacts||[]).map((person)=>[person.name,person.phone,person.role,person.whatsapp,person.email].join(' ')).join(' '); return (!q||[row.clientName,row.phone,row.email,row.clientId,row.reference,people].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!type||row.clientType===type)&&(!method||row.contactMethod===method); }); $('#clientTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="8" class="empty">No client found. Click “Add Client” to create one.</td></tr>'; $('#clientKpiTotal').textContent=clients.length; $('#clientKpiActive').textContent=clients.filter((c)=>c.status==='Active').length; $('#clientKpiContacts').textContent=clients.reduce((sum,c)=>sum+(c.contacts||[]).length,0); $('#clientKpiEmail').textContent=clients.filter((c)=>c.email).length; }
         function editClient(id){ const row=clients.find((r)=>r.clientId===id); if(!row) return; resetForm(); const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); setVisible('clientAddPage'); }
-        function viewClient(id){ const row=clients.find((r)=>r.clientId===id); if(row) alert(`${row.clientName}\nMain Phone: ${row.phone}\nEmail: ${row.email||'-'}\nStatus: ${row.status}\nType: ${row.clientType}\nContacts: ${(row.contacts||[]).map((p)=>p.name+' ('+(p.phone||'-')+')').join(', ')}`); }
+        function viewClient(id){ const row=clients.find((r)=>r.clientId===id); if(row) window.FleetmanDetailViewer?.show('Client Details', row); }
         function deleteClient(id){ if(!confirm('Delete this client from prototype list?')) return; clients=clients.filter((row)=>row.clientId!==id); saveStore(); renderList(); toast('Client deleted.'); }
         function exportClients(){ const rows=[['Client ID','Client Name','Phone','WhatsApp','Email','Reference','Client Type','Status','Preferred Contact','Address','About','Contact Persons']]; clients.forEach((row)=>rows.push([row.clientId,row.clientName,row.phone,row.whatsapp,row.email,row.reference,row.clientType,row.status,row.contactMethod,row.address,row.about,(row.contacts||[]).map((p)=>`${p.name} / ${p.role||''} / ${p.phone||''}`).join('; ')])); exportCsv(rows,'fleetman-client-list.csv'); }
         $('#addClientContactBtn')?.addEventListener('click',()=>addContact()); $('#resetClientBtn')?.addEventListener('click',resetForm); $('#saveClientBtn')?.addEventListener('click',()=>saveClient()); $('#saveClientDraftBtn')?.addEventListener('click',()=>saveClient('Draft')); $('#loadClientSampleBtn')?.addEventListener('click',loadSample); $('#newClientBtn')?.addEventListener('click',()=>{resetForm();setVisible('clientAddPage');}); $('#exportClientsBtn')?.addEventListener('click',exportClients); $('#applyClientFiltersBtn')?.addEventListener('click',renderList); $('#clearClientFiltersBtn')?.addEventListener('click',()=>{['#clientSearch','#clientFilterStatus','#clientFilterType','#clientFilterMethod'].forEach((sel)=>setValue(sel,'')); renderList();}); ['#clientSearch','#clientFilterStatus','#clientFilterType','#clientFilterMethod'].forEach((sel)=>$(sel)?.addEventListener('input',renderList)); document.addEventListener('click',(e)=>{ if(e.target.closest('.remove-row')) e.target.closest('.remove-row').parentElement.remove(); const view=e.target.closest('.view-client'); if(view) viewClient(view.dataset.id); const edit=e.target.closest('.edit-client'); if(edit) editClient(edit.dataset.id); const del=e.target.closest('.delete-client'); if(del) deleteClient(del.dataset.id); });
@@ -3286,9 +3603,7 @@
         function viewEmployee(id) {
             const row = employees.find((item) => item.employeeId === id);
             if (!row) return;
-            const contactSummary = (row.contacts || []).map((c) => `${c.type}: ${c.number}${c.relationship ? ' (' + c.relationship + ')' : ''}`).join('\n') || row.contactNumber || '-';
-            const docCount = (row.documents || []).filter((d) => d.file && (d.file.filePath || d.file.fileUrl)).length;
-            alert(`${row.fullName}\nEmployee ID: ${row.employeeId}\nDesignation: ${row.designation}\n\nContacts:\n${contactSummary}\n\nJoining Date: ${row.joiningDate}\nSalary: ${Number(row.salary || 0).toLocaleString()} (${row.salaryTenure})\nStatus: ${row.status}\nDocuments stored: ${docCount}`);
+            window.FleetmanDetailViewer?.show('Employee Details', row);
         }
 
         function deleteEmployee(id) {

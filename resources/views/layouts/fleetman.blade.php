@@ -22,6 +22,26 @@
             :menu-groups="$menuGroups"
             :active-menu="$activeMenu"
         />
+        <script>
+            (function () {
+                try {
+                    var sidebar = document.getElementById('fleetSidebar');
+                    if (!sidebar || !window.localStorage) return;
+                    var scrollTop = Number(localStorage.getItem('fleetman.sidebar.scrollTop') || 0);
+                    if (scrollTop > 0) sidebar.scrollTop = scrollTop;
+                    sidebar.querySelectorAll('[data-menu-block]').forEach(function (block) {
+                        var key = block.getAttribute('data-menu-key') || '';
+                        var toggle = block.querySelector('[data-submenu-toggle]');
+                        if (!key || !toggle) return;
+                        var saved = localStorage.getItem('fleetman.sidebar.open.' + key);
+                        if (saved !== '1' && saved !== '0') return;
+                        var isOpen = saved === '1';
+                        block.classList.toggle('open', isOpen);
+                        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                    });
+                } catch (error) {}
+            })();
+        </script>
 
         <main class="main-content">
             @yield('content')

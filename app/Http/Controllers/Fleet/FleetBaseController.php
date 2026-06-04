@@ -18,6 +18,7 @@ use App\Models\Fleet\FleetVehicle;
 use App\Models\Fleet\FleetVehicleCategory;
 use App\Models\Fleet\FleetVehicleSubCategory;
 use App\Models\Fleet\FleetVendorParty;
+use App\Support\FleetRbac;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -90,12 +91,16 @@ abstract class FleetBaseController extends Controller
 
     protected function shared(string $activeMenu, array $pageData = []): array
     {
+        $user = auth()->user();
+        $roleName = $user?->fleetRole?->name ?? 'User';
+
         return [
             'brand' => config('fleetman.brand'),
             'account' => array_merge(config('fleetman.account'), [
-                'name' => auth()->user()->name ?? (config('fleetman.account.name') ?? 'User'),
+                'title' => $roleName,
+                'name' => $user?->name ?? (config('fleetman.account.name') ?? 'User'),
             ]),
-            'menuGroups' => config('fleetman.menu'),
+            'menuGroups' => $this->authorizedMenuGroups(config('fleetman.menu', [])),
             'activeMenu' => $activeMenu,
             'fleetman' => array_merge([
                 'options' => $this->optionsFromDatabase(),
@@ -109,7 +114,79 @@ abstract class FleetBaseController extends Controller
                 'attendanceMasters' => $this->attendanceMastersFromDatabase(),
                 'latestFuelRates' => $this->latestActiveFuelRates(),
                 'resources' => $this->resourceUrls(),
+                'auth' => $this->fleetAuthPayload(),
             ], $pageData),
+        ];
+    }
+
+    protected function authorizedMenuGroups(array $groups): array
+    {
+        return collect($groups)
+            ->map(function (array $group): array {
+                $items = collect($group['items'] ?? [])
+                    ->map(function (array $item): ?array {
+                        $children = collect($item['children'] ?? [])
+                            ->filter(fn (array $child): bool => $this->menuItemAllowed($child))
+                            ->values()
+                            ->all();
+
+                        if ($children !== []) {
+                            $item['children'] = $children;
+                            return $item;
+                        }
+
+                        unset($item['children']);
+
+                        return $this->menuItemAllowed($item) ? $item : null;
+                    })
+                    ->filter()
+                    ->values()
+                    ->all();
+
+                $group['items'] = $items;
+
+                return $group;
+            })
+            ->filter(fn (array $group): bool => count($group['items'] ?? []) > 0)
+            ->values()
+            ->all();
+    }
+
+    protected function menuItemAllowed(array $item): bool
+    {
+        $permission = $item['permission'] ?? FleetRbac::permissionForRoute($item['route'] ?? null);
+
+        if (! $permission) {
+            return ! empty($item['route']);
+        }
+
+        $user = auth()->user();
+
+        return ! $user || ! method_exists($user, 'canFleet') || $user->canFleet($permission);
+    }
+
+    protected function fleetAuthPayload(): array
+    {
+        $user = auth()->user();
+        $permissionKeys = collect(FleetRbac::permissions())->pluck('key')->values()->all();
+        $allowedPermissions = collect($permissionKeys)
+            ->filter(fn (string $permission): bool => ! $user || ! method_exists($user, 'canFleet') || $user->canFleet($permission))
+            ->values()
+            ->all();
+
+        return [
+            'user' => $user ? [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ] : null,
+            'role' => $user?->fleetRole ? [
+                'id' => $user->fleetRole->id,
+                'name' => $user->fleetRole->name,
+                'slug' => $user->fleetRole->slug,
+            ] : null,
+            'permissions' => $allowedPermissions,
+            'isSuperAdmin' => $user?->isFleetSuperAdmin() ?? false,
         ];
     }
 
