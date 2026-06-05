@@ -14,6 +14,7 @@ use App\Http\Controllers\Fleet\ReportController;
 use App\Http\Controllers\Fleet\RoleMatrixController;
 use App\Http\Controllers\Fleet\TripController;
 use App\Http\Controllers\Fleet\UserManagementController;
+use App\Http\Controllers\Fleet\SettingsController;
 use App\Http\Controllers\Fleet\VehicleController;
 use App\Http\Controllers\Fleet\VendorPartyController;
 use App\Http\Middleware\EnsureFleetPermission;
@@ -167,4 +168,11 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/reports/monthly-driver-fuel', [ReportController::class, 'monthlyDriverFuel'])
         ->middleware(EnsureFleetPermission::class.':reports.view')
         ->name('reports.monthly-driver-fuel');
+
+    Route::get('/settings', [SettingsController::class, 'index'])
+        ->middleware(EnsureFleetPermission::class.':settings.manage')
+        ->name('settings');
+    Route::post('/settings/logo', [SettingsController::class, 'updateLogo'])
+        ->middleware(EnsureFleetPermission::class.':settings.manage')
+        ->name('settings.update-logo');
 });

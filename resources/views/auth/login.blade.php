@@ -10,7 +10,13 @@
 <body class="login-body">
     <main class="login-shell">
         <section class="login-brand-panel">
-            <div class="login-logo">🚙 {{ $brand['name'] ?? 'FleetMan' }}<small>{{ $brand['tagline'] ?? 'Fleet Management System' }}</small></div>
+            @if(!empty($brand['logo_url']))
+                <div class="login-logo" style="text-align: center; margin-bottom: 20px;">
+                    <img src="{{ $brand['logo_url'] }}" alt="{{ $brand['name'] ?? 'FleetMan Logo' }}" style="max-height: 60px;">
+                </div>
+            @else
+                <div class="login-logo">🚙 {{ $brand['name'] ?? 'FleetMan' }}<small>{{ $brand['tagline'] ?? 'Fleet Management System' }}</small></div>
+            @endif
             <h1>Manage your fleet from one secure dashboard.</h1>
             <p>Track vehicles, trips, drivers, attendance, fuel recharge, clients, vendors, and employees from a single Laravel + MySQL system.</p>
             <div class="login-feature-grid">

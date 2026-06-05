@@ -96,6 +96,7 @@ class FleetRbac
             self::permission('users.manage', 'System', 'Manage', 'Manage Users', 'Create users and assign roles. Admin User and Super Admin only by default.', 'fleet.users.store', 139),
             self::permission('role_matrix.view', 'System', 'View', 'View Role Matrix', 'Open the user role and permission matrix page.', 'fleet.role-matrix', 140),
             self::permission('role_matrix.manage', 'System', 'Manage', 'Manage Role Matrix', 'Update role permissions and assign roles to users.', 'fleet.role-matrix.update', 141),
+            self::permission('settings.manage', 'System', 'Manage', 'Manage Settings', 'Update application settings including logo.', 'fleet.settings', 150),
         ];
     }
 

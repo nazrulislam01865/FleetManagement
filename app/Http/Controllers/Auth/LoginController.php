@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 class LoginController extends Controller
@@ -16,8 +17,13 @@ class LoginController extends Controller
             return redirect()->route('fleet.dashboard');
         }
 
+        $logoFiles = Storage::disk('public')->files('logo');
+        $logoUrl = !empty($logoFiles) ? Storage::url($logoFiles[0]) . '?v=' . time() : null;
+
         return view('auth.login', [
-            'brand' => config('fleetman.brand'),
+            'brand' => array_merge(config('fleetman.brand'), [
+                'logo_url' => $logoUrl,
+            ]),
         ]);
     }
 

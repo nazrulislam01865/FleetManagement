@@ -1,9 +1,13 @@
 <aside class="sidebar" id="fleetSidebar">
     <div class="logo-card">
         <div class="logo-mark">
-            🚙 <?php echo e($brand['name'] ?? 'FleetMan'); ?>
+            <?php if(!empty($brand['logo_url'])): ?>
+                <img src="<?php echo e($brand['logo_url']); ?>" alt="<?php echo e($brand['name'] ?? 'FleetMan Logo'); ?>" style="max-height: 32px;">
+            <?php else: ?>
+                🚙 <?php echo e($brand['name'] ?? 'FleetMan'); ?>
 
-            <small><?php echo e($brand['tagline'] ?? 'Fleet Management System'); ?></small>
+                <small><?php echo e($brand['tagline'] ?? 'Fleet Management System'); ?></small>
+            <?php endif; ?>
         </div>
     </div>
 

@@ -169,7 +169,7 @@ return [
                         ['key' => 'master-data-fuel-units', 'label' => 'Fuel Unit Master', 'icon' => '↳', 'route' => 'fleet.master-data.fuel-units', 'permission' => 'master_data.view'],
                     ],
                 ],
-                ['key' => 'settings', 'label' => 'Settings', 'icon' => '⚙️', 'route' => null],
+                ['key' => 'settings', 'label' => 'Settings', 'icon' => '⚙️', 'route' => 'fleet.settings', 'permission' => 'settings.manage'],
             ],
         ],
     ],

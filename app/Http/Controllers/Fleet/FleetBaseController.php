@@ -25,6 +25,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 abstract class FleetBaseController extends Controller
@@ -94,8 +95,13 @@ abstract class FleetBaseController extends Controller
         $user = auth()->user();
         $roleName = $user?->fleetRole?->name ?? 'User';
 
+        $logoFiles = Storage::disk('public')->files('logo');
+        $logoUrl = !empty($logoFiles) ? Storage::url($logoFiles[0]) . '?v=' . time() : null;
+
         return [
-            'brand' => config('fleetman.brand'),
+            'brand' => array_merge(config('fleetman.brand'), [
+                'logo_url' => $logoUrl,
+            ]),
             'account' => array_merge(config('fleetman.account'), [
                 'title' => $roleName,
                 'name' => $user?->name ?? (config('fleetman.account.name') ?? 'User'),

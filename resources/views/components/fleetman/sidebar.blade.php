@@ -1,8 +1,12 @@
 <aside class="sidebar" id="fleetSidebar">
     <div class="logo-card">
         <div class="logo-mark">
-            🚙 {{ $brand['name'] ?? 'FleetMan' }}
-            <small>{{ $brand['tagline'] ?? 'Fleet Management System' }}</small>
+            @if(!empty($brand['logo_url']))
+                <img src="{{ $brand['logo_url'] }}" alt="{{ $brand['name'] ?? 'FleetMan Logo' }}" style="max-height: 32px;">
+            @else
+                🚙 {{ $brand['name'] ?? 'FleetMan' }}
+                <small>{{ $brand['tagline'] ?? 'Fleet Management System' }}</small>
+            @endif
         </div>
     </div>
 
