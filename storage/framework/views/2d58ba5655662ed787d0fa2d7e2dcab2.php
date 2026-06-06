@@ -31,7 +31,6 @@ unset($__defined_vars, $__key, $__value); ?>
 <section <?php echo e($attributes->merge(['class' => 'title-card'])); ?>>
     <div>
         <h1><?php echo e($title); ?></h1>
-        <p class="subtitle"><?php echo e($subtitle); ?></p>
     </div>
     <?php if(isset($action)): ?>
         <div><?php echo e($action); ?></div>

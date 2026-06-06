@@ -1,0 +1,3610 @@
+/* Shared record details modal for FleetMan entities. */
+window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+    'use strict';
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
+    const humanize = (key) => String(key || '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+    function currentRoleSlug() {
+        return String(window.FLEETMAN?.auth?.role?.slug || '').toLowerCase();
+    }
+
+    function canViewDetails() {
+        const auth = window.FLEETMAN?.auth || {};
+        const roleName = String(auth.role?.name || '').toLowerCase();
+        return Boolean(auth.isSuperAdmin) || ['super_admin', 'admin_user'].includes(currentRoleSlug()) || roleName === 'admin user';
+    }
+
+    function toast(message) {
+        const element = document.getElementById('toast');
+        if (!element) {
+            alert(message);
+            return;
+        }
+        element.textContent = message;
+        element.classList.add('show');
+        setTimeout(() => element.classList.remove('show'), 2800);
+    }
+
+    function ensureModal() {
+        let overlay = document.getElementById('fleetDetailOverlay');
+        if (overlay) return overlay;
+
+        overlay = document.createElement('div');
+        overlay.id = 'fleetDetailOverlay';
+        overlay.className = 'fleet-detail-overlay';
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = `
+            <section class="fleet-detail-panel" role="dialog" aria-modal="true" aria-labelledby="fleetDetailTitle">
+                <div class="fleet-detail-head">
+                    <div>
+                        <span class="fleet-detail-kicker" id="fleetDetailKicker">Record Details</span>
+                        <h2 id="fleetDetailTitle">Details</h2>
+                        <p id="fleetDetailSubtitle"></p>
+                    </div>
+                    <button type="button" class="fleet-detail-close" data-fleet-detail-close aria-label="Close details">×</button>
+                </div>
+                <div class="fleet-detail-body" id="fleetDetailBody"></div>
+            </section>`;
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener('click', (event) => {
+            if (event.target === overlay || event.target.closest('[data-fleet-detail-close]')) close();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && overlay.classList.contains('show')) close();
+        });
+
+        return overlay;
+    }
+
+    function close() {
+        const overlay = document.getElementById('fleetDetailOverlay');
+        if (!overlay) return;
+        overlay.classList.remove('show');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('fleet-detail-open');
+    }
+
+    function fileUrl(file = {}) {
+        if (file.fileUrl || file.url) return String(file.fileUrl || file.url);
+        const path = String(file.filePath || file.path || '');
+        if (!path) return '';
+        if (/^https?:\/\//i.test(path) || path.startsWith('/')) return path;
+        return '/storage/' + path.replace(/^public\//, '').replace(/^storage\//, '');
+    }
+
+    function isFileLike(value) {
+        return value && typeof value === 'object' && !Array.isArray(value) && Boolean(value.fileUrl || value.filePath || value.url || value.path || value.originalName || value.fileName || value.mimeType);
+    }
+
+    function isImageFile(file = {}) {
+        const mime = String(file.mimeType || file.type || '').toLowerCase();
+        const name = String(file.originalName || file.fileName || file.filePath || file.url || '').toLowerCase();
+        return mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i.test(name);
+    }
+
+    function collectFiles(record) {
+        const files = [];
+        const seen = new Set();
+
+        function push(file, label = '') {
+            if (!isFileLike(file)) return;
+            const url = fileUrl(file);
+            const name = file.originalName || file.fileName || label || 'Uploaded file';
+            const key = [url, name, file.mimeType || ''].join('|');
+            if (seen.has(key)) return;
+            seen.add(key);
+            files.push({
+                url,
+                name,
+                label: label || name,
+                mimeType: file.mimeType || '',
+                sizeBytes: file.sizeBytes || '',
+                uploadedAt: file.uploadedAt || '',
+                isImage: isImageFile(file),
+            });
+        }
+
+        function walk(node, context = '') {
+            if (!node || typeof node !== 'object') return;
+            if (isFileLike(node)) {
+                push(node, context);
+                return;
+            }
+            if (Array.isArray(node)) {
+                node.forEach((item, index) => walk(item, context ? `${context} ${index + 1}` : `Item ${index + 1}`));
+                return;
+            }
+            if (node.file && isFileLike(node.file)) {
+                push(node.file, node.name || node.title || node.type || node.reference || context || 'Document');
+            }
+            Object.entries(node).forEach(([key, value]) => {
+                if (key === 'file') return;
+                walk(value, node.name || node.title || node.type || humanize(key));
+            });
+        }
+
+        walk(record, 'Record');
+        return files;
+    }
+
+    function valueText(value) {
+        if (value === null || value === undefined || value === '') return '—';
+        if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+        if (typeof value === 'number') return Number(value).toLocaleString();
+        return String(value);
+    }
+
+    function renderPrimitiveFields(record = {}) {
+        const skip = new Set(['photo', 'image', 'file', 'documents', 'docs', 'contacts', 'fuels', 'payments', 'photos', 'assignments']);
+        const fields = Object.entries(record)
+            .filter(([key, value]) => !skip.has(key) && (typeof value !== 'object' || value === null) && value !== '')
+            .map(([key, value]) => `
+                <div class="fleet-detail-field">
+                    <small>${escapeHtml(humanize(key))}</small>
+                    <strong>${escapeHtml(valueText(value))}</strong>
+                </div>`)
+            .join('');
+
+        return fields ? `<div class="fleet-detail-grid">${fields}</div>` : '<p class="fleet-detail-muted">No primary fields found for this record.</p>';
+    }
+
+    function renderArrayCards(title, rows) {
+        if (!Array.isArray(rows) || !rows.length) return '';
+        const cards = rows.map((item, index) => {
+            if (!item || typeof item !== 'object') return `<div class="fleet-detail-mini-card"><b>${index + 1}.</b> ${escapeHtml(valueText(item))}</div>`;
+            const parts = Object.entries(item)
+                .filter(([key]) => key !== 'file')
+                .map(([key, value]) => {
+                    if (value && typeof value === 'object') return '';
+                    return `<div><small>${escapeHtml(humanize(key))}</small><b>${escapeHtml(valueText(value))}</b></div>`;
+                })
+                .filter(Boolean)
+                .join('');
+            return `<div class="fleet-detail-mini-card"><div class="fleet-detail-mini-title">${escapeHtml(title)} ${index + 1}</div>${parts || '<span class="fleet-detail-muted">No extra data</span>'}</div>`;
+        }).join('');
+        return `<section class="fleet-detail-section"><h3>${escapeHtml(title)}</h3><div class="fleet-detail-mini-grid">${cards}</div></section>`;
+    }
+
+    function renderFiles(files) {
+        if (!files.length) return '';
+        const images = files.filter((file) => file.isImage && file.url);
+        const documents = files.filter((file) => !file.isImage || !file.url);
+        return `
+            ${images.length ? `<section class="fleet-detail-section"><h3>Uploaded Images</h3><div class="fleet-detail-image-grid">${images.map((file) => `
+                <a href="${escapeHtml(file.url)}" target="_blank" rel="noopener" class="fleet-detail-image-card">
+                    <img src="${escapeHtml(file.url)}" alt="${escapeHtml(file.label || file.name)}">
+                    <span>${escapeHtml(file.label || file.name)}</span>
+                </a>`).join('')}</div></section>` : ''}
+            ${documents.length ? `<section class="fleet-detail-section"><h3>Uploaded Documents / Files</h3><div class="fleet-detail-file-list">${documents.map((file) => `
+                <div class="fleet-detail-file-row">
+                    <div><b>${escapeHtml(file.label || file.name)}</b><small>${escapeHtml([file.name, file.mimeType, file.uploadedAt].filter(Boolean).join(' • ') || 'Saved file')}</small></div>
+                    ${file.url ? `<a href="${escapeHtml(file.url)}" target="_blank" rel="noopener" class="mini-btn">Open</a>` : '<span class="badge soft">No link</span>'}
+                </div>`).join('')}</div></section>` : ''}`;
+    }
+
+    function renderNestedSections(record = {}) {
+        const sections = [];
+        if (record.contacts) sections.push(renderArrayCards('Contact', record.contacts));
+        if (record.documents) sections.push(renderArrayCards('Document', record.documents));
+        if (record.docs) sections.push(renderArrayCards('Document', record.docs));
+        if (record.fuels) sections.push(renderArrayCards('Fuel', record.fuels));
+        if (record.payments) sections.push(renderArrayCards('Payment', record.payments));
+        if (record.assignments) sections.push(renderArrayCards('Assignment', record.assignments));
+        if (record.photos && typeof record.photos === 'object') sections.push(renderArrayCards('Photo', Object.entries(record.photos).map(([key, value]) => ({ type: key, ...(value || {}) }))));
+        return sections.filter(Boolean).join('');
+    }
+
+    function titleFor(type, record = {}) {
+        return record.fullName || record.clientName || record.partyName || record.name || record.tripId || record.id || record.employeeId || record.driverId || 'Record Details';
+    }
+
+    function subtitleFor(type, record = {}) {
+        const values = [];
+        if (record.id) values.push(record.id);
+        if (record.driverId) values.push(record.driverId);
+        if (record.employeeId) values.push(record.employeeId);
+        if (record.clientId) values.push(record.clientId);
+        if (record.partyId) values.push(record.partyId);
+        if (record.tripId) values.push(record.tripId);
+        if (record.status) values.push(record.status);
+        return values.join(' • ');
+    }
+
+    function show(type, record = {}) {
+        if (!canViewDetails()) {
+            toast('Only Super Admin and Admin User can view full details.');
+            return;
+        }
+        if (!record) return;
+
+        const overlay = ensureModal();
+        const files = collectFiles(record);
+        document.getElementById('fleetDetailKicker').textContent = type || 'Record Details';
+        document.getElementById('fleetDetailTitle').textContent = titleFor(type, record);
+        document.getElementById('fleetDetailSubtitle').textContent = subtitleFor(type, record);
+        document.getElementById('fleetDetailBody').innerHTML = `
+            <section class="fleet-detail-section">
+                <h3>Full Details</h3>
+                ${renderPrimitiveFields(record)}
+            </section>
+            ${renderNestedSections(record)}
+            ${renderFiles(files)}
+        `;
+        overlay.classList.add('show');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('fleet-detail-open');
+    }
+
+    return { show, close, canViewDetails };
+})();
+
+
+(function () {
+    'use strict';
+
+    const data = window.FLEETMAN || {};
+    const options = data.options || {};
+    const samples = data.samples || {};
+    const records = data.records || samples || {};
+    const resources = data.resources || {};
+
+    function csrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.content || '';
+    }
+
+    function syncResource(resource, rows) {
+        const endpoint = resources?.[resource]?.sync;
+        if (!endpoint) return;
+
+        fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken(),
+            },
+            body: JSON.stringify({ rows: rows || [] }),
+        }).catch(() => {
+            const element = document.getElementById('toast');
+            if (element) {
+                element.textContent = 'Saved locally in screen state, but database sync failed. Check server connection.';
+                element.classList.add('show');
+                setTimeout(() => element.classList.remove('show'), 3200);
+            }
+        });
+    }
+
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+    const value = (selector) => ($(selector) ? $(selector).value : '');
+    const setValue = (selector, nextValue) => { if ($(selector)) $(selector).value = nextValue ?? ''; };
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
+
+    function toast(message) {
+        const element = $('#toast');
+        if (!element) return;
+        element.textContent = message;
+        element.classList.add('show');
+        setTimeout(() => element.classList.remove('show'), 2800);
+    }
+
+    function downloadCsv(filename, rows) {
+        const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
+    function money(number) {
+        return '৳ ' + Number(number || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function bindMobileDrawer() {
+        const body = document.body;
+        const sidebar = $('.sidebar');
+        const menuButton = $('#menuBtn');
+        const backdrop = $('#backdrop');
+        const scrollKey = 'fleetman.sidebar.scrollTop';
+        const openKey = (key) => `fleetman.sidebar.open.${key}`;
+
+        function setDrawer(open) {
+            body.classList.toggle('drawer-open', open);
+            menuButton?.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+
+        function setMenuOpen(block, open, persist = true) {
+            const key = block?.dataset?.menuKey || '';
+            const toggle = $('[data-submenu-toggle]', block);
+            if (!block || !toggle || !key) return;
+
+            block.classList.toggle('open', open);
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (persist) localStorage.setItem(openKey(key), open ? '1' : '0');
+        }
+
+        if (sidebar) {
+            requestAnimationFrame(() => {
+                const savedScroll = Number(localStorage.getItem(scrollKey) || 0);
+                if (savedScroll > 0) sidebar.scrollTop = savedScroll;
+            });
+
+            sidebar.addEventListener('scroll', () => {
+                localStorage.setItem(scrollKey, String(sidebar.scrollTop || 0));
+            }, { passive: true });
+        }
+
+        $$('[data-menu-block]').forEach((block) => {
+            const key = block.dataset.menuKey || '';
+            if (!key || !$('[data-submenu-toggle]', block)) return;
+
+            const saved = localStorage.getItem(openKey(key));
+            if (saved === '1') setMenuOpen(block, true, false);
+            if (saved === '0') setMenuOpen(block, false, false);
+        });
+
+        menuButton?.setAttribute('aria-controls', 'fleetSidebar');
+        menuButton?.setAttribute('aria-expanded', 'false');
+        menuButton?.addEventListener('click', () => setDrawer(!body.classList.contains('drawer-open')));
+        backdrop?.addEventListener('click', () => setDrawer(false));
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') setDrawer(false);
+        });
+
+        document.addEventListener('click', (event) => {
+            const submenuToggle = event.target.closest('[data-submenu-toggle]');
+            if (submenuToggle) {
+                if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+                    event.preventDefault();
+                    const block = submenuToggle.closest('[data-menu-block]');
+                    if (block) setMenuOpen(block, !block.classList.contains('open'));
+                }
+                return;
+            }
+
+            const menuLink = event.target.closest('.menu-item,.submenu-item');
+            if (menuLink && sidebar?.contains(menuLink)) {
+                localStorage.setItem(scrollKey, String(sidebar.scrollTop || 0));
+                if (window.matchMedia('(max-width: 1050px)').matches) setDrawer(false);
+            }
+        });
+    }
+
+
+    function populateSelect(select, values, placeholder) {
+        if (!select) return;
+        const oldValue = select.value;
+        select.innerHTML = '';
+        if (placeholder !== undefined) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = placeholder;
+            select.appendChild(option);
+        }
+        values.forEach((item) => {
+            const option = document.createElement('option');
+            option.value = item;
+            option.textContent = item;
+            select.appendChild(option);
+        });
+        if (oldValue && values.includes(oldValue)) select.value = oldValue;
+    }
+
+    function initVehicles() {
+        let vehicles = Array.isArray(records.vehicles) ? records.vehicles : (samples.vehicles || []);
+        const vehicleCategories = options.vehicle_categories || {};
+        const fuelTypes = options.fuel_types || [];
+        const latestFuelRates = data.latestFuelRates || {};
+        const fuelStations = Array.isArray(data.fuelStations) ? data.fuelStations : [];
+        const docTemplates = options.document_templates || [];
+        const docReminders = options.document_reminders || [];
+
+        function uid() {
+            return 'VHL' + String(Date.now()).slice(-8);
+        }
+
+        function updateSubCategory(selectedValue) {
+            const category = $('#category')?.value || '';
+            const subCategories = vehicleCategories[category] || [];
+            populateSelect($('#subCategory'), subCategories, 'Select sub-category');
+            if (selectedValue && subCategories.includes(selectedValue)) $('#subCategory').value = selectedValue;
+        }
+
+        function getUsage() {
+            return $('input[name="usage"]:checked')?.value || '';
+        }
+
+        function setUsage(usage) {
+            $$('input[name="usage"]').forEach((radio) => { radio.checked = radio.value === usage; });
+        }
+
+        function normalizeFileData(row = {}) {
+            if (row.file && typeof row.file === 'object') return row.file;
+            if (row.filePath || row.fileUrl || row.originalName || row.fileName) {
+                return {
+                    filePath: row.filePath || '',
+                    fileUrl: row.fileUrl || '',
+                    fileName: row.fileName || '',
+                    originalName: row.originalName || row.fileName || '',
+                    mimeType: row.mimeType || '',
+                    sizeBytes: row.sizeBytes || '',
+                    uploadedAt: row.uploadedAt || '',
+                };
+            }
+            return {};
+        }
+
+        function parseFileDataInput(selector, root = document) {
+            const hidden = $(selector, root);
+            if (!hidden?.value) return {};
+            try {
+                return JSON.parse(hidden.value) || {};
+            } catch (_) {
+                return {};
+            }
+        }
+
+        function selectedVehicleImageFile() {
+            return $('#image')?.files?.[0] || null;
+        }
+
+        function selectedDocFile(row) {
+            return $('.docFile', row)?.files?.[0] || null;
+        }
+
+        function renderVehicleImageInfo(fileData = {}, selectedFile = null) {
+            const info = $('#vehicleImageUploadInfo');
+            if (!info) return;
+            if (selectedFile) {
+                info.innerHTML = `<span class="pending-upload">Selected: <b>${escapeHtml(selectedFile.name)}</b>. It will upload only after Save Vehicle.</span>`;
+                return;
+            }
+            if (fileData.fileUrl || fileData.filePath) {
+                const label = fileData.originalName || fileData.fileName || 'Vehicle image';
+                const link = fileData.fileUrl ? `<a href="${escapeHtml(fileData.fileUrl)}" target="_blank" rel="noopener">View image</a>` : '';
+                info.innerHTML = `Uploaded: <b>${escapeHtml(label)}</b>${link ? ` · ${link}` : ''}`;
+            } else {
+                info.textContent = '';
+            }
+        }
+
+        function renderDocFileInfo(row, fileData = {}, selectedFile = null) {
+            const info = $('.docUploadInfo', row);
+            if (!info) return;
+            if (selectedFile) {
+                info.innerHTML = `<span class="pending-upload">Selected: <b>${escapeHtml(selectedFile.name)}</b>. It will upload only after Save Vehicle.</span>`;
+                return;
+            }
+            if (fileData.fileUrl || fileData.filePath) {
+                const label = fileData.originalName || fileData.fileName || 'Uploaded document';
+                const link = fileData.fileUrl ? `<a href="${escapeHtml(fileData.fileUrl)}" target="_blank" rel="noopener">View file</a>` : '';
+                info.innerHTML = `Uploaded: <b>${escapeHtml(label)}</b>${link ? ` · ${link}` : ''}`;
+            } else {
+                info.textContent = '';
+            }
+        }
+
+        function activeRateFor(type) {
+            return latestFuelRates[type] || null;
+        }
+
+        function updateFuelRate(row, force = false) {
+            const type = $('.fuelType', row)?.value || '';
+            const input = $('.fuelRate', row);
+            const hint = $('.fuelRateHint', row);
+            if (!input) return;
+
+            if (!type) {
+                if (force) input.value = '';
+                if (hint) hint.textContent = '';
+                return;
+            }
+
+            const rate = activeRateFor(type);
+            if (!rate) {
+                if (force) input.value = '';
+                if (hint) hint.textContent = 'No active fuel price found for this fuel type.';
+                return;
+            }
+
+            input.value = rate.price ?? '';
+            if (hint) {
+                const unit = rate.unit ? ` / ${rate.unit}` : '';
+                const date = rate.effectiveDate ? ` Effective: ${rate.effectiveDate}.` : '';
+                hint.textContent = `Loaded latest active rate${unit}.${date}`;
+            }
+        }
+
+        function addFuelRow(row = {}) {
+            const wrapper = $('#vehicleFuelRows');
+            if (!wrapper) return;
+            const div = document.createElement('div');
+            div.className = 'repeat-row fuel-row';
+            const fuelOptions = [''].concat(fuelTypes);
+            div.innerHTML = `
+                <div class="field">
+                    <label>Fuel Type</label>
+                    <select class="fuelType">${fuelOptions.map((type) => `<option value="${escapeHtml(type)}" ${row.type === type ? 'selected' : ''}>${escapeHtml(type || 'Select fuel type')}</option>`).join('')}</select>
+                </div>
+                <div class="field">
+                    <label>Fuel Priority</label>
+                    <select class="fuelPriority">
+                        ${['Primary', 'Secondary', 'Tertiary'].map((priority) => `<option value="${priority}" ${row.priority === priority ? 'selected' : ''}>${priority}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Default Rate</label>
+                    <input class="fuelRate" type="number" placeholder="Auto from latest active fuel price" value="${escapeHtml(row.rate || '')}" readonly>
+                    <small class="upload-meta fuelRateHint"></small>
+                </div>
+                <button type="button" class="mini-btn remove-row">Remove</button>`;
+            wrapper.appendChild(div);
+            if (wrapper.children.length === 1 && !row.priority) div.querySelector('.fuelPriority').value = 'Primary';
+            if (row.type && !row.rate) updateFuelRate(div, true);
+            if (row.type && row.rate) updateFuelRate(div, false);
+        }
+
+        function addDocRow(row = {}) {
+            const wrapper = $('#vehicleDocRows');
+            if (!wrapper) return;
+            const div = document.createElement('div');
+            div.className = 'repeat-row doc-row';
+            const defaultDocOptions = [''].concat(docTemplates);
+            const fileData = normalizeFileData(row.file || row);
+            div.innerHTML = `
+                <div class="field">
+                    <label>Document Name</label>
+                    <select class="docName">
+                        ${defaultDocOptions.map((name) => `<option value="${escapeHtml(name)}" ${row.name === name ? 'selected' : ''}>${escapeHtml(name || 'Select document')}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="field">
+                    <label>Expiry Date</label>
+                    <input class="docExpiry" type="date" value="${escapeHtml(row.expiry || '')}">
+                </div>
+                <div class="field">
+                    <label>Reminder</label>
+                    <select class="docReminder">${docReminders.map((reminder) => `<option value="${escapeHtml(reminder)}" ${row.reminder === reminder ? 'selected' : ''}>${escapeHtml(reminder)}</option>`).join('')}</select>
+                </div>
+                <div class="field">
+                    <label>Upload Picture / File</label>
+                    <input class="docFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf">
+                    <input class="docFileData" type="hidden" value="${escapeHtml(JSON.stringify(fileData || {}))}">
+                    <small class="upload-meta docUploadInfo"></small>
+                </div>
+                <button type="button" class="mini-btn remove-row">Remove</button>`;
+            wrapper.appendChild(div);
+            renderDocFileInfo(div, fileData);
+        }
+
+        function validatePendingFiles(vehicleImageFile = null, documentFiles = {}) {
+            if (vehicleImageFile) {
+                const imageExt = String(vehicleImageFile.name || '').split('.').pop().toLowerCase();
+                if (!['jpg', 'jpeg', 'png', 'webp'].includes(imageExt)) {
+                    toast('Vehicle image must be JPG, JPEG, PNG or WEBP.');
+                    return false;
+                }
+                if (vehicleImageFile.size > 5 * 1024 * 1024) {
+                    toast('Vehicle image must be 5 MB or smaller.');
+                    return false;
+                }
+            }
+
+            for (const file of Object.values(documentFiles || {})) {
+                if (!file) continue;
+                const ext = String(file.name || '').split('.').pop().toLowerCase();
+                if (!['jpg', 'jpeg', 'png', 'webp', 'pdf'].includes(ext)) {
+                    toast('Vehicle documents must be JPG, JPEG, PNG, WEBP or PDF.');
+                    return false;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                    toast('Each vehicle document must be 5 MB or smaller.');
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function hasPendingFiles(bundle = {}) {
+            return Boolean(bundle.imageFile) || Object.values(bundle.documentFiles || {}).some(Boolean);
+        }
+
+        async function syncVehicles(rows, filesByVehicle = {}) {
+            const endpoint = resources?.vehicles?.sync;
+            if (!endpoint) return { ok: true, skipped: true };
+
+            const containsFiles = Object.values(filesByVehicle || {}).some(hasPendingFiles);
+
+            try {
+                let response;
+                if (containsFiles) {
+                    const formData = new FormData();
+                    formData.append('rows', JSON.stringify(rows || []));
+                    Object.entries(filesByVehicle).forEach(([vehicleIndex, files]) => {
+                        if (files.imageFile) formData.append(`vehicle_image_files[${vehicleIndex}]`, files.imageFile);
+                        Object.entries(files.documentFiles || {}).forEach(([documentIndex, file]) => {
+                            if (file) formData.append(`vehicle_document_files[${vehicleIndex}][${documentIndex}]`, file);
+                        });
+                    });
+                    response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken(),
+                        },
+                        body: formData,
+                    });
+                } else {
+                    response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken(),
+                        },
+                        body: JSON.stringify({ rows: rows || [] }),
+                    });
+                }
+
+                if (!response.ok) {
+                    let message = 'Vehicle could not be saved.';
+                    try {
+                        const error = await response.json();
+                        message = error.message || Object.values(error.errors || {}).flat().join(' ') || message;
+                    } catch (_) {}
+                    throw new Error(message);
+                }
+
+                return await response.json().catch(() => ({ ok: true }));
+            } catch (error) {
+                toast(error.message || 'Vehicle could not be saved.');
+                return { ok: false, syncFailed: true, message: error.message };
+            }
+        }
+
+        function resetForm(withId = true) {
+            $$('#vehicleAddPage input:not([type=radio]):not([type=file]):not([type=hidden]), #vehicleAddPage textarea').forEach((input) => { input.value = ''; });
+            $$('#vehicleAddPage input[type=file]').forEach((input) => { input.value = ''; });
+            $$('#vehicleAddPage input[type=hidden]').forEach((input) => { input.value = ''; });
+            $$('#vehicleAddPage select').forEach((select) => { select.selectedIndex = 0; });
+            setUsage('');
+            $('#vehicleFuelRows').innerHTML = '';
+            $('#vehicleDocRows').innerHTML = '';
+            if (withId) setValue('#vehicleId', uid());
+            setValue('#rent', 0);
+            updateSubCategory('');
+            addFuelRow({ priority: 'Primary' });
+            docTemplates.forEach((doc) => addDocRow({ name: doc, reminder: docReminders[0] || '' }));
+            renderVehicleImageInfo({});
+        }
+
+        function collectVehicle() {
+            const documentFiles = {};
+            const docs = [];
+            $$('.doc-row').forEach((row) => {
+                const existingFile = parseFileDataInput('.docFileData', row);
+                const pendingFile = selectedDocFile(row);
+                const doc = {
+                    name: $('.docName', row)?.value || '',
+                    expiry: $('.docExpiry', row)?.value || '',
+                    reminder: $('.docReminder', row)?.value || '',
+                    file: existingFile,
+                };
+                if (doc.name || doc.expiry || doc.file?.filePath || doc.file?.fileUrl || pendingFile) {
+                    const documentIndex = docs.length;
+                    docs.push(doc);
+                    if (pendingFile) documentFiles[documentIndex] = pendingFile;
+                }
+            });
+
+            return {
+                vehicle: {
+                    id: value('#vehicleId'),
+                    name: value('#vehicleName').trim(),
+                    regNo: value('#regNo').trim(),
+                    vendor: value('#vendor'),
+                    model: value('#model').trim(),
+                    color: value('#color').trim(),
+                    engineNo: value('#engineNo').trim(),
+                    mileage: value('#mileage'),
+                    odo: value('#odo'),
+                    category: value('#category'),
+                    subCategory: value('#subCategory'),
+                    usage: getUsage(),
+                    driver: value('#driver'),
+                    rent: value('#rent'),
+                    notes: value('#notes'),
+                    image: parseFileDataInput('#vehicleImageData'),
+                    fuels: $$('.fuel-row').map((row) => ({
+                        type: $('.fuelType', row)?.value || '',
+                        priority: $('.fuelPriority', row)?.value || '',
+                        rate: $('.fuelRate', row)?.value || '',
+                    })).filter((fuel) => fuel.type || fuel.rate),
+                    docs,
+                    status: 'Active',
+                },
+                imageFile: selectedVehicleImageFile(),
+                documentFiles,
+            };
+        }
+
+        function validateVehicle(vehicle) {
+            if (!vehicle.name || !vehicle.regNo || !vehicle.vendor || !vehicle.model || !vehicle.engineNo || !vehicle.category || !vehicle.usage) {
+                toast('Please fill all required vehicle information.');
+                return false;
+            }
+            const validFuels = (vehicle.fuels || []).filter((fuel) => fuel.type);
+            if (!validFuels.length) {
+                toast('Please add at least one fuel type.');
+                return false;
+            }
+            if (!validFuels.some((fuel) => fuel.priority === 'Primary')) {
+                toast('Please mark one fuel as Primary.');
+                return false;
+            }
+            if (validFuels.some((fuel) => !fuel.rate)) {
+                toast('Default rate is missing. Add an active fuel price first, then select the fuel type.');
+                return false;
+            }
+            const existingRegistration = vehicles.find((item) => String(item.regNo || '').toLowerCase() === vehicle.regNo.toLowerCase() && item.id !== vehicle.id);
+            if (existingRegistration) {
+                toast('Registration number must be unique. This registration already exists.');
+                return false;
+            }
+            return true;
+        }
+
+        function upsertVehicle(vehicle) {
+            const index = vehicles.findIndex((item) => item.id === vehicle.id);
+            if (index >= 0) {
+                vehicles[index] = vehicle;
+                return index;
+            }
+            vehicles.unshift(vehicle);
+            return 0;
+        }
+
+        function cloneVehicles() {
+            return JSON.parse(JSON.stringify(vehicles || []));
+        }
+
+        async function saveVehicle() {
+            const form = collectVehicle();
+            const vehicle = form.vehicle;
+            if (!validateVehicle(vehicle)) return;
+            if (!validatePendingFiles(form.imageFile, form.documentFiles)) return;
+
+            const saveBtn = $('#saveVehicleBtn');
+            const originalText = saveBtn?.textContent || '';
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.textContent = hasPendingFiles(form) ? 'Saving & uploading...' : 'Saving...';
+            }
+
+            const previousVehicles = cloneVehicles();
+            const vehicleIndex = upsertVehicle(vehicle);
+            const filesForSync = hasPendingFiles(form) ? { [vehicleIndex]: { imageFile: form.imageFile, documentFiles: form.documentFiles } } : {};
+            const result = await syncVehicles(vehicles, filesForSync);
+
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = originalText;
+            }
+
+            if (result?.syncFailed || result?.ok === false) {
+                vehicles = previousVehicles;
+                renderTable();
+                return;
+            }
+
+            if (Array.isArray(result?.rows)) vehicles = result.rows;
+            renderTable();
+            toast('Vehicle saved successfully.');
+            setVisible('vehicleListPage');
+        }
+
+        function loadSample() {
+            const sample = (samples.vehicles || [])[0];
+            if (!sample) return;
+            resetForm(false);
+            setValue('#vehicleId', sample.id);
+            setValue('#vehicleName', sample.name);
+            setValue('#regNo', sample.regNo);
+            setValue('#vendor', sample.vendor);
+            setValue('#model', sample.model);
+            setValue('#color', sample.color);
+            setValue('#engineNo', sample.engineNo);
+            setValue('#mileage', sample.mileage);
+            setValue('#odo', sample.odo);
+            setValue('#category', sample.category);
+            updateSubCategory(sample.subCategory);
+            setValue('#driver', sample.driver);
+            setValue('#rent', sample.rent);
+            setValue('#notes', sample.notes || '');
+            if (sample.image) {
+                setValue('#vehicleImageData', JSON.stringify(sample.image));
+                renderVehicleImageInfo(sample.image);
+            }
+            setUsage(sample.usage);
+            $('#vehicleFuelRows').innerHTML = '';
+            $('#vehicleDocRows').innerHTML = '';
+            (sample.fuels || []).forEach(addFuelRow);
+            (sample.docs || []).forEach(addDocRow);
+            toast('Sample vehicle data loaded.');
+        }
+
+        function editVehicle(id) {
+            const vehicle = vehicles.find((item) => item.id === id);
+            if (!vehicle) return;
+            resetForm(false);
+            setValue('#vehicleId', vehicle.id);
+            setValue('#vehicleName', vehicle.name);
+            setValue('#regNo', vehicle.regNo);
+            setValue('#vendor', vehicle.vendor);
+            setValue('#model', vehicle.model);
+            setValue('#color', vehicle.color);
+            setValue('#engineNo', vehicle.engineNo);
+            setValue('#mileage', vehicle.mileage);
+            setValue('#odo', vehicle.odo);
+            setValue('#category', vehicle.category);
+            updateSubCategory(vehicle.subCategory);
+            setValue('#driver', vehicle.driver);
+            setValue('#rent', vehicle.rent);
+            setValue('#notes', vehicle.notes || '');
+            if (vehicle.image) {
+                setValue('#vehicleImageData', JSON.stringify(vehicle.image));
+                renderVehicleImageInfo(vehicle.image);
+            } else {
+                setValue('#vehicleImageData', '');
+                renderVehicleImageInfo({});
+            }
+            setUsage(vehicle.usage);
+            $('#vehicleFuelRows').innerHTML = '';
+            $('#vehicleDocRows').innerHTML = '';
+            (vehicle.fuels || []).forEach(addFuelRow);
+            if (!(vehicle.fuels || []).length) addFuelRow({ priority: 'Primary' });
+            (vehicle.docs || []).forEach(addDocRow);
+            setVisible('vehicleAddPage');
+        }
+
+        async function deleteVehicle(id) {
+            if (!confirm('Delete this vehicle from the list?')) return;
+            const previousVehicles = cloneVehicles();
+            vehicles = vehicles.filter((vehicle) => vehicle.id !== id);
+            const result = await syncVehicles(vehicles);
+            if (result?.syncFailed || result?.ok === false) {
+                vehicles = previousVehicles;
+                renderTable();
+                return;
+            }
+            if (Array.isArray(result?.rows)) vehicles = result.rows;
+            renderTable();
+            toast('Vehicle deleted.');
+        }
+
+        function documentLinks(vehicle) {
+            return (vehicle.docs || [])
+                .filter((doc) => doc.file?.fileUrl || doc.file?.filePath)
+                .map((doc) => {
+                    const label = doc.name || doc.file?.originalName || 'Document';
+                    return doc.file?.fileUrl ? `<a href="${escapeHtml(doc.file.fileUrl)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>` : escapeHtml(label);
+                })
+                .join(', ');
+        }
+
+        function viewVehicle(id) {
+            const vehicle = vehicles.find((item) => item.id === id);
+            if (!vehicle) return;
+            window.FleetmanDetailViewer?.show('Vehicle Details', vehicle);
+        }
+
+        function renderTable() {
+            const query = value('#vehicleSearch').toLowerCase();
+            const category = value('#vehicleFilterCategory');
+            const fuel = value('#vehicleFilterFuel');
+            const status = value('#vehicleFilterStatus');
+            const rows = vehicles.filter((vehicle) => {
+                const text = [vehicle.name, vehicle.regNo, vehicle.driver, vehicle.id, vehicle.model].join(' ').toLowerCase();
+                return (!query || text.includes(query))
+                    && (!category || vehicle.category === category)
+                    && (!fuel || (vehicle.fuels || []).some((item) => item.type === fuel))
+                    && (!status || vehicle.status === status);
+            });
+
+            const body = $('#vehicleTbody');
+            if (!body) return;
+            body.innerHTML = rows.length ? rows.map((vehicle) => {
+                const docs = vehicle.docs || [];
+                const docsWithFiles = docs.filter((doc) => doc.file?.filePath || doc.file?.fileUrl).length;
+                const imageLink = vehicle.image?.fileUrl ? `<br><small><a href="${escapeHtml(vehicle.image.fileUrl)}" target="_blank" rel="noopener">View image</a></small>` : '';
+                return `
+                <tr>
+                    <td><div class="vehicle-cell"><div class="vehicle-icon">🚗</div><div><b>${escapeHtml(vehicle.name)}</b><br><small>${escapeHtml(vehicle.id)} · ${escapeHtml(vehicle.model)}</small>${imageLink}</div></div></td>
+                    <td>${escapeHtml(vehicle.regNo)}</td>
+                    <td>${escapeHtml(vehicle.category)}<br><small>${escapeHtml(vehicle.subCategory || '')}</small></td>
+                    <td>${(vehicle.fuels || []).map((item) => `<span class="badge soft">${escapeHtml(item.priority)}: ${escapeHtml(item.type)} · ${escapeHtml(item.rate || '0')}</span>`).join('')}</td>
+                    <td>${escapeHtml(vehicle.driver || 'Not assigned')}</td>
+                    <td>${docs.length} document(s)<br><small>${docsWithFiles} uploaded file(s)${docsWithFiles ? ` · ${documentLinks(vehicle)}` : ''}</small></td>
+                    <td>${Number(vehicle.rent || 0).toLocaleString()} BDT</td>
+                    <td><span class="badge ${vehicle.status === 'Active' ? 'ok' : 'warn'}">${escapeHtml(vehicle.status || '-')}</span></td>
+                    <td><button type="button" class="mini-btn view-vehicle" data-id="${escapeHtml(vehicle.id)}">View</button><button type="button" class="mini-btn edit-vehicle" data-id="${escapeHtml(vehicle.id)}">Edit</button><button type="button" class="mini-btn danger delete-vehicle" data-id="${escapeHtml(vehicle.id)}">Delete</button></td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="9" class="empty">No vehicles found.</td></tr>';
+
+            $('#vehicleKpiTotal').textContent = vehicles.length;
+            $('#vehicleKpiActive').textContent = vehicles.filter((vehicle) => vehicle.status === 'Active').length;
+            $('#vehicleKpiDocs').textContent = vehicles.filter((vehicle) => (vehicle.docs || []).some((doc) => doc.expiry)).length;
+            $('#vehicleKpiFuel').textContent = vehicles.filter((vehicle) => (vehicle.fuels || []).length > 1).length;
+        }
+
+        function exportCsv() {
+            downloadCsv('fleetman-vehicle-list.csv', [
+                ['Vehicle ID', 'Vehicle Name', 'Registration', 'Category', 'Fuels', 'Driver', 'Documents', 'Image', 'Status'],
+                ...vehicles.map((vehicle) => [
+                    vehicle.id,
+                    vehicle.name,
+                    vehicle.regNo,
+                    vehicle.category,
+                    (vehicle.fuels || []).map((fuel) => fuel.priority + ' ' + fuel.type + ' @ ' + fuel.rate).join(' | '),
+                    vehicle.driver,
+                    (vehicle.docs || []).map((doc) => [doc.name, doc.expiry, doc.file?.originalName || doc.file?.fileName || doc.file?.filePath || ''].filter(Boolean).join(' ')).join(' | '),
+                    vehicle.image?.filePath || '',
+                    vehicle.status,
+                ]),
+            ]);
+        }
+
+        $('#category')?.addEventListener('change', () => updateSubCategory(''));
+        $('#addFuelRowBtn')?.addEventListener('click', () => addFuelRow());
+        $('#addDocRowBtn')?.addEventListener('click', () => addDocRow());
+        $('#clearVehicleBtn')?.addEventListener('click', () => resetForm());
+        $('#saveVehicleBtn')?.addEventListener('click', saveVehicle);
+        $('#loadVehicleSampleBtn')?.addEventListener('click', loadSample);
+        $('#newVehicleBtn')?.addEventListener('click', () => { resetForm(); setVisible('vehicleAddPage'); });
+        $('#exportVehiclesBtn')?.addEventListener('click', exportCsv);
+        $('#clearVehicleFiltersBtn')?.addEventListener('click', () => { ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus'].forEach((selector) => setValue(selector, '')); renderTable(); });
+        ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus'].forEach((selector) => $(selector)?.addEventListener('input', renderTable));
+
+        document.addEventListener('change', (event) => {
+            const fuelSelect = event.target.closest('.fuelType');
+            if (fuelSelect) updateFuelRate(fuelSelect.closest('.fuel-row'), true);
+
+            const docFile = event.target.closest('.docFile');
+            if (docFile) {
+                const row = docFile.closest('.doc-row');
+                if (row) renderDocFileInfo(row, parseFileDataInput('.docFileData', row), selectedDocFile(row));
+            }
+
+            if (event.target.matches('#image')) {
+                renderVehicleImageInfo(parseFileDataInput('#vehicleImageData'), selectedVehicleImageFile());
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            const pageTarget = event.target.closest('[data-page-target]');
+            if (pageTarget) { renderTable(); setVisible(pageTarget.dataset.pageTarget); }
+            const remove = event.target.closest('.remove-row');
+            if (remove) remove.parentElement.remove();
+            if (del) deleteVehicle(del.dataset.id);
+        });
+
+        resetForm();
+        renderTable();
+        if (window.location.search.includes('action=add')) {
+            setVisible('vehicleAddPage');
+        } else {
+            setVisible('vehicleListPage');
+        }
+    }
+
+    function initFuelPrices() {
+        const STORAGE = 'fleetman_fuel_prices_v2';
+        let prices = Array.isArray(records.fuel_prices) ? records.fuel_prices : (samples.fuel_prices || []);
+
+        function saveStore() {
+            syncResource('fuel_prices', prices);
+        }
+
+        function genId() {
+            return 'FPR' + new Date().toISOString().slice(2, 10).replaceAll('-', '') + Math.floor(100 + Math.random() * 900);
+        }
+
+        function resetForm() {
+            $$('#fuelPriceAddPage input, #fuelPriceAddPage select, #fuelPriceAddPage textarea').forEach((field) => { field.value = ''; });
+            setValue('#fuelPriceId', genId());
+            setValue('#fuelStatus', 'Active');
+            setValue('#effectiveDate', new Date().toISOString().slice(0, 10));
+        }
+
+        function collect(statusOverride) {
+            return {
+                fuelPriceId: value('#fuelPriceId'),
+                fuelType: value('#fuelType'),
+                name: value('#fuelName').trim(),
+                price: value('#fuelPrice'),
+                unit: value('#fuelUnit'),
+                effectiveDate: value('#effectiveDate'),
+                reference: value('#fuelReference').trim(),
+                status: statusOverride || value('#fuelStatus'),
+                remarks: value('#fuelRemarks').trim(),
+            };
+        }
+
+        function upsert(row) {
+            const index = prices.findIndex((item) => item.fuelPriceId === row.fuelPriceId);
+            if (index >= 0) prices[index] = row;
+            else prices.unshift(row);
+            saveStore();
+        }
+
+        function saveFuelPrice(statusOverride) {
+            const row = collect(statusOverride);
+            if (row.status === 'Draft') {
+                if (!row.name) row.name = 'Draft Fuel Price';
+            }
+            if (!row.fuelType || !row.name || !row.price || !row.unit || !row.status || !row.effectiveDate) {
+                toast('Please fill the required fuel price information, including fuel type and unit type.');
+                return;
+            }
+            upsert(row);
+            renderList();
+            toast(row.status === 'Draft' ? 'Draft saved.' : 'Fuel price saved.');
+            setVisible('fuelPriceListPage');
+        }
+
+        function editFuelPrice(id) {
+            const row = prices.find((item) => item.fuelPriceId === id);
+            if (!row) return;
+            resetForm();
+            setValue('#fuelPriceId', row.fuelPriceId);
+            setValue('#fuelType', row.fuelType);
+            setValue('#fuelName', row.name);
+            setValue('#fuelPrice', row.price);
+            setValue('#fuelUnit', row.unit);
+            setValue('#effectiveDate', row.effectiveDate);
+            setValue('#fuelReference', row.reference);
+            setValue('#fuelStatus', row.status);
+            setValue('#fuelRemarks', row.remarks);
+            setVisible('fuelPriceAddPage');
+        }
+
+        function deleteFuelPrice(id) {
+            if (!confirm('Delete this fuel price from the list?')) return;
+            prices = prices.filter((row) => row.fuelPriceId !== id);
+            saveStore();
+            renderList();
+            toast('Fuel price deleted.');
+        }
+
+        function loadSample() {
+            const sample = (samples.fuel_prices || [])[0];
+            if (!sample) return;
+            resetForm();
+            setValue('#fuelPriceId', sample.fuelPriceId);
+            setValue('#fuelType', sample.fuelType);
+            setValue('#fuelName', sample.name);
+            setValue('#fuelPrice', sample.price);
+            setValue('#fuelUnit', sample.unit);
+            setValue('#effectiveDate', sample.effectiveDate);
+            setValue('#fuelReference', sample.reference);
+            setValue('#fuelStatus', sample.status);
+            setValue('#fuelRemarks', sample.remarks);
+            toast('Sample fuel price data loaded.');
+        }
+
+        function renderList() {
+            const query = value('#fuelPriceSearch').toLowerCase();
+            const fuelType = value('#fuelPriceFilterFuel');
+            const status = value('#fuelPriceFilterStatus');
+            const unit = value('#fuelPriceFilterUnit');
+            const rows = prices.filter((row) => {
+                const text = [row.fuelPriceId, row.fuelType, row.name, row.reference].join(' ').toLowerCase();
+                return (!query || text.includes(query)) && (!fuelType || row.fuelType === fuelType) && (!status || row.status === status) && (!unit || row.unit === unit);
+            });
+
+            const body = $('#fuelPriceTbody');
+            if (!body) return;
+            body.innerHTML = rows.length ? rows.map((row) => {
+                const statusClass = row.status === 'Active' ? 'ok' : row.status === 'Inactive' ? 'danger' : 'soft';
+                return `<tr>
+                    <td><div class="fuel-cell"><div class="fuel-icon">⛽</div><div><b>${escapeHtml(row.name)}</b><br><small>${escapeHtml(row.fuelPriceId)}</small></div></div></td>
+                    <td>${escapeHtml(row.fuelType || '-')}</td>
+                    <td>${Number(row.price || 0).toLocaleString()}<br><small>${escapeHtml(row.remarks ? row.remarks.slice(0, 42) : '')}</small></td>
+                    <td>${escapeHtml(row.unit || '-')}</td>
+                    <td>${escapeHtml(row.effectiveDate || '-')}</td>
+                    <td>${escapeHtml(row.reference || '-')}</td>
+                    <td><span class="badge ${statusClass}">${escapeHtml(row.status || '-')}</span></td>
+                    <td><button type="button" class="mini-btn view-fuel-price" data-id="${escapeHtml(row.fuelPriceId)}">View</button><button type="button" class="mini-btn edit-fuel-price" data-id="${escapeHtml(row.fuelPriceId)}">Edit</button><button type="button" class="mini-btn danger delete-fuel-price" data-id="${escapeHtml(row.fuelPriceId)}">Delete</button></td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="8" class="empty">No fuel price found. Click “Add Fuel Price” to create one.</td></tr>';
+
+            $('#fuelPriceKpiTotal').textContent = prices.length;
+            $('#fuelPriceKpiActive').textContent = prices.filter((row) => row.status === 'Active').length;
+            $('#fuelPriceKpiTypes').textContent = new Set(prices.map((row) => row.fuelType).filter(Boolean)).size;
+            $('#fuelPriceKpiLatest').textContent = prices.map((row) => row.effectiveDate).filter(Boolean).sort().reverse()[0] || '-';
+        }
+
+        function exportCsv() {
+            downloadCsv('fleetman-fuel-price-list.csv', [
+                ['Fuel Price ID', 'Fuel Type', 'Name', 'Price', 'Unit', 'Effective Date', 'Reference', 'Status', 'Remarks'],
+                ...prices.map((row) => [row.fuelPriceId, row.fuelType, row.name, row.price, row.unit, row.effectiveDate, row.reference, row.status, row.remarks]),
+            ]);
+        }
+
+        $('#resetFuelPriceBtn')?.addEventListener('click', resetForm);
+        $('#saveFuelPriceBtn')?.addEventListener('click', () => saveFuelPrice());
+        $('#saveFuelPriceDraftBtn')?.addEventListener('click', () => saveFuelPrice('Draft'));
+        $('#loadFuelPriceSampleBtn')?.addEventListener('click', loadSample);
+        $('#newFuelPriceBtn')?.addEventListener('click', () => { resetForm(); setVisible('fuelPriceAddPage'); });
+        $('#exportFuelPricesBtn')?.addEventListener('click', exportCsv);
+        $('#applyFuelPriceFiltersBtn')?.addEventListener('click', renderList);
+        $('#clearFuelPriceFiltersBtn')?.addEventListener('click', () => { ['#fuelPriceSearch', '#fuelPriceFilterFuel', '#fuelPriceFilterStatus', '#fuelPriceFilterUnit'].forEach((selector) => setValue(selector, '')); renderList(); });
+        ['#fuelPriceSearch', '#fuelPriceFilterFuel', '#fuelPriceFilterStatus', '#fuelPriceFilterUnit'].forEach((selector) => $(selector)?.addEventListener('input', renderList));
+        document.addEventListener('click', (event) => {
+            const pageTarget = event.target.closest('[data-page-target]');
+            if (pageTarget) { renderList(); setVisible(pageTarget.dataset.pageTarget); }
+            const view = event.target.closest('.view-fuel-price');
+            if (view) {
+                const row = prices.find((item) => item.fuelPriceId === view.dataset.id);
+                if (row) alert(`${row.name}\nFuel Type: ${row.fuelType}\nPrice: ${row.price} ${row.unit}\nEffective Date: ${row.effectiveDate}\nStatus: ${row.status}\nReference: ${row.reference || '-'}`);
+            }
+            const edit = event.target.closest('.edit-fuel-price');
+            if (edit) editFuelPrice(edit.dataset.id);
+            const del = event.target.closest('.delete-fuel-price');
+            if (del) deleteFuelPrice(del.dataset.id);
+        });
+
+        resetForm();
+        renderList();
+        if (window.location.search.includes('action=add')) {
+            setVisible('fuelPriceAddPage');
+        } else {
+            setVisible('fuelPriceListPage');
+        }
+    }
+
+    function initFuelRecharge() {
+        const contracts = Array.isArray(data.contracts) ? data.contracts : [];
+        const latestFuelRates = data.latestFuelRates || {};
+        const fuelStations = Array.isArray(data.fuelStations) ? data.fuelStations : [];
+        const photoRequirements = data.photoRequirements || [];
+        const photoState = {};
+        photoRequirements.forEach((photo) => { photoState[photo.key] = { captured: false, file: null, preview: '', capturedAt: '', displayTime: '', place: '' }; });
+        let recharges = Array.isArray(records.fuel_recharges) ? records.fuel_recharges.slice() : [];
+        let activeCameraKey = null;
+        let activeStream = null;
+
+        function endpoint() {
+            return resources?.fuel_recharges?.sync || null;
+        }
+
+        async function syncFuelRecharges(rows, filesByRow = {}) {
+            const url = endpoint();
+            if (!url) return { ok: true, skipped: true };
+            const hasFiles = Object.values(filesByRow || {}).some((photos) => Object.values(photos || {}).some(Boolean));
+            try {
+                let response;
+                if (hasFiles) {
+                    const formData = new FormData();
+                    formData.append('rows', JSON.stringify(rows || []));
+                    Object.entries(filesByRow || {}).forEach(([rowIndex, photos]) => {
+                        Object.entries(photos || {}).forEach(([photoKey, file]) => {
+                            if (file) formData.append(`fuel_recharge_photos[${rowIndex}][${photoKey}]`, file);
+                        });
+                    });
+                    response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+                        body: formData,
+                    });
+                } else {
+                    response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+                        body: JSON.stringify({ rows: rows || [] }),
+                    });
+                }
+
+                if (!response.ok) {
+                    let message = 'Fuel recharge could not be saved.';
+                    try {
+                        const error = await response.json();
+                        message = error.message || Object.values(error.errors || {}).flat().join(' ') || message;
+                    } catch (_) {}
+                    throw new Error(message);
+                }
+                return await response.json().catch(() => ({ ok: true }));
+            } catch (error) {
+                toast(error.message || 'Fuel recharge could not be saved.');
+                return { ok: false, syncFailed: true, message: error.message };
+            }
+        }
+
+        function nextRechargeId() {
+            return 'FR-' + new Date().toISOString().slice(0, 10).replaceAll('-', '') + '-' + String(Date.now()).slice(-5);
+        }
+
+        function normalizeFuelName(name) {
+            return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '').replace('petroloctane', 'octane').replace('octanepetrol', 'octane');
+        }
+
+        function latestRateForFuel(fuelName) {
+            const fuel = String(fuelName || '').trim();
+            if (!fuel) return null;
+            if (latestFuelRates[fuel]) return latestFuelRates[fuel];
+            const needle = normalizeFuelName(fuel);
+            const foundKey = Object.keys(latestFuelRates).find((key) => {
+                const candidate = normalizeFuelName(key);
+                return candidate === needle || candidate.includes(needle) || needle.includes(candidate);
+            });
+            return foundKey ? latestFuelRates[foundKey] : null;
+        }
+
+        function selectedContract() {
+            return contracts.find((contract) => String(contract.id) === value('#contractSelect')) || null;
+        }
+
+        function selectedVehicle() {
+            const contract = selectedContract();
+            if (!contract) return null;
+            return (contract.vehicles || []).find((vehicle) => String(vehicle.id) === value('#vehicleSelect')) || null;
+        }
+
+        function setFuelRateFields(fuelName, rateSelector, unitSelector) {
+            const rateInfo = latestRateForFuel(fuelName);
+            setValue(rateSelector, rateInfo?.price ? Number(rateInfo.price || 0).toFixed(2) : '');
+            const unitElement = unitSelector ? $(unitSelector) : null;
+            if (unitElement) unitElement.textContent = rateInfo?.unit || '';
+            return rateInfo;
+        }
+
+        function updateVehicles() {
+            const contract = selectedContract();
+            const select = $('#vehicleSelect');
+            if (!select) return;
+            select.innerHTML = '';
+
+            if (!contract) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = '- Select vehicle -';
+                select.appendChild(option);
+                clearVehicleSetup('Select a contract first. Vehicle list will load from that contract.');
+                return;
+            }
+
+            const vehicles = contract.vehicles || [];
+            if (!vehicles.length) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No vehicle assigned in this contract';
+                select.appendChild(option);
+                clearVehicleSetup('This contract has no vehicle assignment. Add a vehicle assignment in the Contract page first.');
+                return;
+            }
+
+            if (vehicles.length > 1) {
+                const placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = '- Select vehicle from contract -';
+                select.appendChild(placeholder);
+            }
+
+            vehicles.forEach((vehicle) => {
+                const option = document.createElement('option');
+                option.value = vehicle.id;
+                option.textContent = vehicle.label || vehicle.name || vehicle.id;
+                select.appendChild(option);
+            });
+
+            if (vehicles.length === 1) select.value = vehicles[0].id;
+            updateVehicleSetup();
+        }
+
+        function clearVehicleSetup(note) {
+            setValue('#primaryFuelName', '');
+            setValue('#primaryStation', '');
+            setValue('#primaryRate', '');
+            setValue('#primaryQty', '');
+            setValue('#primaryAmount', money(0));
+            setValue('#secondaryFuelName', '');
+            setValue('#secondaryStation', '');
+            setValue('#secondaryRate', '');
+            setValue('#secondaryQty', 0);
+            setValue('#secondaryAmount', money(0));
+            setValue('#startKm', '');
+            setValue('#endKm', '');
+            setValue('#totalKm', '');
+            setValue('#mileage', '');
+            $('#totalAmount').textContent = money(0);
+            const toggle = $('#hasSecondaryFuel');
+            if (toggle) {
+                toggle.checked = false;
+                toggle.disabled = true;
+            }
+            const secondaryBlock = $('#secondaryFuelBlock');
+            if (secondaryBlock) secondaryBlock.style.display = 'none';
+            $('#vehicleSetupNote').textContent = note || 'Vehicle setup is not loaded.';
+        }
+
+        function updateVehicleSetup() {
+            const vehicle = selectedVehicle();
+            if (!vehicle) {
+                clearVehicleSetup('Select a vehicle to load its primary / secondary fuel and latest active fuel price.');
+                return;
+            }
+
+            const primaryFuel = vehicle.primary || '';
+            const secondaryFuel = vehicle.secondary || '';
+            const primaryRate = latestRateForFuel(primaryFuel) || vehicle.primaryRateInfo || null;
+            const secondaryRate = latestRateForFuel(secondaryFuel) || vehicle.secondaryRateInfo || null;
+
+            setValue('#primaryFuelName', primaryFuel);
+            setValue('#primaryRate', primaryRate?.price ? Number(primaryRate.price || 0).toFixed(2) : '');
+            setValue('#secondaryFuelName', secondaryFuel);
+            setValue('#secondaryRate', secondaryRate?.price ? Number(secondaryRate.price || 0).toFixed(2) : '');
+            setValue('#primaryQty', '');
+            setValue('#secondaryQty', 0);
+            setValue('#primaryAmount', money(0));
+            setValue('#secondaryAmount', money(0));
+            setValue('#primaryStation', '');
+            setValue('#secondaryStation', '');
+            setValue('#startKm', vehicle.startKm ?? vehicle.odo ?? vehicle.lastOdo ?? '');
+            setValue('#endKm', '');
+            setValue('#totalKm', '');
+            setValue('#mileage', '');
+            const primaryUnit = primaryRate?.unit || vehicle.primaryUnit || '';
+            const secondaryUnit = secondaryRate?.unit || vehicle.secondaryUnit || '';
+            const primaryQtyHint = $('#primaryQtyHint');
+            const secondaryQtyHint = $('#secondaryQtyHint');
+            const primaryRateHint = $('#primaryRateHint');
+            const secondaryRateHint = $('#secondaryRateHint');
+            if (primaryQtyHint) primaryQtyHint.textContent = primaryUnit ? `Enter quantity in ${primaryUnit}.` : 'Enter quantity.';
+            if (secondaryQtyHint) secondaryQtyHint.textContent = secondaryUnit ? `Enter quantity in ${secondaryUnit}.` : 'Enter quantity.';
+            if (primaryRateHint) primaryRateHint.textContent = primaryRate?.effectiveDate ? `Latest active price from ${primaryRate.effectiveDate}.` : 'No latest active price found.';
+            if (secondaryRateHint) secondaryRateHint.textContent = secondaryFuel ? (secondaryRate?.effectiveDate ? `Latest active price from ${secondaryRate.effectiveDate}.` : 'No latest active price found.') : 'No secondary fuel configured.';
+
+            const toggle = $('#hasSecondaryFuel');
+            const secondaryAvailable = Boolean(secondaryFuel);
+            if (toggle) {
+                toggle.disabled = !secondaryAvailable;
+                toggle.checked = false;
+            }
+            const secondaryBlock = $('#secondaryFuelBlock');
+            if (secondaryBlock) secondaryBlock.style.display = 'none';
+
+            const primaryRateText = primaryRate?.price ? `৳ ${Number(primaryRate.price).toLocaleString('en-BD')} ${primaryRate.unit || ''}` : 'No active fuel price found';
+            const secondaryRateText = secondaryAvailable
+                ? (secondaryRate?.price ? `৳ ${Number(secondaryRate.price).toLocaleString('en-BD')} ${secondaryRate.unit || ''}` : 'No active fuel price found')
+                : 'No secondary fuel configured';
+            const driverText = vehicle.driver ? ` Assigned driver: ${vehicle.driver}.` : '';
+            const odoText = (vehicle.startKm || vehicle.odo || vehicle.lastOdo) ? ` Start KM: ${vehicle.startKm || vehicle.odo || vehicle.lastOdo}.` : '';
+
+            $('#vehicleSetupNote').textContent = `Vehicle setup loaded from vehicle table. Primary: ${primaryFuel || 'Not set'} (${primaryRateText}). Secondary: ${secondaryFuel || 'Not set'} (${secondaryRateText}).${driverText}${odoText}`;
+            recalculate();
+        }
+
+        function rechargeMileageQuantity(primaryName, primaryQty, secondaryName, secondaryQty) {
+            const primaryIsGas = /cng|lpg|gas/i.test(primaryName || '');
+            const secondaryIsGas = /cng|lpg|gas/i.test(secondaryName || '');
+            const liquidQty = (primaryIsGas ? 0 : primaryQty) + (secondaryIsGas ? 0 : secondaryQty);
+            return liquidQty > 0 ? liquidQty : primaryQty + secondaryQty;
+        }
+
+        function recalculate() {
+            const primaryQty = Number(value('#primaryQty') || 0);
+            const secondaryQty = $('#hasSecondaryFuel')?.checked ? Number(value('#secondaryQty') || 0) : 0;
+            const primaryAmount = primaryQty * Number(value('#primaryRate') || 0);
+            const hasSecondary = $('#hasSecondaryFuel')?.checked;
+            const secondaryAmount = hasSecondary ? secondaryQty * Number(value('#secondaryRate') || 0) : 0;
+            setValue('#primaryAmount', money(primaryAmount));
+            setValue('#secondaryAmount', money(secondaryAmount));
+            $('#totalAmount').textContent = money(primaryAmount + secondaryAmount);
+
+            const startKm = Number(value('#startKm') || 0);
+            const endKm = Number(value('#endKm') || 0);
+            const totalKm = startKm > 0 && endKm >= startKm ? endKm - startKm : 0;
+            setValue('#totalKm', totalKm > 0 ? totalKm : '');
+
+            const mileageQty = rechargeMileageQuantity(value('#primaryFuelName'), primaryQty, value('#secondaryFuelName'), secondaryQty);
+            const mileageValue = totalKm > 0 && mileageQty > 0 ? totalKm / mileageQty : 0;
+            setValue('#mileage', mileageValue > 0 ? mileageValue.toFixed(2) : '');
+        }
+
+        function updateCounter() {
+            const requiredKeys = photoRequirements.filter((photo) => photo.required).map((photo) => photo.key);
+            const done = requiredKeys.filter((key) => photoState[key]?.captured).length;
+            const hasOptional = photoRequirements.some((photo) => !photo.required && photoState[photo.key]?.captured);
+            $('#photoCount').textContent = `${done} / ${requiredKeys.length} required${hasOptional ? ' + other' : ''}`;
+        }
+
+        function fallbackPlaceNameFromCoordinates(lat, lng) {
+            if (lat >= 23.85 && lat <= 23.92 && lng >= 90.35 && lng <= 90.43) return 'Uttara, Dhaka';
+            if (lat >= 23.72 && lat <= 23.82 && lng >= 90.36 && lng <= 90.43) return 'Banani / Mohakhali, Dhaka';
+            if (lat >= 23.68 && lat <= 23.75 && lng >= 90.38 && lng <= 90.45) return 'Motijheel / Central Dhaka';
+            if (lat >= 23.95 && lat <= 24.15 && lng >= 90.35 && lng <= 90.48) return 'Gazipur / Tongi Area';
+            if (lat >= 22.30 && lat <= 22.42 && lng >= 91.75 && lng <= 91.90) return 'Chattogram City Area';
+            return 'Place name unavailable';
+        }
+
+        function formatReverseGeocodeAddress(address = {}) {
+            const parts = [
+                address.road || address.neighbourhood || address.suburb || address.quarter,
+                address.city || address.town || address.village || address.municipality || address.county,
+                address.state || address.division,
+                address.country,
+            ].filter(Boolean);
+            return [...new Set(parts)].join(', ');
+        }
+
+        async function reverseGeocodePlaceName(latitude, longitude) {
+            try {
+                const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=18&addressdetails=1&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`;
+                const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+                if (!response.ok) return '';
+                const result = await response.json();
+                return formatReverseGeocodeAddress(result.address || {}) || result.display_name || '';
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function requestCurrentPlace() {
+            return new Promise((resolve) => {
+                if (!navigator.geolocation) {
+                    resolve({ place: 'Location not supported', placeName: 'Location not supported', error: 'Browser location service is not available.' });
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const latitude = position.coords.latitude;
+                    const longitude = position.coords.longitude;
+                    const resolvedPlace = await reverseGeocodePlaceName(latitude, longitude);
+                    const place = resolvedPlace || fallbackPlaceNameFromCoordinates(latitude, longitude);
+                    resolve({
+                        place,
+                        placeName: place,
+                        capturedAt: new Date().toISOString(),
+                        source: resolvedPlace ? 'reverse_geocode' : 'device_location_fallback',
+                    });
+                }, (error) => {
+                    resolve({ place: 'Location unavailable', placeName: 'Location unavailable', error: error.message });
+                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            });
+        }
+
+        function renderPhotos() {
+            const list = $('#photoList');
+            if (!list) return;
+            list.innerHTML = photoRequirements.map((photo) => `
+                <div class="photo-card" data-key="${escapeHtml(photo.key)}" data-required="${photo.required ? 'yes' : 'no'}">
+                    <div class="photo-card-header">
+                        <div><b>${escapeHtml(photo.title)} ${photo.required ? '<span class="req">*</span>' : ''}</b><span>${escapeHtml(photo.description)}</span></div>
+                        <div class="photo-pill ${photo.required ? '' : 'optional'}">${photo.required ? 'Pending' : 'Optional'}</div>
+                    </div>
+                    <div class="stage"><img alt="${escapeHtml(photo.title)} preview"><div class="stage-empty"><div class="icon">${escapeHtml(photo.icon)}</div>Tap below to open camera</div></div>
+                    <div class="photo-actions">
+                        <button class="btn primary take-btn" type="button">📷 Open Camera</button>
+                        <button class="btn light retake-btn" type="button" disabled>Retake</button>
+                        <button class="btn danger clear-btn" type="button" disabled>Clear</button>
+                    </div>
+                    <div class="photo-meta"><div class="meta-row"><small>Date & Time</small><b class="cap-time">Not captured yet</b></div><div class="meta-row"><small>Place</small><b class="cap-place">Not captured yet</b></div></div>
+                </div>`).join('');
+            bindPhotoEvents();
+        }
+
+        function ensureCameraModal() {
+            let modal = $('#fuelCameraModal');
+            if (modal) return modal;
+            modal = document.createElement('div');
+            modal.id = 'fuelCameraModal';
+            modal.className = 'fuel-camera-modal hidden';
+            modal.innerHTML = `
+                <div class="fuel-camera-panel">
+                    <div class="fuel-camera-head"><strong>Take Live Photo</strong><button class="mini-btn" type="button" id="fuelCameraCloseBtn">Close</button></div>
+                    <video id="fuelCameraVideo" autoplay playsinline></video>
+                    <canvas id="fuelCameraCanvas" class="hidden"></canvas>
+                    <div class="fuel-camera-actions">
+                        <button class="btn green" type="button" id="fuelCameraCaptureBtn">Capture Photo</button>
+                    </div>
+                    <p class="fuel-camera-note">Camera and location permission may be requested by the browser/device. Gallery upload is not used here.</p>
+                </div>`;
+            document.body.appendChild(modal);
+            $('#fuelCameraCloseBtn', modal)?.addEventListener('click', closeCamera);
+            $('#fuelCameraCaptureBtn', modal)?.addEventListener('click', captureCameraPhoto);
+            return modal;
+        }
+
+        async function openCamera(key) {
+            if (!navigator.mediaDevices?.getUserMedia) {
+                toast('Live camera capture is not supported in this browser/device.');
+                return;
+            }
+            activeCameraKey = key;
+            const modal = ensureCameraModal();
+            const video = $('#fuelCameraVideo', modal);
+            try {
+                activeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+                video.srcObject = activeStream;
+                modal.classList.remove('hidden');
+                toast('Camera opened. Capture the required photo.');
+            } catch (error) {
+                activeCameraKey = null;
+                toast('Camera permission denied or camera unavailable: ' + (error.message || 'Unable to open camera.'));
+            }
+        }
+
+        function closeCamera() {
+            if (activeStream) {
+                activeStream.getTracks().forEach((track) => track.stop());
+                activeStream = null;
+            }
+            const modal = $('#fuelCameraModal');
+            const video = $('#fuelCameraVideo');
+            if (video) video.srcObject = null;
+            if (modal) modal.classList.add('hidden');
+            activeCameraKey = null;
+        }
+
+        function captureCameraPhoto() {
+            if (!activeCameraKey) return;
+            const modal = $('#fuelCameraModal');
+            const video = $('#fuelCameraVideo', modal);
+            const canvas = $('#fuelCameraCanvas', modal);
+            if (!video || !canvas || !video.videoWidth) {
+                toast('Camera is still loading. Please try again in a moment.');
+                return;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(async (blob) => {
+                if (!blob) {
+                    toast('Could not capture photo. Please try again.');
+                    return;
+                }
+                const key = activeCameraKey;
+                const capturedAt = new Date();
+                const file = new File([blob], `${key}-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                const preview = URL.createObjectURL(blob);
+                photoState[key] = {
+                    ...(photoState[key] || {}),
+                    captured: true,
+                    file,
+                    preview,
+                    capturedAt: capturedAt.toISOString(),
+                    displayTime: capturedAt.toLocaleString(),
+                    place: 'Getting place name...',
+                };
+                updatePhotoCard(key);
+                updateCounter();
+                closeCamera();
+                const location = await requestCurrentPlace();
+                photoState[key] = { ...(photoState[key] || {}), ...location, place: location.place || 'Location unavailable' };
+                updatePhotoCard(key);
+                toast('Photo captured with time and place.');
+            }, 'image/jpeg', 0.9);
+        }
+
+        function updatePhotoCard(key) {
+            const card = $(`.photo-card[data-key="${String(key).replace(/[^a-zA-Z0-9_-]/g, '')}"]`);
+            if (!card) return;
+            const state = photoState[key] || {};
+            const img = $('img', card);
+            const empty = $('.stage-empty', card);
+            const pill = $('.photo-pill', card);
+            const retake = $('.retake-btn', card);
+            const clear = $('.clear-btn', card);
+            const time = $('.cap-time', card);
+            const place = $('.cap-place', card);
+
+            if (state.captured) {
+                if (img && state.preview) {
+                    img.src = state.preview;
+                    img.style.display = 'block';
+                }
+                if (empty) empty.style.display = 'none';
+                if (pill) {
+                    pill.textContent = 'Captured';
+                    pill.classList.remove('optional');
+                    pill.classList.add('done');
+                }
+                if (retake) retake.disabled = false;
+                if (clear) clear.disabled = false;
+                if (time) time.textContent = state.displayTime || (state.capturedAt ? new Date(state.capturedAt).toLocaleString() : 'Captured');
+                if (place) place.textContent = state.place || 'Place unavailable';
+            } else {
+                if (img) {
+                    img.removeAttribute('src');
+                    img.style.display = 'none';
+                }
+                if (empty) empty.style.display = 'block';
+                if (pill) {
+                    pill.textContent = card.dataset.required === 'yes' ? 'Pending' : 'Optional';
+                    pill.classList.remove('done');
+                    if (card.dataset.required !== 'yes') pill.classList.add('optional');
+                }
+                if (retake) retake.disabled = true;
+                if (clear) clear.disabled = true;
+                if (time) time.textContent = 'Not captured yet';
+                if (place) place.textContent = 'Not captured yet';
+            }
+        }
+
+        function bindPhotoEvents() {
+            $$('.photo-card').forEach((card) => {
+                const key = card.dataset.key;
+                $('.take-btn', card)?.addEventListener('click', () => openCamera(key));
+                $('.retake-btn', card)?.addEventListener('click', () => openCamera(key));
+                $('.clear-btn', card)?.addEventListener('click', () => {
+                    if (photoState[key]?.preview) URL.revokeObjectURL(photoState[key].preview);
+                    photoState[key] = { captured: false, file: null, preview: '', capturedAt: '', displayTime: '', place: '' };
+                    updatePhotoCard(key);
+                    updateCounter();
+                });
+            });
+        }
+
+        function collectPhotoPayload() {
+            return Object.fromEntries(Object.entries(photoState).map(([key, state]) => [key, {
+                captured: Boolean(state.captured),
+                capturedAt: state.capturedAt || '',
+                time: state.displayTime || '',
+                place: state.place || '',
+                placeName: state.place || '',
+                file: state.fileData || {},
+            }]));
+        }
+
+        function resetFuelRechargeForm() {
+            closeCamera();
+            setValue('#contractSelect', '');
+            updateVehicles();
+            Object.keys(photoState).forEach((key) => {
+                if (photoState[key]?.preview) URL.revokeObjectURL(photoState[key].preview);
+                photoState[key] = { captured: false, file: null, preview: '', capturedAt: '', displayTime: '', place: '' };
+            });
+            $$('.photo-card').forEach((card) => updatePhotoCard(card.dataset.key));
+            updateCounter();
+            setValue('#primaryStation', '');
+            setValue('#secondaryStation', '');
+            setValue('#endKm', '');
+            setValue('#totalKm', '');
+            setValue('#mileage', '');
+            setValue('#rechargeRemarks', '');
+            const submitTime = $('#submitTime');
+            const submitPlace = $('#submitPlace');
+            const submitPlaceDetail = $('#submitPlaceDetail');
+            if (submitTime) submitTime.textContent = 'Not submitted';
+            if (submitPlace) submitPlace.textContent = 'Not submitted';
+            if (submitPlaceDetail) submitPlaceDetail.textContent = 'Place name will be saved if location is allowed.';
+            recalculate();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function collectPhotoFiles() {
+            return Object.fromEntries(Object.entries(photoState)
+                .filter(([, state]) => state.captured && state.file)
+                .map(([key, state]) => [key, state.file]));
+        }
+
+        function collectRecharge(statusOverride, submitLocation = null) {
+            const contract = selectedContract();
+            const vehicle = selectedVehicle();
+            const rechargeId = nextRechargeId();
+            const primaryName = value('#primaryFuelName') || vehicle?.primary || '';
+            const secondaryEnabled = $('#hasSecondaryFuel')?.checked;
+            const secondaryName = secondaryEnabled ? (value('#secondaryFuelName') || vehicle?.secondary || '') : '';
+            const primaryQty = Number(value('#primaryQty') || 0);
+            const secondaryQty = secondaryEnabled ? Number(value('#secondaryQty') || 0) : 0;
+            const primaryRate = Number(value('#primaryRate') || 0);
+            const secondaryRate = secondaryEnabled ? Number(value('#secondaryRate') || 0) : 0;
+            const primaryAmount = primaryQty * primaryRate;
+            const secondaryAmount = secondaryQty * secondaryRate;
+            const endKm = Number(value('#endKm') || 0);
+            const startKm = Number(value('#startKm') || vehicle?.startKm || vehicle?.odo || vehicle?.lastOdo || 0);
+            const totalKm = startKm > 0 && endKm >= startKm ? endKm - startKm : 0;
+            const primaryLower = primaryName.toLowerCase();
+            const secondaryLower = secondaryName.toLowerCase();
+            const primaryIsGas = /cng|lpg|gas/.test(primaryLower);
+            const secondaryIsGas = /cng|lpg|gas/.test(secondaryLower);
+            const mileageQty = rechargeMileageQuantity(primaryName, primaryQty, secondaryName, secondaryQty);
+            const diesel = (primaryLower.includes('diesel') ? primaryQty : 0) + (secondaryLower.includes('diesel') ? secondaryQty : 0);
+            const octane = ((primaryLower.includes('octane') || primaryLower.includes('petrol')) ? primaryQty : 0) + ((secondaryLower.includes('octane') || secondaryLower.includes('petrol')) ? secondaryQty : 0);
+            const gas = (primaryIsGas ? primaryAmount : 0) + (secondaryIsGas ? secondaryAmount : 0);
+
+            return {
+                rechargeId,
+                date: new Date().toISOString().slice(0, 10),
+                contractId: contract?.contractId || contract?.id || '',
+                contract: contract?.label || $('#contractSelect option:checked')?.textContent || '',
+                contractLabel: contract?.label || '',
+                vehicleId: vehicle?.id || value('#vehicleSelect'),
+                vehicle: vehicle?.label || vehicle?.name || $('#vehicleSelect option:checked')?.textContent || '',
+                vehicleLabel: vehicle?.label || '',
+                car: vehicle?.label || vehicle?.name || '',
+                driverId: vehicle?.driverId || '',
+                driver: vehicle?.driver || 'Assigned Driver',
+                driverName: vehicle?.driver || '',
+                driverStart: '',
+                driverEnd: '',
+                totalTime: 0,
+                primaryFuelName: primaryName,
+                primaryStation: value('#primaryStation'),
+                primaryFuelStation: value('#primaryStation'),
+                fuelStation: value('#primaryStation'),
+                primaryQty,
+                primaryRate,
+                primaryAmount,
+                primaryFuelUnit: latestRateForFuel(primaryName)?.unit || vehicle?.primaryUnit || '',
+                secondaryFuelName: secondaryName,
+                secondaryStation: secondaryEnabled ? value('#secondaryStation') : '',
+                secondaryFuelStation: secondaryEnabled ? value('#secondaryStation') : '',
+                secondaryQty,
+                secondaryRate,
+                secondaryAmount,
+                secondaryFuelUnit: secondaryName ? (latestRateForFuel(secondaryName)?.unit || vehicle?.secondaryUnit || '') : '',
+                diesel,
+                gas,
+                octane,
+                startKm,
+                endKm,
+                odoReading: endKm,
+                totalKm,
+                mileage: totalKm > 0 && mileageQty > 0 ? +(totalKm / mileageQty).toFixed(2) : 0,
+                totalAmount: primaryAmount + secondaryAmount,
+                status: statusOverride || 'Submitted',
+                submittedBy: value('#submittedBy') || data.account?.name || 'Logged-in User',
+                fuelType: secondaryEnabled && secondaryName ? `${primaryName} + ${secondaryName}` : primaryName,
+                remarks: value('#rechargeRemarks'),
+                photos: collectPhotoPayload(),
+                submittedAt: new Date().toISOString(),
+                submittedLocation: submitLocation || null,
+            };
+        }
+
+        async function saveRecharge(statusOverride, submitLocation = null) {
+            const row = collectRecharge(statusOverride, submitLocation);
+            const previousRows = JSON.parse(JSON.stringify(recharges || []));
+            recharges.unshift(row);
+            const files = collectPhotoFiles();
+            const result = await syncFuelRecharges(recharges, Object.keys(files).length ? { 0: files } : {});
+            if (result?.syncFailed || result?.ok === false) {
+                recharges = previousRows;
+                return null;
+            }
+            if (Array.isArray(result?.rows)) recharges = result.rows;
+            return row;
+        }
+
+        function validateBeforeSubmit(requirePhotos = true) {
+            if (!value('#contractSelect') || !value('#vehicleSelect')) {
+                toast('Please select contract and vehicle.');
+                return false;
+            }
+            if (!value('#primaryFuelName')) {
+                toast('Primary fuel is missing in the selected vehicle setup.');
+                return false;
+            }
+            if (Number(value('#primaryRate') || 0) <= 0) {
+                toast('Latest active fuel price is missing for the selected primary fuel. Add it in Fuel Prices first.');
+                return false;
+            }
+            if (requirePhotos) {
+                const missingRequiredPhoto = photoRequirements.some((photo) => photo.required && !photoState[photo.key]?.captured);
+                if (missingRequiredPhoto) {
+                    toast('Please take all required live photos: Vehicle, Fuel/Dispenser, and ODO Meter.');
+                    return false;
+                }
+            }
+            if (!value('#primaryStation')) {
+                toast('Please select or type the primary fuel station.');
+                return false;
+            }
+            if (Number(value('#primaryQty') || 0) <= 0) {
+                toast('Please enter main fuel quantity.');
+                return false;
+            }
+            if ($('#hasSecondaryFuel')?.checked) {
+                if (!value('#secondaryStation')) {
+                    toast('Please select or type the secondary fuel station.');
+                    return false;
+                }
+                if (Number(value('#secondaryRate') || 0) <= 0) {
+                    toast('Latest active fuel price is missing for the selected secondary fuel.');
+                    return false;
+                }
+                if (Number(value('#secondaryQty') || 0) <= 0) {
+                    toast('Second fuel is selected. Please enter second fuel quantity.');
+                    return false;
+                }
+            }
+            if (Number(value('#endKm') || 0) <= 0) {
+                toast('Please enter end KM / latest ODO reading.');
+                return false;
+            }
+            return true;
+        }
+
+        async function submitRecharge() {
+            if (!validateBeforeSubmit(true)) return;
+            const submitBtn = $('#submitRechargeBtn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Submitting...';
+            }
+            $('#submitTime').textContent = new Date().toLocaleString();
+            const submitPlace = $('#submitPlace');
+            const submitDetail = $('#submitPlaceDetail');
+            submitPlace.textContent = 'Getting place name...';
+            submitDetail.textContent = 'Browser/device may ask for location permission.';
+            const location = await requestCurrentPlace();
+            submitPlace.textContent = location.place || 'Location unavailable';
+            submitDetail.textContent = location.error || 'Place name and time saved with the fuel recharge entry.';
+            const saved = await saveRecharge('Submitted', location);
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit';
+            }
+            if (saved) {
+                resetFuelRechargeForm();
+                renderRechargeList();
+                setVisible('rechargeListPage');
+                toast('Fuel recharge submitted successfully. Form reset for next entry.');
+            }
+        }
+
+        async function saveDraft() {
+            if (!value('#contractSelect') || !value('#vehicleSelect')) {
+                toast('Please select contract and vehicle before saving draft.');
+                return;
+            }
+            const draftBtn = $('#draftRechargeBtn');
+            if (draftBtn) {
+                draftBtn.disabled = true;
+                draftBtn.textContent = 'Saving...';
+            }
+            const saved = await saveRecharge('Draft', null);
+            if (draftBtn) {
+                draftBtn.disabled = false;
+                draftBtn.textContent = 'Save Draft';
+            }
+            if (saved) {
+                resetFuelRechargeForm();
+                renderRechargeList();
+                setVisible('rechargeListPage');
+                toast('Draft saved to database. Form reset for next entry.');
+            }
+        }
+
+        function renderRechargeList() {
+            const q = value('#rechargeSearch').toLowerCase();
+            const status = value('#rechargeFilterStatus');
+            const rows = recharges.filter((r) => {
+                const combined = [r.rechargeId, r.contract, r.vehicle, r.driver, r.primaryStation, r.secondaryStation].join(' ').toLowerCase();
+                return (!q || combined.includes(q)) && (!status || r.status === status);
+            });
+
+            const tbody = $('#rechargeTbody');
+            if (tbody) {
+                tbody.innerHTML = rows.length ? rows.map(r => {
+                    const statClass = r.status === 'Submitted' ? 'ok' : 'warn';
+                    const primaryRow = r.primaryFuelName ? `<div class="chipRow"><span class="chip">${escapeHtml(r.primaryFuelName)}</span><span>${Number(r.primaryQty||0).toFixed(2)} L</span></div>` : '-';
+                    const secondaryRow = r.secondaryFuelName ? `<div class="chipRow"><span class="chip">${escapeHtml(r.secondaryFuelName)}</span><span>${Number(r.secondaryQty||0).toFixed(2)}</span></div>` : '-';
+                    const imgClass = r.imageFlag === 'All 3 Images Taken' ? 'ok' : (r.imageFlag === 'Not Taken' ? 'danger' : 'warn');
+                    return `<tr>
+                        <td><div class="listCell"><div class="listIcon">⛽</div><div><b>${escapeHtml(r.rechargeId)}</b></div></div></td>
+                        <td>${escapeHtml(r.createdAt || r.date || new Date().toISOString().slice(0, 10))}</td>
+                        <td>${escapeHtml(r.contract || '')}</td>
+                        <td>${escapeHtml(r.vehicle || '')}</td>
+                        <td>${escapeHtml(r.driver || '')}</td>
+                        <td>${primaryRow}</td>
+                        <td>${escapeHtml(r.primaryStation || '-')}</td>
+                        <td>${secondaryRow}</td>
+                        <td>${escapeHtml(r.secondaryStation || '-')}</td>
+                        <td>${escapeHtml(r.startKm || '')}</td>
+                        <td>${escapeHtml(r.endKm || '')}</td>
+                        <td>${escapeHtml(r.totalKm || '')}</td>
+                        <td>${r.mileage ? Number(r.mileage).toFixed(2) : '-'}</td>
+                        <td><span class="badge ${imgClass}">${escapeHtml(r.imageFlag || 'Not Taken')}</span></td>
+                        <td><span class="badge ${statClass}">${escapeHtml(r.status || 'Draft')}</span></td>
+                        <td>${escapeHtml(r.submittedBy || '')}</td>
+                        <td>
+                            <button class="mini-btn view-recharge" type="button" onclick="window.viewRechargeEntry('${r.rechargeId}')">View</button>
+                            <button class="mini-btn edit-recharge" type="button" onclick="window.editRechargeEntry('${r.rechargeId}')">Edit</button>
+                            <button class="mini-btn danger delete-recharge" type="button" onclick="window.deleteRechargeEntry('${r.rechargeId}')">Delete</button>
+                        </td>
+                    </tr>`;
+                }).join('') : `<tr><td colspan="17" class="empty">No fuel recharge entry found. Click “Add Fuel Recharge” to create one.</td></tr>`;
+            }
+
+            const kpiTotal = $('#rechargeKpiTotal');
+            const kpiSubmitted = $('#rechargeKpiSubmitted');
+            const kpiDraft = $('#rechargeKpiDraft');
+            const kpiMileage = $('#rechargeKpiMileage');
+            if (kpiTotal) kpiTotal.textContent = recharges.length;
+            if (kpiSubmitted) kpiSubmitted.textContent = recharges.filter(x => x.status === 'Submitted').length;
+            if (kpiDraft) kpiDraft.textContent = recharges.filter(x => x.status === 'Draft').length;
+            if (kpiMileage) {
+                const withMileage = recharges.filter(x => Number(x.mileage) > 0);
+                const avg = withMileage.length ? withMileage.reduce((sum, x) => sum + Number(x.mileage), 0) / withMileage.length : 0;
+                kpiMileage.textContent = avg.toFixed(2);
+            }
+        }
+
+        window.viewRechargeEntry = (id) => {
+            const rec = recharges.find(r => r.rechargeId === id);
+            if (!rec) return;
+            window.FleetmanDetailViewer?.show('Fuel Recharge Details', rec);
+        };
+
+        window.editRechargeEntry = (id) => {
+            const rec = recharges.find(r => r.rechargeId === id);
+            if (!rec) return;
+            resetFuelRechargeForm();
+            setValue('#contractSelect', rec.contractId);
+            updateVehicles();
+            setTimeout(() => {
+                setValue('#vehicleSelect', rec.vehicleId);
+                updateVehicleSetup();
+                setValue('#primaryStation', rec.primaryStation);
+                setValue('#primaryQty', rec.primaryQty);
+                if (rec.secondaryFuel) {
+                    const toggle = $('#hasSecondaryFuel');
+                    if (toggle) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
+                    setValue('#secondaryStation', rec.secondaryStation);
+                    setValue('#secondaryQty', rec.secondaryQty);
+                }
+                setValue('#endKm', rec.endKm);
+                setValue('#rechargeRemarks', rec.remarks);
+                recalculate();
+                setVisible('rechargeAddPage');
+            }, 50);
+        };
+
+        window.deleteRechargeEntry = async (id) => {
+            if (!confirm('Delete this fuel recharge entry?')) return;
+            const previous = [...recharges];
+            recharges = recharges.filter(r => r.rechargeId !== id);
+            const result = await syncFuelRecharges(recharges);
+            if (result?.syncFailed || result?.ok === false) {
+                recharges = previous;
+            } else {
+                toast('Entry deleted.');
+            }
+            renderRechargeList();
+        };
+
+        $('#contractSelect')?.addEventListener('change', updateVehicles);
+        $('#vehicleSelect')?.addEventListener('change', updateVehicleSetup);
+        $('#primaryQty')?.addEventListener('input', recalculate);
+        $('#secondaryQty')?.addEventListener('input', recalculate);
+        $('#endKm')?.addEventListener('input', recalculate);
+        $('#rechargeSearch')?.addEventListener('input', renderRechargeList);
+        $('#rechargeFilterStatus')?.addEventListener('change', renderRechargeList);
+        $('#applyRechargeFiltersBtn')?.addEventListener('click', renderRechargeList);
+        $('#clearRechargeFiltersBtn')?.addEventListener('click', () => {
+            setValue('#rechargeSearch', '');
+            setValue('#rechargeFilterStatus', '');
+            renderRechargeList();
+        });
+        $('#newRechargeBtn')?.addEventListener('click', () => {
+            resetFuelRechargeForm();
+            setVisible('rechargeAddPage');
+        });
+        $('#exportRechargesBtn')?.addEventListener('click', () => {
+            const rows = [['Entry ID', 'Date', 'Contract', 'Vehicle', 'Driver', 'Primary Fuel', 'Primary Qty', 'Primary Station', 'Secondary Fuel', 'Secondary Qty', 'Secondary Station', 'Start KM', 'End KM', 'Total KM', 'Mileage', 'Images Taken?', 'Status', 'Submitted By', 'Remarks']];
+            recharges.forEach(r => rows.push([r.entryId, r.createdAt, r.contractName, r.vehicleName, r.driver, r.primaryFuel, r.primaryQty, r.primaryStation, r.secondaryFuel, r.secondaryQty, r.secondaryStation, r.startKm, r.endKm, r.totalKm, r.mileage, r.imageFlag, r.status, r.submittedBy, r.remarks]));
+            exportCsv(rows, 'fleetman-fuel-recharges.csv');
+        });
+        $('#recalculateFuelRechargeBtn')?.addEventListener('click', recalculate);
+        $('#hasSecondaryFuel')?.addEventListener('change', function () {
+            const vehicle = selectedVehicle();
+            if (vehicle && !vehicle.secondaryAvailable) {
+                this.checked = false;
+                toast('Second fuel is not configured for this vehicle.');
+                return;
+            }
+            $('#secondaryFuelBlock').style.display = this.checked ? 'block' : 'none';
+            if (!this.checked) { setValue('#secondaryQty', 0); setValue('#secondaryStation', ''); }
+            recalculate();
+        });
+        $('#resetRechargeBtn')?.addEventListener('click', resetFuelRechargeForm);
+        $('#draftRechargeBtn')?.addEventListener('click', saveDraft);
+        $('#submitRechargeBtn')?.addEventListener('click', submitRecharge);
+
+        renderPhotos();
+        updateVehicles();
+        updateCounter();
+        recalculate();
+        renderRechargeList();
+        if (window.location.search.includes('action=add')) {
+            setVisible('rechargeAddPage');
+        } else {
+            setVisible('rechargeListPage');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        bindMobileDrawer();
+        const page = document.body.dataset.page;
+        if (page === 'vehicles') initVehicles();
+        if (page === 'fuel-prices') initFuelPrices();
+        if (page === 'fuel-recharge') initFuelRecharge();
+    });
+                renderStatusChoices();
+                updateSummary();
+            }
+            const now = event.target.closest('[data-time-now]');
+            if (now) setNow(now.dataset.timeNow);
+            const clear = event.target.closest('[data-clear-field]');
+            if (clear) {
+                setValue('#' + clear.dataset.clearField, '');
+                updateSummary();
+            }
+            const view = event.target.closest('.view-attendance');
+            if (view) viewLog(view.dataset.id);
+            const edit = event.target.closest('.edit-attendance');
+            if (edit) editLog(edit.dataset.id);
+            const del = event.target.closest('.delete-attendance');
+            if (del) deleteLog(del.dataset.id);
+        });
+
+        populateBase();
+        resetForm();
+        renderList();
+        if (window.location.search.includes('action=add')) {
+            setVisible('attendanceAddPage');
+        } else {
+            setVisible('attendanceListPage');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        bindPageTargets();
+        const page = document.body.dataset.page;
+        if (page === 'vendors') initVendors();
+        if (page === 'trips') initTrips();
+        if (page === 'drivers') initDrivers();
+        if (page === 'clients') initClients();
+        if (page === 'employees') initEmployees();
+        if (page === 'driver-attendance') initDriverAttendance();
+    });
+})();
+
+/* Master Data page logic: dynamic database-backed lookup rows for app-wide dropdowns. */
+(() => {
+    'use strict';
+
+    const data = window.FLEETMAN || {};
+    const resources = data.resources || {};
+    const masterData = data.masterData || { vehicle_categories: [], vehicle_sub_categories: [], party_types: [], document_names: [], licence_types: [], client_types: [], contact_methods: [], fuel_types: [], fuel_units: [] };
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const value = (selector) => $(selector)?.value || '';
+    const setValue = (selector, nextValue) => { const element = $(selector); if (element) element.value = nextValue ?? ''; };
+    const setText = (selector, nextValue) => { const element = $(selector); if (element) element.textContent = nextValue ?? ''; };
+    const escapeHtml = (input) => String(input ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char]));
+
+    function csrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.content || '';
+    }
+
+    function toast(message) {
+        const node = $('#toast');
+        if (!node) return;
+        node.textContent = message;
+        node.classList.add('show');
+        setTimeout(() => node.classList.remove('show'), 2800);
+    }
+
+    function codeFrom(input) {
+        const code = String(input || '')
+            .trim()
+            .toUpperCase()
+            .replace(/[^A-Z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+
+        return code || 'MASTER_' + Math.random().toString(36).slice(2, 8).toUpperCase();
+    }
+
+    function sortRows(rows) {
+        return rows.slice().sort((a, b) => {
+            const sortA = Number(a.sortOrder || 0);
+            const sortB = Number(b.sortOrder || 0);
+            if (sortA !== sortB) return sortA - sortB;
+            return String(a.name || '').localeCompare(String(b.name || ''));
+        });
+    }
+
+    function initMasterData() {
+        let vehicleCategories = Array.isArray(masterData.vehicle_categories) ? masterData.vehicle_categories.slice() : [];
+        let vehicleSubCategories = Array.isArray(masterData.vehicle_sub_categories) ? masterData.vehicle_sub_categories.slice() : [];
+        let partyTypes = Array.isArray(masterData.party_types) ? masterData.party_types.slice() : [];
+        let documentNames = Array.isArray(masterData.document_names) ? masterData.document_names.slice() : [];
+        let licenceTypes = Array.isArray(masterData.licence_types) ? masterData.licence_types.slice() : [];
+        let clientTypes = Array.isArray(masterData.client_types) ? masterData.client_types.slice() : [];
+        let contactMethods = Array.isArray(masterData.contact_methods) ? masterData.contact_methods.slice() : [];
+        let fuelTypes = Array.isArray(masterData.fuel_types) ? masterData.fuel_types.slice() : [];
+        let fuelUnits = Array.isArray(masterData.fuel_units) ? masterData.fuel_units.slice() : [];
+
+        function populateVehicleCategorySelect(selectedValue = '') {
+            const select = $('#vehicleSubCategoryParent');
+            if (!select) return;
+
+            const currentValue = selectedValue || select.value;
+            select.innerHTML = '<option value="">Select vehicle category</option>';
+            sortRows(vehicleCategories)
+                .filter((row) => row.status !== 'Inactive')
+                .forEach((row) => {
+                    const option = document.createElement('option');
+                    option.value = row.code;
+                    option.textContent = row.name;
+                    select.appendChild(option);
+                });
+
+            if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+                select.value = currentValue;
+            }
+        }
+
+        function vehicleCategoryName(code) {
+            return vehicleCategories.find((row) => row.code === code)?.name || code || '—';
+        }
+
+        function codeForVehicleSubCategory() {
+            const categoryCode = value('#vehicleSubCategoryParent');
+            const name = value('#vehicleSubCategoryMasterName');
+            return codeFrom([categoryCode, name].filter(Boolean).join('_'));
+        }
+
+        function saveStore() {
+            const endpoint = resources?.master_data?.sync;
+            if (!endpoint) {
+                toast('Master Data route is missing. Please check routes/web.php.');
+                return;
+            }
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+                body: JSON.stringify({ vehicle_categories: vehicleCategories, vehicle_sub_categories: vehicleSubCategories, party_types: partyTypes, document_names: documentNames, licence_types: licenceTypes, client_types: clientTypes, contact_methods: contactMethods, fuel_types: fuelTypes, fuel_units: fuelUnits }),
+            })
+                .then(async (response) => {
+                    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Master data sync failed.');
+                    return response.json();
+                })
+                .then((payload) => {
+                    if (payload.masterData) {
+                        vehicleCategories = Array.isArray(payload.masterData.vehicle_categories) ? payload.masterData.vehicle_categories : vehicleCategories;
+                        vehicleSubCategories = Array.isArray(payload.masterData.vehicle_sub_categories) ? payload.masterData.vehicle_sub_categories : vehicleSubCategories;
+                        partyTypes = Array.isArray(payload.masterData.party_types) ? payload.masterData.party_types : partyTypes;
+                        documentNames = Array.isArray(payload.masterData.document_names) ? payload.masterData.document_names : documentNames;
+                        licenceTypes = Array.isArray(payload.masterData.licence_types) ? payload.masterData.licence_types : licenceTypes;
+                        clientTypes = Array.isArray(payload.masterData.client_types) ? payload.masterData.client_types : clientTypes;
+                        contactMethods = Array.isArray(payload.masterData.contact_methods) ? payload.masterData.contact_methods : contactMethods;
+                        fuelTypes = Array.isArray(payload.masterData.fuel_types) ? payload.masterData.fuel_types : fuelTypes;
+                        fuelUnits = Array.isArray(payload.masterData.fuel_units) ? payload.masterData.fuel_units : fuelUnits;
+                        renderAll();
+                    }
+                })
+                .catch((error) => toast(error.message || 'Could not save master data to database.'));
+        }
+
+        function resetVehicleCategoryForm() {
+            setValue('#vehicleCategoryEditingCode', '');
+            setValue('#vehicleCategoryMasterName', '');
+            setValue('#vehicleCategoryMasterCode', '');
+            setValue('#vehicleCategoryMasterSort', '0');
+            setValue('#vehicleCategoryMasterStatus', 'Active');
+            setValue('#vehicleCategoryMasterDescription', '');
+            setText('#saveVehicleCategoryMasterBtn', 'Save Vehicle Category');
+        }
+
+        function resetVehicleSubCategoryForm() {
+            setValue('#vehicleSubCategoryEditingCode', '');
+            setValue('#vehicleSubCategoryParent', '');
+            setValue('#vehicleSubCategoryMasterName', '');
+            setValue('#vehicleSubCategoryMasterCode', '');
+            setValue('#vehicleSubCategoryMasterSort', '0');
+            setValue('#vehicleSubCategoryMasterStatus', 'Active');
+            setValue('#vehicleSubCategoryMasterDescription', '');
+            setText('#saveVehicleSubCategoryMasterBtn', 'Save Vehicle Sub Category');
+        }
+
+        function resetPartyTypeForm() {
+            setValue('#partyTypeEditingCode', '');
+            setValue('#partyTypeMasterName', '');
+            setValue('#partyTypeMasterCode', '');
+            setValue('#partyTypeMasterSort', '0');
+            setValue('#partyTypeMasterStatus', 'Active');
+            setValue('#partyTypeMasterDescription', '');
+            setText('#savePartyTypeMasterBtn', 'Save Party Type');
+        }
+
+        function resetDocumentNameForm() {
+            setValue('#documentNameEditingCode', '');
+            setValue('#documentNameMasterName', '');
+            setValue('#documentNameMasterCode', '');
+            setValue('#documentNameMasterSort', '0');
+            setValue('#documentNameMasterStatus', 'Active');
+            setValue('#documentNameMasterDescription', '');
+            setText('#saveDocumentNameMasterBtn', 'Save Document Name');
+        }
+
+        function resetLicenceTypeForm() {
+            setValue('#licenceTypeEditingCode', '');
+            setValue('#licenceTypeMasterName', '');
+            setValue('#licenceTypeMasterCode', '');
+            setValue('#licenceTypeMasterSort', '0');
+            setValue('#licenceTypeMasterStatus', 'Active');
+            setValue('#licenceTypeMasterDescription', '');
+            setText('#saveLicenceTypeMasterBtn', 'Save Licence Type');
+        }
+
+        function resetFuelTypeForm() {
+            setValue('#fuelTypeEditingCode', '');
+            setValue('#fuelTypeMasterName', '');
+            setValue('#fuelTypeMasterCode', '');
+            setValue('#fuelTypeMasterSort', '0');
+            setValue('#fuelTypeMasterStatus', 'Active');
+            setValue('#fuelTypeMasterDescription', '');
+            setText('#saveFuelTypeMasterBtn', 'Save Fuel Type');
+        }
+
+        function resetFuelUnitForm() {
+            setValue('#fuelUnitEditingCode', '');
+            setValue('#fuelUnitMasterName', '');
+            setValue('#fuelUnitMasterCode', '');
+            setValue('#fuelUnitMasterSort', '0');
+            setValue('#fuelUnitMasterStatus', 'Active');
+            setValue('#fuelUnitMasterDescription', '');
+            setText('#saveFuelUnitMasterBtn', 'Save Fuel Unit');
+        }
+
+        function resetClientTypeForm() {
+            setValue('#clientTypeEditingCode', '');
+            setValue('#clientTypeMasterName', '');
+            setValue('#clientTypeMasterCode', '');
+            setValue('#clientTypeMasterSort', '0');
+            setValue('#clientTypeMasterStatus', 'Active');
+            setValue('#clientTypeMasterDescription', '');
+            setText('#saveClientTypeMasterBtn', 'Save Client Type');
+        }
+
+        function resetContactMethodForm() {
+            setValue('#contactMethodEditingCode', '');
+            setValue('#contactMethodMasterName', '');
+            setValue('#contactMethodMasterCode', '');
+            setValue('#contactMethodMasterSort', '0');
+            setValue('#contactMethodMasterStatus', 'Active');
+            setValue('#contactMethodMasterDescription', '');
+            setText('#saveContactMethodMasterBtn', 'Save Contact Method');
+        }
+
+        function collectVehicleCategory() {
+            const name = value('#vehicleCategoryMasterName').trim();
+            if (!name) {
+                toast('Vehicle Category Name is required.');
+                return null;
+            }
+
+            return {
+                code: codeFrom(value('#vehicleCategoryMasterCode') || name),
+                name,
+                sortOrder: Number(value('#vehicleCategoryMasterSort') || 0),
+                status: value('#vehicleCategoryMasterStatus') || 'Active',
+                description: value('#vehicleCategoryMasterDescription').trim(),
+            };
+        }
+
+        function collectVehicleSubCategory() {
+            const name = value('#vehicleSubCategoryMasterName').trim();
+            const vehicleCategoryCode = value('#vehicleSubCategoryParent').trim();
+
+            if (!vehicleCategoryCode) {
+                toast('Vehicle Category is required.');
+                return null;
+            }
+
+            if (!name) {
+                toast('Vehicle Sub Category Name is required.');
+                return null;
+            }
+
+            return {
+                code: codeFrom(value('#vehicleSubCategoryMasterCode') || `${vehicleCategoryCode}_${name}`),
+                vehicleCategoryCode,
+                vehicleCategoryName: vehicleCategoryName(vehicleCategoryCode),
+                name,
+                sortOrder: Number(value('#vehicleSubCategoryMasterSort') || 0),
+                status: value('#vehicleSubCategoryMasterStatus') || 'Active',
+                description: value('#vehicleSubCategoryMasterDescription').trim(),
+            };
+        }
+
+        function collectPartyType() {
+            const name = value('#partyTypeMasterName').trim();
+            if (!name) {
+                toast('Party Type Name is required.');
+                return null;
+            }
+
+            return {
+                code: codeFrom(value('#partyTypeMasterCode') || name),
+                name,
+                sortOrder: Number(value('#partyTypeMasterSort') || 0),
+                status: value('#partyTypeMasterStatus') || 'Active',
+                description: value('#partyTypeMasterDescription').trim(),
+            };
+        }
+
+        function collectDocumentName() {
+            const name = value('#documentNameMasterName').trim();
+            if (!name) {
+                toast('Document Name is required.');
+                return null;
+            }
+
+            return {
+                code: codeFrom(value('#documentNameMasterCode') || name),
+                name,
+                sortOrder: Number(value('#documentNameMasterSort') || 0),
+                status: value('#documentNameMasterStatus') || 'Active',
+                description: value('#documentNameMasterDescription').trim(),
+            };
+        }
+
+        function collectLicenceType() {
+            const name = value('#licenceTypeMasterName').trim();
+            if (!name) {
+                toast('Licence Type Name is required.');
+                return null;
+            }
+
+            return {
+                code: codeFrom(value('#licenceTypeMasterCode') || name),
+                name,
+                sortOrder: Number(value('#licenceTypeMasterSort') || 0),
+                status: value('#licenceTypeMasterStatus') || 'Active',
+                description: value('#licenceTypeMasterDescription').trim(),
+            };
+        }
+
+        function collectFuelType() {
+            const name = value('#fuelTypeMasterName').trim();
+            if (!name) { toast('Fuel Type Name is required.'); return null; }
+            return { code: codeFrom(value('#fuelTypeMasterCode') || name), name, sortOrder: Number(value('#fuelTypeMasterSort') || 0), status: value('#fuelTypeMasterStatus') || 'Active', description: value('#fuelTypeMasterDescription').trim() };
+        }
+
+        function collectFuelUnit() {
+            const name = value('#fuelUnitMasterName').trim();
+            if (!name) { toast('Fuel Unit Name is required.'); return null; }
+            return { code: codeFrom(value('#fuelUnitMasterCode') || name), name, sortOrder: Number(value('#fuelUnitMasterSort') || 0), status: value('#fuelUnitMasterStatus') || 'Active', description: value('#fuelUnitMasterDescription').trim() };
+        }
+
+        function collectClientType() {
+            const name = value('#clientTypeMasterName').trim();
+            if (!name) {
+                toast('Client Type Name is required.');
+                return null;
+            }
+
+            return {
+                code: codeFrom(value('#clientTypeMasterCode') || name),
+                name,
+                sortOrder: Number(value('#clientTypeMasterSort') || 0),
+                status: value('#clientTypeMasterStatus') || 'Active',
+                description: value('#clientTypeMasterDescription').trim(),
+            };
+        }
+
+        function collectContactMethod() {
+            const name = value('#contactMethodMasterName').trim();
+            if (!name) {
+                toast('Contact Method Name is required.');
+                return null;
+            }
+
+            return {
+                code: codeFrom(value('#contactMethodMasterCode') || name),
+                name,
+                sortOrder: Number(value('#contactMethodMasterSort') || 0),
+                status: value('#contactMethodMasterStatus') || 'Active',
+                description: value('#contactMethodMasterDescription').trim(),
+            };
+        }
+
+        function upsertRow(rows, row, editingCode) {
+            const duplicate = rows.find((item) => item.code === row.code && item.code !== editingCode);
+            if (duplicate) {
+                toast('This code already exists. Please use a unique code.');
+                return rows;
+            }
+
+            const nextRows = rows.filter((item) => item.code !== (editingCode || row.code));
+            nextRows.push(row);
+            return sortRows(nextRows);
+        }
+
+        function renderVehicleCategories() {
+            setText('#masterVehicleCategoryCount', vehicleCategories.filter((row) => row.status !== 'Inactive').length);
+            populateVehicleCategorySelect();
+            const tbody = $('#vehicleCategoryMasterTbody');
+            if (!tbody) return;
+
+            const rows = sortRows(vehicleCategories);
+            tbody.innerHTML = rows.length ? rows.map((row) => `
+                <tr>
+                    <td><b>${escapeHtml(row.name)}</b></td>
+                    <td><span class="master-code">${escapeHtml(row.code)}</span></td>
+                    <td>${Number(row.sortOrder || 0)}</td>
+                    <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
+                    <td class="master-description">${escapeHtml(row.description || '—')}</td>
+                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-vehicle-category="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-vehicle-category="${escapeHtml(row.code)}">Delete</button></div></td>
+                </tr>`).join('') : '<tr><td colspan="6" class="empty">No vehicle category added yet.</td></tr>';
+        }
+
+        function renderVehicleSubCategories() {
+            setText('#masterVehicleSubCategoryCount', vehicleSubCategories.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#vehicleSubCategoryMasterTbody');
+            if (!tbody) return;
+
+            const rows = sortRows(vehicleSubCategories).sort((a, b) => {
+                const categoryCompare = vehicleCategoryName(a.vehicleCategoryCode).localeCompare(vehicleCategoryName(b.vehicleCategoryCode));
+                if (categoryCompare !== 0) return categoryCompare;
+                const sortA = Number(a.sortOrder || 0);
+                const sortB = Number(b.sortOrder || 0);
+                if (sortA !== sortB) return sortA - sortB;
+                return String(a.name || '').localeCompare(String(b.name || ''));
+            });
+
+            tbody.innerHTML = rows.length ? rows.map((row) => `
+                <tr>
+                    <td><b>${escapeHtml(row.name)}</b></td>
+                    <td>${escapeHtml(vehicleCategoryName(row.vehicleCategoryCode))}</td>
+                    <td><span class="master-code">${escapeHtml(row.code)}</span></td>
+                    <td>${Number(row.sortOrder || 0)}</td>
+                    <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
+                    <td class="master-description">${escapeHtml(row.description || '—')}</td>
+                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-vehicle-sub-category="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-vehicle-sub-category="${escapeHtml(row.code)}">Delete</button></div></td>
+                </tr>`).join('') : '<tr><td colspan="7" class="empty">No vehicle sub category added yet.</td></tr>';
+        }
+
+        function renderPartyTypes() {
+            setText('#masterPartyTypeCount', partyTypes.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#partyTypeMasterTbody');
+            if (!tbody) return;
+
+            const rows = sortRows(partyTypes);
+            tbody.innerHTML = rows.length ? rows.map((row) => `
+                <tr>
+                    <td><b>${escapeHtml(row.name)}</b></td>
+                    <td><span class="master-code">${escapeHtml(row.code)}</span></td>
+                    <td>${Number(row.sortOrder || 0)}</td>
+                    <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
+                    <td class="master-description">${escapeHtml(row.description || '—')}</td>
+                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-party="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-party="${escapeHtml(row.code)}">Delete</button></div></td>
+                </tr>`).join('') : '<tr><td colspan="6" class="empty">No party type added yet.</td></tr>';
+        }
+
+        function renderDocumentNames() {
+            setText('#masterDocumentNameCount', documentNames.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#documentNameMasterTbody');
+            if (!tbody) return;
+
+            const rows = sortRows(documentNames);
+            tbody.innerHTML = rows.length ? rows.map((row) => `
+                <tr>
+                    <td><b>${escapeHtml(row.name)}</b></td>
+                    <td><span class="master-code">${escapeHtml(row.code)}</span></td>
+                    <td>${Number(row.sortOrder || 0)}</td>
+                    <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
+                    <td class="master-description">${escapeHtml(row.description || '—')}</td>
+                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-document="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-document="${escapeHtml(row.code)}">Delete</button></div></td>
+                </tr>`).join('') : '<tr><td colspan="6" class="empty">No document name added yet.</td></tr>';
+        }
+
+        function renderLicenceTypes() {
+            setText('#masterLicenceTypeCount', licenceTypes.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#licenceTypeMasterTbody');
+            if (!tbody) return;
+
+            const rows = sortRows(licenceTypes);
+            tbody.innerHTML = rows.length ? rows.map((row) => `
+                <tr>
+                    <td><b>${escapeHtml(row.name)}</b></td>
+                    <td><span class="master-code">${escapeHtml(row.code)}</span></td>
+                    <td>${Number(row.sortOrder || 0)}</td>
+                    <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
+                    <td class="master-description">${escapeHtml(row.description || '—')}</td>
+                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-licence="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-licence="${escapeHtml(row.code)}">Delete</button></div></td>
+                </tr>`).join('') : '<tr><td colspan="6" class="empty">No licence type added yet.</td></tr>';
+        }
+
+        function renderFuelTypes() {
+            setText('#masterFuelTypeCount', fuelTypes.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#fuelTypeMasterTbody');
+            if (!tbody) return;
+            const rows = sortRows(fuelTypes);
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No fuel type added yet.</td></tr>';
+        }
+
+        function renderFuelUnits() {
+            setText('#masterFuelUnitCount', fuelUnits.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#fuelUnitMasterTbody');
+            if (!tbody) return;
+            const rows = sortRows(fuelUnits);
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-unit="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-unit="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No fuel unit added yet.</td></tr>';
+        }
+
+        function renderClientTypes() {
+            setText('#masterClientTypeCount', clientTypes.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#clientTypeMasterTbody');
+            if (!tbody) return;
+
+            const rows = sortRows(clientTypes);
+            tbody.innerHTML = rows.length ? rows.map((row) => `
+                <tr>
+                    <td><b>${escapeHtml(row.name)}</b></td>
+                    <td><span class="master-code">${escapeHtml(row.code)}</span></td>
+                    <td>${Number(row.sortOrder || 0)}</td>
+                    <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
+                    <td class="master-description">${escapeHtml(row.description || '—')}</td>
+                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-client="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-client="${escapeHtml(row.code)}">Delete</button></div></td>
+                </tr>`).join('') : '<tr><td colspan="6" class="empty">No client type added yet.</td></tr>';
+        }
+
+        function renderContactMethods() {
+            setText('#masterContactMethodCount', contactMethods.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#contactMethodMasterTbody');
+            if (!tbody) return;
+
+            const rows = sortRows(contactMethods);
+            tbody.innerHTML = rows.length ? rows.map((row) => `
+                <tr>
+                    <td><b>${escapeHtml(row.name)}</b></td>
+                    <td><span class="master-code">${escapeHtml(row.code)}</span></td>
+                    <td>${Number(row.sortOrder || 0)}</td>
+                    <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
+                    <td class="master-description">${escapeHtml(row.description || '—')}</td>
+                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-contact-method="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-contact-method="${escapeHtml(row.code)}">Delete</button></div></td>
+                </tr>`).join('') : '<tr><td colspan="6" class="empty">No contact method added yet.</td></tr>';
+        }
+
+        function renderAll() {
+            renderVehicleCategories();
+            renderVehicleSubCategories();
+            renderPartyTypes();
+            renderDocumentNames();
+            renderLicenceTypes();
+            renderClientTypes();
+            renderContactMethods();
+            renderFuelTypes();
+            renderFuelUnits();
+        }
+
+        function editVehicleCategory(code) {
+            const row = vehicleCategories.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#vehicleCategoryEditingCode', row.code);
+            setValue('#vehicleCategoryMasterName', row.name);
+            setValue('#vehicleCategoryMasterCode', row.code);
+            setValue('#vehicleCategoryMasterSort', row.sortOrder || 0);
+            setValue('#vehicleCategoryMasterStatus', row.status || 'Active');
+            setValue('#vehicleCategoryMasterDescription', row.description || '');
+            setText('#saveVehicleCategoryMasterBtn', 'Update Vehicle Category');
+            $('#vehicleCategoryMasterName')?.focus();
+        }
+
+        function editVehicleSubCategory(code) {
+            const row = vehicleSubCategories.find((item) => item.code === code);
+            if (!row) return;
+            populateVehicleCategorySelect(row.vehicleCategoryCode);
+            setValue('#vehicleSubCategoryEditingCode', row.code);
+            setValue('#vehicleSubCategoryParent', row.vehicleCategoryCode);
+            setValue('#vehicleSubCategoryMasterName', row.name);
+            setValue('#vehicleSubCategoryMasterCode', row.code);
+            setValue('#vehicleSubCategoryMasterSort', row.sortOrder || 0);
+            setValue('#vehicleSubCategoryMasterStatus', row.status || 'Active');
+            setValue('#vehicleSubCategoryMasterDescription', row.description || '');
+            setText('#saveVehicleSubCategoryMasterBtn', 'Update Vehicle Sub Category');
+            $('#vehicleSubCategoryMasterName')?.focus();
+        }
+
+        function editParty(code) {
+            const row = partyTypes.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#partyTypeEditingCode', row.code);
+            setValue('#partyTypeMasterName', row.name);
+            setValue('#partyTypeMasterCode', row.code);
+            setValue('#partyTypeMasterSort', row.sortOrder || 0);
+            setValue('#partyTypeMasterStatus', row.status || 'Active');
+            setValue('#partyTypeMasterDescription', row.description || '');
+            setText('#savePartyTypeMasterBtn', 'Update Party Type');
+            $('#partyTypeMasterName')?.focus();
+        }
+
+        function editDocument(code) {
+            const row = documentNames.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#documentNameEditingCode', row.code);
+            setValue('#documentNameMasterName', row.name);
+            setValue('#documentNameMasterCode', row.code);
+            setValue('#documentNameMasterSort', row.sortOrder || 0);
+            setValue('#documentNameMasterStatus', row.status || 'Active');
+            setValue('#documentNameMasterDescription', row.description || '');
+            setText('#saveDocumentNameMasterBtn', 'Update Document Name');
+            $('#documentNameMasterName')?.focus();
+        }
+
+        function editLicenceType(code) {
+            const row = licenceTypes.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#licenceTypeEditingCode', row.code);
+            setValue('#licenceTypeMasterName', row.name);
+            setValue('#licenceTypeMasterCode', row.code);
+            setValue('#licenceTypeMasterSort', row.sortOrder || 0);
+            setValue('#licenceTypeMasterStatus', row.status || 'Active');
+            setValue('#licenceTypeMasterDescription', row.description || '');
+            setText('#saveLicenceTypeMasterBtn', 'Update Licence Type');
+            $('#licenceTypeMasterName')?.focus();
+        }
+
+        function editFuelType(code) {
+            const row = fuelTypes.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#fuelTypeEditingCode', row.code);
+            setValue('#fuelTypeMasterName', row.name);
+            setValue('#fuelTypeMasterCode', row.code);
+            setValue('#fuelTypeMasterSort', row.sortOrder || 0);
+            setValue('#fuelTypeMasterStatus', row.status || 'Active');
+            setValue('#fuelTypeMasterDescription', row.description || '');
+            setText('#saveFuelTypeMasterBtn', 'Update Fuel Type');
+            $('#fuelTypeMasterName')?.focus();
+        }
+
+        function editFuelUnit(code) {
+            const row = fuelUnits.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#fuelUnitEditingCode', row.code);
+            setValue('#fuelUnitMasterName', row.name);
+            setValue('#fuelUnitMasterCode', row.code);
+            setValue('#fuelUnitMasterSort', row.sortOrder || 0);
+            setValue('#fuelUnitMasterStatus', row.status || 'Active');
+            setValue('#fuelUnitMasterDescription', row.description || '');
+            setText('#saveFuelUnitMasterBtn', 'Update Fuel Unit');
+            $('#fuelUnitMasterName')?.focus();
+        }
+
+        function editClientType(code) {
+            const row = clientTypes.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#clientTypeEditingCode', row.code);
+            setValue('#clientTypeMasterName', row.name);
+            setValue('#clientTypeMasterCode', row.code);
+            setValue('#clientTypeMasterSort', row.sortOrder || 0);
+            setValue('#clientTypeMasterStatus', row.status || 'Active');
+            setValue('#clientTypeMasterDescription', row.description || '');
+            setText('#saveClientTypeMasterBtn', 'Update Client Type');
+            $('#clientTypeMasterName')?.focus();
+        }
+
+        function editContactMethod(code) {
+            const row = contactMethods.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#contactMethodEditingCode', row.code);
+            setValue('#contactMethodMasterName', row.name);
+            setValue('#contactMethodMasterCode', row.code);
+            setValue('#contactMethodMasterSort', row.sortOrder || 0);
+            setValue('#contactMethodMasterStatus', row.status || 'Active');
+            setValue('#contactMethodMasterDescription', row.description || '');
+            setText('#saveContactMethodMasterBtn', 'Update Contact Method');
+            $('#contactMethodMasterName')?.focus();
+        }
+
+        $('#vehicleCategoryMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectVehicleCategory();
+            if (!row) return;
+            const editingCode = value('#vehicleCategoryEditingCode');
+            vehicleCategories = upsertRow(vehicleCategories, row, editingCode);
+            if (editingCode && editingCode !== row.code) {
+                vehicleSubCategories = vehicleSubCategories.map((subRow) => subRow.vehicleCategoryCode === editingCode ? { ...subRow, vehicleCategoryCode: row.code, vehicleCategoryName: row.name } : subRow);
+            }
+            resetVehicleCategoryForm();
+            renderAll();
+            saveStore();
+            toast('Vehicle category saved to database.');
+        });
+
+        $('#vehicleSubCategoryMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectVehicleSubCategory();
+            if (!row) return;
+            vehicleSubCategories = upsertRow(vehicleSubCategories, row, value('#vehicleSubCategoryEditingCode'));
+            resetVehicleSubCategoryForm();
+            renderAll();
+            saveStore();
+            toast('Vehicle sub category saved to database.');
+        });
+
+        $('#partyTypeMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectPartyType();
+            if (!row) return;
+            partyTypes = upsertRow(partyTypes, row, value('#partyTypeEditingCode'));
+            resetPartyTypeForm();
+            renderAll();
+            saveStore();
+            toast('Party type saved to database.');
+        });
+
+        $('#documentNameMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectDocumentName();
+            if (!row) return;
+            documentNames = upsertRow(documentNames, row, value('#documentNameEditingCode'));
+            resetDocumentNameForm();
+            renderAll();
+            saveStore();
+            toast('Document name saved to database.');
+        });
+
+        $('#licenceTypeMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectLicenceType();
+            if (!row) return;
+            licenceTypes = upsertRow(licenceTypes, row, value('#licenceTypeEditingCode'));
+            resetLicenceTypeForm();
+            renderAll();
+            saveStore();
+            toast('Licence type saved to database.');
+        });
+
+        $('#fuelTypeMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectFuelType();
+            if (!row) return;
+            fuelTypes = upsertRow(fuelTypes, row, value('#fuelTypeEditingCode'));
+            resetFuelTypeForm();
+            renderAll();
+            saveStore();
+            toast('Fuel type saved to database.');
+        });
+
+        $('#fuelUnitMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectFuelUnit();
+            if (!row) return;
+            fuelUnits = upsertRow(fuelUnits, row, value('#fuelUnitEditingCode'));
+            resetFuelUnitForm();
+            renderAll();
+            saveStore();
+            toast('Fuel unit saved to database.');
+        });
+
+        $('#clientTypeMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectClientType();
+            if (!row) return;
+            clientTypes = upsertRow(clientTypes, row, value('#clientTypeEditingCode'));
+            resetClientTypeForm();
+            renderAll();
+            saveStore();
+            toast('Client type saved to database.');
+        });
+
+        $('#contactMethodMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectContactMethod();
+            if (!row) return;
+            contactMethods = upsertRow(contactMethods, row, value('#contactMethodEditingCode'));
+            resetContactMethodForm();
+            renderAll();
+            saveStore();
+            toast('Contact method saved to database.');
+        });
+
+        $('#resetVehicleCategoryMasterBtn')?.addEventListener('click', resetVehicleCategoryForm);
+        $('#cancelVehicleCategoryEditBtn')?.addEventListener('click', resetVehicleCategoryForm);
+        $('#resetVehicleSubCategoryMasterBtn')?.addEventListener('click', resetVehicleSubCategoryForm);
+        $('#cancelVehicleSubCategoryEditBtn')?.addEventListener('click', resetVehicleSubCategoryForm);
+        $('#resetPartyTypeMasterBtn')?.addEventListener('click', resetPartyTypeForm);
+        $('#cancelPartyTypeEditBtn')?.addEventListener('click', resetPartyTypeForm);
+        $('#resetDocumentNameMasterBtn')?.addEventListener('click', resetDocumentNameForm);
+        $('#cancelDocumentNameEditBtn')?.addEventListener('click', resetDocumentNameForm);
+        $('#resetLicenceTypeMasterBtn')?.addEventListener('click', resetLicenceTypeForm);
+        $('#cancelLicenceTypeEditBtn')?.addEventListener('click', resetLicenceTypeForm);
+
+        $('#resetFuelTypeMasterBtn')?.addEventListener('click', resetFuelTypeForm);
+        $('#cancelFuelTypeEditBtn')?.addEventListener('click', resetFuelTypeForm);
+        $('#resetFuelUnitMasterBtn')?.addEventListener('click', resetFuelUnitForm);
+        $('#cancelFuelUnitEditBtn')?.addEventListener('click', resetFuelUnitForm);
+
+        $('#resetClientTypeMasterBtn')?.addEventListener('click', resetClientTypeForm);
+        $('#cancelClientTypeEditBtn')?.addEventListener('click', resetClientTypeForm);
+        $('#resetContactMethodMasterBtn')?.addEventListener('click', resetContactMethodForm);
+        $('#cancelContactMethodEditBtn')?.addEventListener('click', resetContactMethodForm);
+
+        $('#vehicleCategoryMasterName')?.addEventListener('input', () => {
+            if (!value('#vehicleCategoryMasterCode') || !value('#vehicleCategoryEditingCode')) setValue('#vehicleCategoryMasterCode', codeFrom(value('#vehicleCategoryMasterName')));
+        });
+        $('#vehicleSubCategoryMasterName')?.addEventListener('input', () => {
+            if (!value('#vehicleSubCategoryMasterCode') || !value('#vehicleSubCategoryEditingCode')) setValue('#vehicleSubCategoryMasterCode', codeForVehicleSubCategory());
+        });
+        $('#vehicleSubCategoryParent')?.addEventListener('change', () => {
+            if (!value('#vehicleSubCategoryMasterCode') || !value('#vehicleSubCategoryEditingCode')) setValue('#vehicleSubCategoryMasterCode', codeForVehicleSubCategory());
+        });
+        $('#partyTypeMasterName')?.addEventListener('input', () => {
+            if (!value('#partyTypeMasterCode') || !value('#partyTypeEditingCode')) setValue('#partyTypeMasterCode', codeFrom(value('#partyTypeMasterName')));
+        });
+        $('#documentNameMasterName')?.addEventListener('input', () => {
+            if (!value('#documentNameMasterCode') || !value('#documentNameEditingCode')) setValue('#documentNameMasterCode', codeFrom(value('#documentNameMasterName')));
+        });
+        $('#licenceTypeMasterName')?.addEventListener('input', () => {
+            if (!value('#licenceTypeMasterCode') || !value('#licenceTypeEditingCode')) setValue('#licenceTypeMasterCode', codeFrom(value('#licenceTypeMasterName')));
+        });
+
+        document.addEventListener('click', (event) => {
+            const editVehicleCategoryBtn = event.target.closest('[data-master-edit-vehicle-category]');
+            if (editVehicleCategoryBtn) editVehicleCategory(editVehicleCategoryBtn.dataset.masterEditVehicleCategory);
+
+            const deleteVehicleCategoryBtn = event.target.closest('[data-master-delete-vehicle-category]');
+            if (deleteVehicleCategoryBtn && confirm('Delete this vehicle category from master data? Related sub categories will also be removed.')) {
+                const deletingCode = deleteVehicleCategoryBtn.dataset.masterDeleteVehicleCategory;
+                vehicleCategories = vehicleCategories.filter((row) => row.code !== deletingCode);
+                vehicleSubCategories = vehicleSubCategories.filter((row) => row.vehicleCategoryCode !== deletingCode);
+                renderAll();
+                saveStore();
+                toast('Vehicle category deleted from database.');
+            }
+
+            const editVehicleSubCategoryBtn = event.target.closest('[data-master-edit-vehicle-sub-category]');
+            if (editVehicleSubCategoryBtn) editVehicleSubCategory(editVehicleSubCategoryBtn.dataset.masterEditVehicleSubCategory);
+
+            const deleteVehicleSubCategoryBtn = event.target.closest('[data-master-delete-vehicle-sub-category]');
+            if (deleteVehicleSubCategoryBtn && confirm('Delete this vehicle sub category from master data?')) {
+                vehicleSubCategories = vehicleSubCategories.filter((row) => row.code !== deleteVehicleSubCategoryBtn.dataset.masterDeleteVehicleSubCategory);
+                renderAll();
+                saveStore();
+                toast('Vehicle sub category deleted from database.');
+            }
+
+            const editPartyBtn = event.target.closest('[data-master-edit-party]');
+            if (editPartyBtn) editParty(editPartyBtn.dataset.masterEditParty);
+
+            const deletePartyBtn = event.target.closest('[data-master-delete-party]');
+            if (deletePartyBtn && confirm('Delete this party type from master data?')) {
+                partyTypes = partyTypes.filter((row) => row.code !== deletePartyBtn.dataset.masterDeleteParty);
+                renderAll();
+                saveStore();
+                toast('Party type deleted from database.');
+            }
+
+            const editDocumentBtn = event.target.closest('[data-master-edit-document]');
+            if (editDocumentBtn) editDocument(editDocumentBtn.dataset.masterEditDocument);
+
+            const deleteDocumentBtn = event.target.closest('[data-master-delete-document]');
+            if (deleteDocumentBtn && confirm('Delete this document name from master data?')) {
+                documentNames = documentNames.filter((row) => row.code !== deleteDocumentBtn.dataset.masterDeleteDocument);
+                renderAll();
+                saveStore();
+                toast('Document name deleted from database.');
+            }
+
+            const editLicenceBtn = event.target.closest('[data-master-edit-licence]');
+            if (editLicenceBtn) editLicenceType(editLicenceBtn.dataset.masterEditLicence);
+
+            const deleteLicenceBtn = event.target.closest('[data-master-delete-licence]');
+            if (deleteLicenceBtn && confirm('Delete this licence type from master data?')) {
+                licenceTypes = licenceTypes.filter((row) => row.code !== deleteLicenceBtn.dataset.masterDeleteLicence);
+                renderAll();
+                saveStore();
+                toast('Licence type deleted from database.');
+            }
+            const editFuelTypeBtn = event.target.closest('[data-master-edit-fuel-type]');
+            if (editFuelTypeBtn) editFuelType(editFuelTypeBtn.dataset.masterEditFuelType);
+
+            const deleteFuelTypeBtn = event.target.closest('[data-master-delete-fuel-type]');
+            if (deleteFuelTypeBtn && confirm('Delete this fuel type from master data?')) {
+                fuelTypes = fuelTypes.filter((row) => row.code !== deleteFuelTypeBtn.dataset.masterDeleteFuelType);
+                renderAll();
+                saveStore();
+                toast('Fuel type deleted from database.');
+            }
+
+            const editFuelUnitBtn = event.target.closest('[data-master-edit-fuel-unit]');
+            if (editFuelUnitBtn) editFuelUnit(editFuelUnitBtn.dataset.masterEditFuelUnit);
+
+            const deleteFuelUnitBtn = event.target.closest('[data-master-delete-fuel-unit]');
+            if (deleteFuelUnitBtn && confirm('Delete this fuel unit from master data?')) {
+                fuelUnits = fuelUnits.filter((row) => row.code !== deleteFuelUnitBtn.dataset.masterDeleteFuelUnit);
+                renderAll();
+                saveStore();
+                toast('Fuel unit deleted from database.');
+            }
+
+            const editClientBtn = event.target.closest('[data-master-edit-client]');
+            if (editClientBtn) editClientType(editClientBtn.dataset.masterEditClient);
+
+            const deleteClientBtn = event.target.closest('[data-master-delete-client]');
+            if (deleteClientBtn && confirm('Delete this client type from master data?')) {
+                clientTypes = clientTypes.filter((row) => row.code !== deleteClientBtn.dataset.masterDeleteClient);
+                renderAll();
+                saveStore();
+                toast('Client type deleted from database.');
+            }
+
+            const editContactMethodBtn = event.target.closest('[data-master-edit-contact-method]');
+            if (editContactMethodBtn) editContactMethod(editContactMethodBtn.dataset.masterEditContactMethod);
+
+            const deleteContactMethodBtn = event.target.closest('[data-master-delete-contact-method]');
+            if (deleteContactMethodBtn && confirm('Delete this contact method from master data?')) {
+                contactMethods = contactMethods.filter((row) => row.code !== deleteContactMethodBtn.dataset.masterDeleteContactMethod);
+                renderAll();
+                saveStore();
+                toast('Contact method deleted from database.');
+            }
+        });
+
+        resetVehicleCategoryForm();
+        resetVehicleSubCategoryForm();
+        resetFuelTypeForm();
+        resetFuelUnitForm();
+        resetClientTypeForm();
+        resetContactMethodForm();
+        resetPartyTypeForm();
+        resetDocumentNameForm();
+        resetLicenceTypeForm();
+        renderAll();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (document.body.dataset.page === 'master-data') initMasterData();
+    });
+})();
+
+/* Contract page logic: dynamic database-backed contract form, assignments, documents, and list. */
+(() => {
+    'use strict';
+
+    const data = window.FLEETMAN || {};
+    const options = data.options || {};
+    const records = data.records || data.samples || {};
+    const resources = data.resources || {};
+    const masters = data.contractMasters || { parties: { Client: [], Vendor: [] }, vehicles: [], drivers: [] };
+
+    const $ = (selector, root = document) => root.querySelector(selector);
+    const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+    const value = (selector) => ($(selector) ? $(selector).value : '');
+    const setValue = (selector, nextValue) => { const el = $(selector); if (el) el.value = nextValue ?? ''; };
+    const escapeHtml = (nextValue) => String(nextValue ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
+
+    function csrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.content || '';
+    }
+
+    function toast(message) {
+        const element = $('#toast');
+        if (!element) return;
+        element.textContent = message;
+        element.classList.add('show');
+        setTimeout(() => element.classList.remove('show'), 2800);
+    }
+
+    function money(number) {
+        return '৳ ' + Number(number || 0).toLocaleString('en-BD', { maximumFractionDigits: 2 });
+    }
+
+    function formatDate(nextValue) {
+        if (!nextValue) return '-';
+        const date = new Date(nextValue + 'T00:00:00');
+        if (Number.isNaN(date.getTime())) return nextValue;
+        return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-');
+    }
+
+    function downloadCsv(filename, rows) {
+        const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
+    function initContracts() {
+        let contracts = Array.isArray(records.contracts)
+            ? records.contracts.filter((row) => !['fuel_recharge', 'attendance'].includes(String(row.status || row.savedAs || '').toLowerCase()))
+            : [];
+        let currentPage = 1;
+        let rowsPerPage = 10;
+        let assignmentCounter = 0;
+        let documentCounter = 0;
+        const documentNames = options.contract_document_templates || options.document_templates || [];
+        const documentTypes = ['PDF', 'DOCX', 'XLSX', 'JPG', 'PNG'];
+
+        function endpoint() {
+            return resources?.contracts?.sync || null;
+        }
+
+        function setPage(pageId) {
+            ['contractCreatePage', 'contractListPage'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('hidden', id !== pageId);
+            });
+            window.scrollTo(0, 0);
+        }
+
+        function genId() {
+            const now = new Date();
+            const yy = String(now.getFullYear()).slice(-2);
+            const mm = String(now.getMonth() + 1).padStart(2, '0');
+            const dd = String(now.getDate()).padStart(2, '0');
+            return 'CNT' + yy + mm + dd + String(Math.floor(100 + Math.random() * 900));
+        }
+
+        function optionHtml(items, selected = '', placeholder = 'Select') {
+            const opts = [`<option value="">${escapeHtml(placeholder)}</option>`];
+            (items || []).forEach((item) => {
+                const val = typeof item === 'string' ? item : (item.value || item.id || item.name || item.label || '');
+                const label = typeof item === 'string' ? item : (item.label || item.name || item.value || item.id || '');
+                opts.push(`<option value="${escapeHtml(val)}" ${selected === val ? 'selected' : ''}>${escapeHtml(label)}</option>`);
+            });
+            if (selected && !opts.some((opt) => opt.includes(`value="${escapeHtml(selected)}"`))) {
+                opts.push(`<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)}</option>`);
+            }
+            return opts.join('');
+        }
+
+        function activeChip(groupId) {
+            return $(`#${groupId} .chip.active`)?.dataset.value || '';
+        }
+
+        function setChip(groupId, nextValue) {
+            const buttons = $$(`#${groupId} .chip`);
+            buttons.forEach((btn) => btn.classList.toggle('active', btn.dataset.value === nextValue));
+            if (!buttons.some((btn) => btn.classList.contains('active')) && buttons[0]) buttons[0].classList.add('active');
+        }
+
+        function partyList() {
+            return masters.parties?.[activeChip('contractWithGroup') || 'Client'] || [];
+        }
+
+        function selectedParty() {
+            const id = value('#contractParty');
+            return partyList().find((party) => party.id === id) || null;
+        }
+
+        function updatePartySelect(selectedId = '') {
+            const select = $('#contractParty');
+            if (!select) return;
+            const parties = partyList();
+            select.innerHTML = optionHtml(parties, selectedId, parties.length ? 'Select contract party' : 'No saved party found');
+            const selected = selectedParty();
+            setValue('#contractPartyId', selected?.id || value('#contractParty'));
+        }
+
+        function vehicleById(id) {
+            return (masters.vehicles || []).find((vehicle) => vehicle.id === id) || null;
+        }
+
+        function driverById(id) {
+            return (masters.drivers || []).find((driver) => driver.id === id) || null;
+        }
+
+        function hiddenFileValue(fileData = {}) {
+            try { return JSON.stringify(fileData || {}); } catch (_) { return '{}'; }
+        }
+
+        function parseHiddenFile(input) {
+            if (!input?.value) return {};
+            try { return JSON.parse(input.value) || {}; } catch (_) { return {}; }
+        }
+
+        function fileInfoHtml(file = {}, selectedName = '') {
+            if (selectedName) return `Selected: <b>${escapeHtml(selectedName)}</b>. It will be stored after save.`;
+            if (file.fileUrl || file.filePath) {
+                const label = file.originalName || file.fileName || 'Uploaded document';
+                const link = file.fileUrl ? ` · <a href="${escapeHtml(file.fileUrl)}" target="_blank" rel="noopener">View file</a>` : '';
+                return `Uploaded: <b>${escapeHtml(label)}</b>${link}`;
+            }
+            return '';
+        }
+
+        function renderFileInfo(row, selectedFile = null) {
+            const info = $('.contract-upload-info', row);
+            if (!info) return;
+            const fileData = parseHiddenFile($('.contractDocExistingFile', row));
+            info.innerHTML = fileInfoHtml(fileData, selectedFile?.name || '');
+        }
+
+        function addAssignment(row = {}) {
+            assignmentCounter += 1;
+            const wrapper = $('#contractAssignments');
+            if (!wrapper) return;
+            const card = document.createElement('div');
+            card.className = 'contract-assignment-card';
+            const driverId = row.driverId || row.driver || '';
+            const vehicleId = row.vehicleId || row.vehicle || '';
+            card.innerHTML = `
+                <div class="contract-card-head">
+                    <div>
+                        <div class="contract-card-title">Assignment ${assignmentCounter}</div>
+                        <div class="contract-card-hint"></div>
+                    </div>
+                    <button class="btn light small remove-contract-card" type="button">Remove</button>
+                </div>
+                <div class="contract-grid">
+                    <div class="field contract-col-3">
+                        <label>Driver <span class="req">*</span></label>
+                        <select class="contractAsgDriver">${optionHtml(masters.drivers || [], driverId, 'Select driver')}</select>
+                    </div>
+                    <div class="field contract-col-4">
+                        <label>Vehicle <span class="req">*</span></label>
+                        <select class="contractAsgVehicle">${optionHtml(masters.vehicles || [], vehicleId, 'Select vehicle')}</select>
+                    </div>
+                    <div class="field contract-col-2">
+                        <label>Vehicle Hourly Rate <span class="req">*</span></label>
+                        <input class="contractAsgRate" type="number" step="0.01" value="${escapeHtml(row.rate ?? '')}" placeholder="0">
+                    </div>
+                    <div class="field contract-col-2">
+                        <label>Vehicle Duty Hour <span class="req">*</span></label>
+                        <input class="contractAsgDuty" type="number" step="0.01" value="${escapeHtml(row.duty ?? '')}" placeholder="0">
+                    </div>
+                    <div class="field contract-col-1">
+                        <label>Weight</label>
+                        <input class="contractAsgWeight" type="number" step="0.01" value="${escapeHtml(row.weight ?? 1)}">
+                    </div>
+                </div>`;
+            wrapper.appendChild(card);
+        }
+
+        function addDocument(row = {}) {
+            documentCounter += 1;
+            const wrapper = $('#contractDocuments');
+            if (!wrapper) return;
+            const card = document.createElement('div');
+            card.className = 'contract-doc-card';
+            const documentNameOptions = (documentNames || []).map((name) => ({ id: name, label: name }));
+            card.innerHTML = `
+                <div class="contract-card-head">
+                    <div>
+                        <div class="contract-card-title">Document ${documentCounter}</div>
+                        <div class="contract-card-hint"></div>
+                    </div>
+                    <button class="btn light small remove-contract-card" type="button">Remove</button>
+                </div>
+                <div class="contract-grid">
+                    <div class="field contract-col-4">
+                        <label>Document Name</label>
+                        <select class="contractDocName">${optionHtml(documentNameOptions, row.name || '', 'Select document name')}</select>
+                    </div>
+                    <div class="field contract-col-3">
+                        <label>Document Type</label>
+                        <select class="contractDocType">${optionHtml(documentTypes, row.type || '', 'Select document type')}</select>
+                    </div>
+                    <div class="field contract-col-5">
+                        <label>Attach File</label>
+                        <input class="contractDocFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx">
+                        <input class="contractDocExistingFile" type="hidden" value="${escapeHtml(hiddenFileValue(row.file || {}))}">
+                        <div class="contract-upload-info">${fileInfoHtml(row.file || {})}</div>
+                    </div>
+                </div>`;
+            wrapper.appendChild(card);
+        }
+
+        function clearRepeating() {
+            if ($('#contractAssignments')) $('#contractAssignments').innerHTML = '';
+            if ($('#contractDocuments')) $('#contractDocuments').innerHTML = '';
+            assignmentCounter = 0;
+            documentCounter = 0;
+        }
+
+        function resetForm() {
+            setValue('#contractId', genId());
+            setChip('contractWithGroup', 'Client');
+            updatePartySelect();
+            setValue('#contractAmount', '');
+            setChip('contractStatusGroup', 'Initiated');
+            setValue('#contractStart', '');
+            setValue('#contractEnd', '');
+            setValue('#contractDetails', '');
+            clearRepeating();
+            addAssignment();
+            addDocument();
+        }
+
+        function collectAssignments() {
+            return $$('.contract-assignment-card').map((card) => {
+                const vehicleId = $('.contractAsgVehicle', card)?.value || '';
+                const driverId = $('.contractAsgDriver', card)?.value || '';
+                const vehicle = vehicleById(vehicleId);
+                const driver = driverById(driverId);
+                return {
+                    driverId,
+                    driver: driver ? driver.label : driverId,
+                    driverName: driver?.name || '',
+                    vehicleId,
+                    vehicle: vehicle ? vehicle.label : vehicleId,
+                    vehicleName: vehicle?.name || '',
+                    rate: Number($('.contractAsgRate', card)?.value || 0),
+                    duty: Number($('.contractAsgDuty', card)?.value || 0),
+                    weight: Number($('.contractAsgWeight', card)?.value || 1),
+                };
+            });
+        }
+
+        function collectDocuments() {
+            return $$('.contract-doc-card').map((card) => ({
+                name: $('.contractDocName', card)?.value || 'Unnamed Document',
+                type: $('.contractDocType', card)?.value || '',
+                file: parseHiddenFile($('.contractDocExistingFile', card)),
+            }));
+        }
+
+        function collectDocumentFiles() {
+            const files = [];
+            $$('.contract-doc-card').forEach((card, index) => {
+                const file = $('.contractDocFile', card)?.files?.[0] || null;
+                if (file) files.push({ index, file });
+            });
+            return files;
+        }
+
+        function collectContract(savedAs) {
+            const party = selectedParty();
+            return {
+                contractId: value('#contractId') || genId(),
+                contractWith: activeChip('contractWithGroup'),
+                partyId: party?.id || value('#contractPartyId') || value('#contractParty'),
+                partyName: party?.name || $('#contractParty option:checked')?.textContent || '',
+                amount: Number(value('#contractAmount') || 0),
+                status: activeChip('contractStatusGroup'),
+                contractStart: value('#contractStart'),
+                contractEnd: value('#contractEnd'),
+                details: value('#contractDetails').trim(),
+                assignments: collectAssignments(),
+                documents: collectDocuments(),
+                savedAs,
+                savedAt: new Date().toISOString(),
+            };
+        }
+
+        function validateContract(row, savedAs) {
+            if (savedAs === 'Draft') return true;
+            if (!row.contractId || !row.contractWith || !row.partyId || !row.partyName || !row.amount || !row.status || !row.contractStart || !row.contractEnd || !row.details) {
+                toast('Please fill all required contract information before submitting.');
+                return false;
+            }
+            if (!row.assignments.length) {
+                toast('Please add at least one vehicle and driver assignment.');
+                return false;
+            }
+            const invalidAssignment = row.assignments.find((item) => !item.vehicleId || !item.driverId || !item.rate || !item.duty);
+            if (invalidAssignment) {
+                toast('Please complete vehicle, driver, rate, and duty hour for every assignment.');
+                return false;
+            }
+            return true;
+        }
+
+        function upsertLocal(row) {
+            const index = contracts.findIndex((item) => item.contractId === row.contractId);
+            if (index >= 0) {
+                contracts[index] = row;
+                return index;
+            }
+            contracts.unshift(row);
+            return 0;
+        }
+
+        function syncContracts(documentFiles, rowIndex) {
+            const saveUrl = endpoint();
+            if (!saveUrl) return Promise.resolve();
+            const formData = new FormData();
+            formData.append('rows', JSON.stringify(contracts));
+            documentFiles.forEach((item) => {
+                formData.append(`contract_document_files[${rowIndex}][${item.index}]`, item.file);
+            });
+            return fetch(saveUrl, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+                body: formData,
+            }).then((response) => {
+                if (!response.ok) throw new Error('Contract database save failed.');
+                return response.json();
+            }).then((payload) => {
+                if (Array.isArray(payload.rows)) contracts = payload.rows;
+            });
+        }
+
+        function saveContract(savedAs) {
+            const row = collectContract(savedAs);
+            if (!validateContract(row, savedAs)) return;
+            const documentFiles = collectDocumentFiles();
+            const rowIndex = upsertLocal(row);
+            syncContracts(documentFiles, rowIndex)
+                .then(() => {
+                    currentPage = 1;
+                    renderList();
+                    setPage('contractListPage');
+                    toast(savedAs === 'Draft' ? 'Contract draft saved.' : 'Contract submitted successfully.');
+                })
+                .catch((error) => {
+                    toast(error.message || 'Contract save failed. Please check server connection.');
+                });
+        }
+
+        function filteredContracts() {
+            const status = value('#contractFilterStatus');
+            const withType = value('#contractFilterWith');
+            const party = value('#contractFilterParty').toLowerCase().trim();
+            return contracts.filter((row) => {
+                const haystack = `${row.contractId || ''} ${row.partyName || ''} ${row.contractWith || ''}`.toLowerCase();
+                return (!status || row.savedAs === status || row.status === status)
+                    && (!withType || row.contractWith === withType)
+                    && (!party || haystack.includes(party));
+            });
+        }
+
+        function badgeClass(valueToCheck) {
+            if (valueToCheck === 'Active' || valueToCheck === 'Submitted') return 'ok';
+            if (valueToCheck === 'Draft' || valueToCheck === 'Initiated') return 'warn';
+            return 'soft';
+        }
+
+        function renderList() {
+            const items = filteredContracts();
+            const totalVehicles = items.reduce((sum, row) => sum + (row.assignments || []).length, 0);
+            const totalValue = items.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+            if ($('#contractKpiTotal')) $('#contractKpiTotal').textContent = items.length;
+            if ($('#contractKpiActive')) $('#contractKpiActive').textContent = items.filter((row) => row.status === 'Active').length;
+            if ($('#contractKpiDraft')) $('#contractKpiDraft').textContent = items.filter((row) => row.savedAs === 'Draft').length;
+            if ($('#contractKpiVehicles')) $('#contractKpiVehicles').textContent = totalVehicles;
+            if ($('#contractKpiValue')) $('#contractKpiValue').textContent = money(totalValue);
+
+            const pages = Math.max(1, Math.ceil(items.length / rowsPerPage));
+            if (currentPage > pages) currentPage = pages;
+            const start = (currentPage - 1) * rowsPerPage;
+            const pageItems = items.slice(start, start + rowsPerPage);
+            const tbody = $('#contractListBody');
+            if (tbody) {
+                tbody.innerHTML = pageItems.length ? pageItems.map((row) => `
+                    <tr>
+                        <td class="contract-sticky-1"><b>${escapeHtml(row.contractId)}</b></td>
+                        <td class="contract-sticky-2">${escapeHtml(row.partyName || '-')}</td>
+                        <td class="contract-sticky-3">${escapeHtml(row.contractWith || '-')}</td>
+                        <td><span class="badge ${badgeClass(row.status)}">${escapeHtml(row.status || '-')}</span></td>
+                        <td>${money(row.amount)}</td>
+                        <td>${formatDate(row.contractStart)}</td>
+                        <td>${formatDate(row.contractEnd)}</td>
+                        <td>${(row.assignments || []).length}</td>
+                        <td>${new Set((row.assignments || []).map((item) => item.driverId || item.driver)).size}</td>
+                        <td>${(row.documents || []).length}</td>
+                        <td><span class="badge ${badgeClass(row.savedAs)}">${escapeHtml(row.savedAs || '-')}</span></td>
+                        <td><button class="mini-btn view-contract" type="button" data-id="${escapeHtml(row.contractId)}">View</button><button class="mini-btn edit-contract" type="button" data-id="${escapeHtml(row.contractId)}">Edit</button><button class="mini-btn danger delete-contract" type="button" data-id="${escapeHtml(row.contractId)}">Delete</button></td>
+                    </tr>`).join('') : '<tr><td colspan="12"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
+            }
+
+            const cards = $('#contractMobileCards');
+            if (cards) {
+                cards.innerHTML = pageItems.map((row) => `
+                    <div class="contract-card-mobile">
+                        <h3>${escapeHtml(row.contractId)} <span class="badge ${badgeClass(row.savedAs)}">${escapeHtml(row.savedAs || '-')}</span></h3>
+                        <div><b>${escapeHtml(row.partyName || '-')}</b> • ${escapeHtml(row.contractWith || '-')}</div>
+                        <div class="contract-mini-grid">
+                            <div><b>Status</b><br>${escapeHtml(row.status || '-')}</div>
+                            <div><b>Amount</b><br>${money(row.amount)}</div>
+                            <div><b>Start</b><br>${formatDate(row.contractStart)}</div>
+                            <div><b>End</b><br>${formatDate(row.contractEnd)}</div>
+                            <div><b>Assignments</b><br>${(row.assignments || []).length}</div>
+                            <div><b>Documents</b><br>${(row.documents || []).length}</div>
+                        </div>
+                    </div>`).join('');
+            }
+
+            if ($('#contractPageInfo')) $('#contractPageInfo').textContent = `Showing ${items.length ? start + 1 : 0} - ${Math.min(start + rowsPerPage, items.length)} of ${items.length} contracts`;
+            if ($('#contractPageNumbers')) {
+                $('#contractPageNumbers').innerHTML = Array.from({ length: pages }, (_, i) => `<button type="button" class="mini-btn ${currentPage === i + 1 ? 'active' : ''}" data-contract-page="${i + 1}">${i + 1}</button>`).join('');
+            }
+        }
+
+        function loadContract(row) {
+            if (!row) return;
+            setValue('#contractId', row.contractId || genId());
+            setChip('contractWithGroup', row.contractWith || 'Client');
+            updatePartySelect(row.partyId || '');
+            if (!value('#contractParty') && row.partyId) {
+                const select = $('#contractParty');
+                if (select) select.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(row.partyId)}" selected>${escapeHtml(row.partyName || row.partyId)}</option>`);
+            }
+            setValue('#contractPartyId', row.partyId || '');
+            setValue('#contractAmount', row.amount || '');
+            setChip('contractStatusGroup', row.status || 'Initiated');
+            setValue('#contractStart', row.contractStart || '');
+            setValue('#contractEnd', row.contractEnd || '');
+            setValue('#contractDetails', row.details || '');
+            clearRepeating();
+            (row.assignments || []).forEach(addAssignment);
+            if (!$('.contract-assignment-card')) addAssignment();
+            (row.documents || []).forEach(addDocument);
+            if (!$('.contract-doc-card')) addDocument();
+        }
+
+        function viewContract(id) {
+            const row = contracts.find((item) => item.contractId === id);
+            if (!row) return;
+            const docs = (row.documents || []).map((doc) => doc.name).filter(Boolean).join(', ') || '-';
+            alert(`${row.contractId}\nParty: ${row.partyName}\nContract With: ${row.contractWith}\nStatus: ${row.status}\nSaved As: ${row.savedAs}\nAmount: ${money(row.amount)}\nAssignments: ${(row.assignments || []).length}\nDocuments: ${docs}`);
+        }
+
+        function editContract(id) {
+            const row = contracts.find((item) => item.contractId === id);
+            if (!row) return;
+            loadContract(row);
+            setPage('contractCreatePage');
+        }
+
+        function deleteContract(id) {
+            if (!confirm('Delete this contract?')) return;
+            contracts = contracts.filter((row) => row.contractId !== id);
+            syncContracts([], 0).then(() => {
+                renderList();
+                toast('Contract deleted.');
+            }).catch(() => {
+                renderList();
+                toast('Deleted locally, but database sync failed.');
+            });
+        }
+
+        function loadExisting() {
+            if (contracts.length) {
+                loadContract(contracts[0]);
+                toast('Latest saved contract loaded.');
+            } else {
+                resetForm();
+                toast('No saved contract found yet. Blank contract form opened.');
+            }
+        }
+
+        function exportContracts() {
+            downloadCsv('fleetman-contract-list.csv', [
+                ['Contract ID', 'Contract With', 'Party Name', 'Amount', 'Status', 'Start Date', 'End Date', 'Assignments', 'Documents', 'Saved As', 'Details'],
+                ...contracts.map((row) => [row.contractId, row.contractWith, row.partyName, row.amount, row.status, row.contractStart, row.contractEnd, (row.assignments || []).length, (row.documents || []).length, row.savedAs, row.details]),
+            ]);
+        }
+
+        document.addEventListener('click', (event) => {
+            const chip = event.target.closest('[data-contract-chip]');
+            if (chip) {
+                const group = chip.dataset.contractChip === 'contractWith' ? 'contractWithGroup' : 'contractStatusGroup';
+                setChip(group, chip.dataset.value);
+                if (group === 'contractWithGroup') updatePartySelect();
+            }
+
+            const pageTarget = event.target.closest('[data-contract-page-target]');
+            if (pageTarget) {
+                renderList();
+                setPage(pageTarget.dataset.contractPageTarget);
+            }
+
+            const remove = event.target.closest('.remove-contract-card');
+            if (remove) remove.closest('.contract-assignment-card,.contract-doc-card')?.remove();
+
+            const pageBtn = event.target.closest('[data-contract-page]');
+            if (pageBtn) {
+                currentPage = Number(pageBtn.dataset.contractPage || 1);
+                renderList();
+            }
+
+            const view = event.target.closest('.view-contract');
+            if (view) viewContract(view.dataset.id);
+
+            const edit = event.target.closest('.edit-contract');
+            if (edit) editContract(edit.dataset.id);
+
+            const del = event.target.closest('.delete-contract');
+            if (del) deleteContract(del.dataset.id);
+        });
+
+        $('#contractParty')?.addEventListener('change', () => {
+            const party = selectedParty();
+            setValue('#contractPartyId', party?.id || value('#contractParty'));
+        });
+        $('#addContractAssignmentBtn')?.addEventListener('click', () => addAssignment());
+        $('#addContractDocumentBtn')?.addEventListener('click', () => addDocument());
+        $('#resetContractBtn')?.addEventListener('click', resetForm);
+        $('#loadContractExistingBtn')?.addEventListener('click', loadExisting);
+        $('#saveContractDraftBtn')?.addEventListener('click', () => saveContract('Draft'));
+        $('#submitContractBtn')?.addEventListener('click', () => saveContract('Submitted'));
+        $('#newContractBtn')?.addEventListener('click', () => { resetForm(); setPage('contractCreatePage'); });
+        $('#exportContractsBtn')?.addEventListener('click', exportContracts);
+        $('#contractPrevPageBtn')?.addEventListener('click', () => { if (currentPage > 1) { currentPage -= 1; renderList(); } });
+        $('#contractNextPageBtn')?.addEventListener('click', () => {
+            const pages = Math.max(1, Math.ceil(filteredContracts().length / rowsPerPage));
+            if (currentPage < pages) { currentPage += 1; renderList(); }
+        });
+        ['#contractFilterStatus', '#contractFilterWith', '#contractFilterParty'].forEach((selector) => $(selector)?.addEventListener('input', () => { currentPage = 1; renderList(); }));
+        $('#contractRowsPerPage')?.addEventListener('change', () => { rowsPerPage = Number(value('#contractRowsPerPage') || 10); currentPage = 1; renderList(); });
+        document.addEventListener('change', (event) => {
+            const file = event.target.closest('.contractDocFile');
+            if (file) renderFileInfo(file.closest('.contract-doc-card'), file.files?.[0] || null);
+        });
+
+        resetForm();
+        renderList();
+        setPage('contractListPage');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if (document.body.dataset.page === 'contracts') initContracts();
+        
+        document.querySelectorAll('.submenu-item').forEach((item) => {
+            item.addEventListener('click', (e) => {
+                try {
+                    const url = new URL(item.href);
+                    if (url.pathname === window.location.pathname) {
+                        e.preventDefault();
+                        window.history.pushState({}, '', url.href);
+                        
+                        document.querySelectorAll('.submenu-item').forEach(x => x.classList.remove('active'));
+                        item.classList.add('active');
+                        
+                        const action = url.searchParams.get('action');
+                        const page = document.body.dataset.page;
+                        
+                        let targetPageId = '';
+                        if (page === 'trips') {
+                            targetPageId = action === 'add' ? 'tripAddPage' : 'tripListPage';
+                        } else if (page === 'fuel-recharge') {
+                            targetPageId = action === 'add' ? 'rechargeAddPage' : 'rechargeListPage';
+                        } else if (page === 'driver-attendance') {
+                            targetPageId = action === 'add' ? 'attendanceAddPage' : 'attendanceListPage';
+                        } else if (page === 'vehicles') {
+                            targetPageId = action === 'add' ? 'vehicleAddPage' : 'vehicleListPage';
+                        } else if (page === 'fuel-prices') {
+                            targetPageId = action === 'add' ? 'fuelPriceAddPage' : 'fuelPriceListPage';
+                        }
+                        
+                        if (targetPageId) {
+                            const idsToToggle = page === 'trips' ? ['tripAddPage', 'tripListPage'] 
+                                              : page === 'fuel-recharge' ? ['rechargeAddPage', 'rechargeListPage']
+                                              : page === 'driver-attendance' ? ['attendanceAddPage', 'attendanceListPage']
+                                              : page === 'vehicles' ? ['vehicleAddPage', 'vehicleListPage']
+                                              : ['fuelPriceAddPage', 'fuelPriceListPage'];
+                            idsToToggle.forEach(id => {
+                                const el = document.getElementById(id);
+                                if (el) {
+                                    if (id === targetPageId) {
+                                        el.classList.remove('hidden');
+                                        el.style.display = 'block';
+                                    } else {
+                                        el.classList.add('hidden');
+                                        el.style.display = 'none';
+                                    }
+                                }
+                            });
+                            window.scrollTo(0, 0);
+                        } else {
+                            window.location.href = url.href;
+                        }
+                    }
+                } catch (err) {
+                    window.location.href = item.href;
+                }
+            });
+        });
+    });
+})();

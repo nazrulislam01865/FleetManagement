@@ -44,32 +44,26 @@ class RoleMatrixController extends FleetBaseController
 
         DB::transaction(function () use ($permissionInput, $userRoleInput, $request): void {
             $permissions = FleetPermission::query()->orderBy('sort_order')->get();
-            $editableRoles = FleetRole::query()->where('slug', '!=', 'super_admin')->get();
-            $superAdminRole = FleetRole::query()->where('slug', 'super_admin')->first();
+            $users = User::query()->with('fleetRole')->get();
             $now = now();
 
-            foreach ($editableRoles as $role) {
-                $allowedKeys = collect($permissionInput[$role->id] ?? [])
+            foreach ($users as $user) {
+                $isSuperAdmin = $user->isFleetSuperAdmin();
+                
+                $allowedKeys = collect($permissionInput[$user->id] ?? [])
                     ->map(fn ($key) => (string) $key)
                     ->all();
 
                 foreach ($permissions as $permission) {
-                    DB::table('fleet_role_permissions')->updateOrInsert(
-                        ['role_id' => $role->id, 'permission_id' => $permission->id],
+                    $allowed = $isSuperAdmin ? true : in_array($permission->key, $allowedKeys, true);
+
+                    DB::table('fleet_user_permissions')->updateOrInsert(
+                        ['user_id' => $user->id, 'permission_id' => $permission->id],
                         [
-                            'allowed' => in_array($permission->key, $allowedKeys, true),
+                            'allowed' => $allowed,
                             'created_at' => $now,
                             'updated_at' => $now,
                         ]
-                    );
-                }
-            }
-
-            if ($superAdminRole) {
-                foreach ($permissions as $permission) {
-                    DB::table('fleet_role_permissions')->updateOrInsert(
-                        ['role_id' => $superAdminRole->id, 'permission_id' => $permission->id],
-                        ['allowed' => true, 'created_at' => $now, 'updated_at' => $now]
                     );
                 }
             }
@@ -91,12 +85,10 @@ class RoleMatrixController extends FleetBaseController
                     continue;
                 }
 
-                // Only an existing Super Admin can change a Super Admin user's role.
                 if ($targetUser->fleetRole?->slug === 'super_admin' && ! $request->user()->isFleetSuperAdmin()) {
                     continue;
                 }
 
-                // Prevent the logged-in Super Admin from accidentally removing their own access.
                 if ($userId === $currentUserId && $request->user()->isFleetSuperAdmin()) {
                     continue;
                 }
@@ -109,7 +101,7 @@ class RoleMatrixController extends FleetBaseController
 
         return redirect()
             ->route('fleet.role-matrix')
-            ->with('status', 'Role based access matrix updated successfully.');
+            ->with('status', 'User-based access matrix updated successfully.');
     }
 
     public function storeUser(Request $request): RedirectResponse
@@ -129,41 +121,42 @@ class RoleMatrixController extends FleetBaseController
             'fleet_role_id' => ['required', 'integer', Rule::in($roleIds)],
         ]);
 
-        User::query()->create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'fleet_role_id' => $validated['fleet_role_id'],
-        ]);
+        DB::transaction(function () use ($validated) {
+            $user = User::query()->create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => $validated['password'],
+                'fleet_role_id' => $validated['fleet_role_id'],
+            ]);
+
+            $role = FleetRole::query()->find($validated['fleet_role_id']);
+            if ($role) {
+                $rolePermissions = DB::table('fleet_role_permissions')->where('role_id', $role->id)->get();
+                $now = now();
+                foreach ($rolePermissions as $rp) {
+                    DB::table('fleet_user_permissions')->insert([
+                        'user_id' => $user->id,
+                        'permission_id' => $rp->permission_id,
+                        'allowed' => $rp->allowed,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]);
+                }
+            }
+        });
 
         return redirect()
             ->route('fleet.role-matrix')
-            ->with('status', 'User added and role assigned successfully. The password was saved encrypted by Laravel.');
+            ->with('status', 'User added and initial permissions assigned successfully. Password was encrypted.');
     }
 
     private function roleMatrixViewData(): array
     {
-        $roles = FleetRole::query()
-            ->withCount('users')
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get();
-
         $permissions = FleetPermission::query()
             ->orderBy('sort_order')
             ->orderBy('module')
             ->orderBy('label')
             ->get();
-
-        $matrix = [];
-        $pivotRows = DB::table('fleet_role_permissions')
-            ->join('fleet_permissions', 'fleet_permissions.id', '=', 'fleet_role_permissions.permission_id')
-            ->select('fleet_role_permissions.role_id', 'fleet_permissions.key', 'fleet_role_permissions.allowed')
-            ->get();
-
-        foreach ($pivotRows as $row) {
-            $matrix[(int) $row->role_id][(string) $row->key] = (bool) $row->allowed;
-        }
 
         $users = User::query()
             ->with('fleetRole')
@@ -171,10 +164,21 @@ class RoleMatrixController extends FleetBaseController
             ->orderBy('email')
             ->get();
 
+        $this->ensureUsersHavePermissions($users);
+
+        $matrix = [];
+        $pivotRows = DB::table('fleet_user_permissions')
+            ->join('fleet_permissions', 'fleet_permissions.id', '=', 'fleet_user_permissions.permission_id')
+            ->select('fleet_user_permissions.user_id', 'fleet_permissions.key', 'fleet_user_permissions.allowed')
+            ->get();
+
+        foreach ($pivotRows as $row) {
+            $matrix[(int) $row->user_id][(string) $row->key] = (bool) $row->allowed;
+        }
+
         return array_merge($this->shared('role-matrix', [
             'page' => 'role-matrix',
         ]), [
-            'roles' => $roles,
             'permissions' => $permissions,
             'permissionMatrix' => $matrix,
             'users' => $users,
@@ -184,6 +188,35 @@ class RoleMatrixController extends FleetBaseController
             'canManageUsers' => auth()->user()?->canFleet('users.manage') ?? false,
             'canAssignSuperAdmin' => auth()->user()?->isFleetSuperAdmin() ?? false,
         ]);
+    }
+
+    private function ensureUsersHavePermissions($users): void
+    {
+        $now = now();
+        $permissions = FleetPermission::query()->get();
+        foreach ($users as $user) {
+            $hasPermissions = DB::table('fleet_user_permissions')->where('user_id', $user->id)->exists();
+            if (! $hasPermissions) {
+                $role = $user->fleetRole;
+                if ($role) {
+                    $rolePermissions = DB::table('fleet_role_permissions')->where('role_id', $role->id)->get()->keyBy('permission_id');
+                    foreach ($permissions as $permission) {
+                        $rp = $rolePermissions->get($permission->id);
+                        $allowed = $rp ? (bool) $rp->allowed : false;
+                        if ($role->slug === 'super_admin') {
+                            $allowed = true;
+                        }
+                        DB::table('fleet_user_permissions')->insert([
+                            'user_id' => $user->id,
+                            'permission_id' => $permission->id,
+                            'allowed' => $allowed,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ]);
+                    }
+                }
+            }
+        }
     }
 
     private function assignableRoles(?User $user)

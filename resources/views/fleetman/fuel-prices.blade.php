@@ -6,19 +6,17 @@
 @section('content')
 <div class="page-section">
     <div id="fuelPriceAddPage">
-        <x-fleetman.topbar :items="[['label' => 'Add Fuel Price']]">
+        <x-fleetman.topbar :items="[['label' => 'Add Price']]">
             <x-slot:actions>
-                <button type="button" class="btn light" data-page-target="fuelPriceListPage">← Fuel Price List</button>
+                <button type="button" class="btn light" data-page-target="fuelPriceListPage">← Price List</button>
             </x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card
-            title="Add Fuel Price"
+            title="Add Price"
             subtitle="A clearer setup screen for office users. Keep the fuel type, display name, price, and effective date easy to understand and easy to save."
         >
-            <x-slot:action>
-                <button type="button" class="btn secondary" id="loadFuelPriceSampleBtn">Use sample data</button>
-            </x-slot:action>
+
         </x-fleetman.title-card>
 
         <div class="layout">
@@ -27,16 +25,15 @@
                     <div class="section-head">
                         <div>
                             <h2>1. Fuel Price Information</h2>
-                            <p>Use one row per fuel price setup. If price changes later, create a new setup or edit the existing one based on business rules.</p>
                         </div>
                     </div>
-                    <div class="grid4">
+                    <div class="grid3">
                         <div class="field"><label for="fuelPriceId">Fuel Price ID <span class="req">*</span></label><input id="fuelPriceId" readonly></div>
                         <x-fleetman.select id="fuelType" label="Fuel Type" :options="$fleetman['options']['fuel_types']" placeholder="Select fuel type" required />
                         <div class="field"><label for="fuelName">Name <span class="req">*</span></label><input id="fuelName" placeholder="Example: Diesel - Standard Rate"></div>
                         <x-fleetman.select id="fuelStatus" label="Status" :options="$fleetman['options']['fuel_statuses']" required />
                     </div>
-                    <div class="grid4" style="margin-top:16px">
+                    <div class="grid3" style="margin-top:16px">
                         <div class="field"><label for="fuelPrice">Price per Unit <span class="req">*</span></label><input id="fuelPrice" type="number" step="0.01" placeholder="Example: 122"></div>
                         <x-fleetman.select id="fuelUnit" label="Unit" :options="$fleetman['options']['fuel_units']" placeholder="Select unit type" required />
                         <div class="field"><label for="effectiveDate">Effective Date <span class="req">*</span></label><input id="effectiveDate" type="date"></div>
@@ -45,25 +42,10 @@
                     <div class="field" style="margin-top:16px">
                         <label for="fuelRemarks">Remarks</label>
                         <textarea id="fuelRemarks" placeholder="Optional note about source, approval, or special rule."></textarea>
-                        <div class="hint">Example: “Updated based on management approval effective from 1 June 2026.”</div>
                     </div>
                 </div>
             </div>
-            <div>
-                <div class="side-note">
-                    <h3>Recommended form flow</h3>
-                    <ul>
-                        <li>Choose the fuel type first.</li>
-                        <li>Give the price a simple business-friendly name.</li>
-                        <li>Use <b>Active</b> only for the current rate.</li>
-                        <li>After save, the page redirects to the fuel price list.</li>
-                    </ul>
-                </div>
-                <div class="required-box">
-                    <b>Required before save:</b><br>
-                    Fuel type, name, price, unit type, status, and effective date.
-                </div>
-            </div>
+
         </div>
 
         <div class="save-bar">
@@ -74,21 +56,17 @@
     </div>
 
     <div id="fuelPriceListPage" class="hidden">
-        <x-fleetman.topbar :items="[['label' => 'Fuel Price List']]">
+        <x-fleetman.topbar :items="[['label' => 'Price List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportFuelPricesBtn">⬇ Export CSV</button>
-                <button type="button" class="btn primary" id="newFuelPriceBtn">＋ Add Fuel Price</button>
+                <button type="button" class="btn primary" id="newFuelPriceBtn">＋ Add Price</button>
             </x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card
-            title="Fuel Price List"
+            title="Price List"
             subtitle="A simple list page with sample data, quick search, status filters, and edit/delete actions. Suitable for non-technical back-office users."
-        >
-            <x-slot:action>
-                <div class="pillbar"><div class="pill active">All Rates</div><div class="pill">Active</div><div class="pill">Recent Updates</div></div>
-            </x-slot:action>
-        </x-fleetman.title-card>
+        />
 
         <div class="kpi">
             <div class="card"><strong id="fuelPriceKpiTotal">0</strong><span>Total Fuel Prices</span></div>

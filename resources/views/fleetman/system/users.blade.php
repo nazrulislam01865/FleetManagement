@@ -41,7 +41,7 @@
         @if($canManageUsers)
             <form method="POST" action="{{ route('fleet.users.store') }}">
                 @csrf
-                <div class="grid4">
+                <div class="grid3">
                     <x-fleetman.input id="userName" name="name" label="Name" placeholder="Enter user name" :value="old('name')" required />
                     <x-fleetman.input id="userEmail" name="email" label="Email" type="email" placeholder="name@example.com" :value="old('email')" required />
                     <div class="field">

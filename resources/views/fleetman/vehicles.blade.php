@@ -13,12 +13,10 @@
         </x-fleetman.topbar>
 
         <x-fleetman.title-card
-            title="Add New Vehicle"
+            title="Add Vehicle"
             subtitle="A simple guided form for non-technical users. Fill basic information first, then fuel, documents and driver assignment."
         >
-            <x-slot:action>
-                <button type="button" class="btn secondary" id="loadVehicleSampleBtn">Use sample data</button>
-            </x-slot:action>
+
         </x-fleetman.title-card>
 
         <div class="layout">
@@ -27,7 +25,6 @@
                     <div class="section-head">
                         <div>
                             <h2>1. Basic Vehicle Information</h2>
-                            <p>Keep names familiar. Use registration number exactly as written on the vehicle papers.</p>
                         </div>
                     </div>
                     <div class="grid3">
@@ -38,7 +35,7 @@
                         <div class="field"><label for="model">Model <span class="req">*</span></label><input id="model" placeholder="Example: Toyota Hiace 2021"></div>
                         <div class="field"><label for="color">Color</label><input id="color" placeholder="Example: White"></div>
                         <div class="field"><label for="engineNo">Engine Number <span class="req">*</span></label><input id="engineNo" placeholder="Example: ENG-78219"></div>
-                        <div class="field"><label for="mileage">Regular Mileage Target</label><input id="mileage" type="number" placeholder="Example: 8.5"><div class="hint">Km per litre/Kg. Used later for mileage warning.</div></div>
+                        <div class="field"><label for="mileage">Regular Mileage Target</label><input id="mileage" type="number" placeholder="Example: 8.5"></div>
                         <div class="field"><label for="odo">Current Odometer</label><input id="odo" type="number" placeholder="Example: 45230"></div>
                     </div>
                 </div>
@@ -47,7 +44,6 @@
                     <div class="section-head">
                         <div>
                             <h2>2. Vehicle Type & Usage</h2>
-                            <p>Use friendly grouped options instead of a very long checkbox list.</p>
                         </div>
                     </div>
                     <div class="grid">
@@ -76,7 +72,6 @@
                     <div class="section-head">
                         <div>
                             <h2>3. Fuel Setup</h2>
-                            <p>Add primary, secondary and tertiary fuel. Primary fuel is required.</p>
                         </div>
                         <button type="button" class="btn secondary" id="addFuelRowBtn">+ Add fuel</button>
                     </div>
@@ -87,7 +82,6 @@
                     <div class="section-head">
                         <div>
                             <h2>4. Documents</h2>
-                            <p>Write document names and expiry dates. Add as many as needed.</p>
                         </div>
                         <button type="button" class="btn secondary" id="addDocRowBtn">+ Add document</button>
                     </div>
@@ -98,11 +92,10 @@
                     <div class="section-head">
                         <div>
                             <h2>5. Photo & Notes</h2>
-                            <p>Photo is optional in prototype. In real system it can be mandatory based on policy.</p>
                         </div>
                     </div>
                     <div class="grid">
-                        <div class="field"><label for="image">Vehicle Image</label><input id="image" type="file" accept="image/*"><input id="vehicleImageData" type="hidden"><small class="upload-meta" id="vehicleImageUploadInfo">Choose image. It will be stored after Save Vehicle.</small><div class="hint">Allowed: jpg, png, webp. Recommended size below 5 MB.</div></div>
+                        <div class="field"><label for="image">Vehicle Image</label><input id="image" type="file" accept="image/*"><input id="vehicleImageData" type="hidden"><small class="upload-meta" id="vehicleImageUploadInfo"></small><div class="hint">Allowed: jpg, png, webp. Recommended size below 5 MB.</div></div>
                         <div class="field"><label for="notes">Notes</label><textarea id="notes" placeholder="Any special note about vehicle condition or assignment"></textarea></div>
                     </div>
                 </div>
@@ -113,34 +106,14 @@
                 </div>
             </div>
 
-            <aside>
-                <div class="side-note">
-                    <h3>Design changes made</h3>
-                    <ul>
-                        <li>Long vehicle category list changed to category + sub-category.</li>
-                        <li>Fuel supports primary, secondary and tertiary.</li>
-                        <li>Documents can be added one by one with expiry and reminder.</li>
-                        <li>Important fields grouped into small steps.</li>
-                        <li>Plain labels, larger fields and clearer actions.</li>
-                    </ul>
-                </div>
-                <div class="side-note">
-                    <h3>Recommended validation</h3>
-                    <ul>
-                        <li>Registration number should be unique.</li>
-                        <li>One fuel must be marked Primary.</li>
-                        <li>Expiry date warning before 30 days.</li>
-                        <li>Odometer cannot be lower than last reading.</li>
-                    </ul>
-                </div>
-            </aside>
         </div>
     </div>
 
     <div id="vehicleListPage" class="hidden">
-        <x-fleetman.topbar :items="[['label' => 'Vehicles']]">
+        <x-fleetman.topbar :items="[['label' => 'Vehicle List']]">
             <x-slot:actions>
-                <button type="button" class="btn primary" id="newVehicleBtn">+ Add Vehicle</button>
+                <button type="button" class="btn light" id="exportVehiclesBtn">⬇ Export CSV</button>
+                <button type="button" class="btn primary" id="newVehicleBtn">＋ Add Vehicle</button>
             </x-slot:actions>
         </x-fleetman.topbar>
 

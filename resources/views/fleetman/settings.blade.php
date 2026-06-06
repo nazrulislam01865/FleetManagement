@@ -23,7 +23,7 @@
                     <label>Current Logo</label>
                     <div style="margin-top: 10px; padding: 20px; background: #f8f9fa; border-radius: 8px; display: inline-block;">
                         @if(!empty($brand['logo_url']))
-                            <img src="{{ $brand['logo_url'] }}" alt="Logo" style="max-height: 50px;">
+                            <img src="{{ $brand['logo_url'] }}" alt="Logo" style="max-height: 120px; max-width: 100%; object-fit: contain;">
                         @else
                             <div style="font-size: 24px; font-weight: bold;">🚙 {{ $brand['name'] ?? 'FleetMan' }}</div>
                         @endif

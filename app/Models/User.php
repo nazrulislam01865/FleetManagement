@@ -34,6 +34,12 @@ class User extends Authenticatable
         return $this->fleetRole?->slug === 'super_admin' && $this->fleetRole?->is_active;
     }
 
+    public function userPermissions()
+    {
+        return $this->belongsToMany(\App\Models\Fleet\FleetPermission::class, 'fleet_user_permissions', 'user_id', 'permission_id')
+                    ->withPivot('allowed');
+    }
+
     public function canFleet(string $permissionKey): bool
     {
         if (! Schema::hasTable('users') || ! Schema::hasColumn('users', 'fleet_role_id') || ! Schema::hasTable('fleet_roles') || ! Schema::hasTable('fleet_role_permissions')) {
@@ -48,6 +54,18 @@ class User extends Authenticatable
 
         if ($role->slug === 'super_admin') {
             return true;
+        }
+
+        if (Schema::hasTable('fleet_user_permissions')) {
+            $userPerm = \Illuminate\Support\Facades\DB::table('fleet_user_permissions')
+                ->join('fleet_permissions', 'fleet_permissions.id', '=', 'fleet_user_permissions.permission_id')
+                ->where('fleet_user_permissions.user_id', $this->id)
+                ->where('fleet_permissions.key', $permissionKey)
+                ->first();
+
+            if ($userPerm) {
+                return (bool) $userPerm->allowed;
+            }
         }
 
         return $role->permissions()

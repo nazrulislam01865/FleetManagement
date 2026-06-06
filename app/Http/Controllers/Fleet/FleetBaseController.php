@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Fleet;
 
 use App\Http\Controllers\Controller;
+use App\Support\FleetBrand;
 use App\Models\Fleet\FleetClient;
 use App\Models\Fleet\FleetContract;
 use App\Models\Fleet\FleetDriver;
@@ -25,7 +26,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
 abstract class FleetBaseController extends Controller
@@ -95,8 +95,7 @@ abstract class FleetBaseController extends Controller
         $user = auth()->user();
         $roleName = $user?->fleetRole?->name ?? 'User';
 
-        $logoFiles = Storage::disk('public')->files('logo');
-        $logoUrl = !empty($logoFiles) ? Storage::url($logoFiles[0]) . '?v=' . time() : null;
+        $logoUrl = FleetBrand::logoUrl();
 
         return [
             'brand' => array_merge(config('fleetman.brand'), [

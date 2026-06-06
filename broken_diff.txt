@@ -1,0 +1,2785 @@
+diff --git a/public/js/fleetman.js b/public/js/fleetman.js.broken
+index 6c0a1c9..d6bae04 100644
+--- a/public/js/fleetman.js
++++ b/public/js/fleetman.js.broken
+@@ -376,13 +376,6 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+         });
+     }
+ 
+-    function setVisible(pageId) {
+-        ['vehicleAddPage', 'vehicleListPage', 'fuelPriceAddPage', 'fuelPriceListPage'].forEach((id) => {
+-            const element = document.getElementById(id);
+-            if (element) element.classList.toggle('hidden', id !== pageId);
+-        });
+-        window.scrollTo(0, 0);
+-    }
+ 
+     function populateSelect(select, values, placeholder) {
+         if (!select) return;
+@@ -477,7 +470,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+                 const link = fileData.fileUrl ? `<a href="${escapeHtml(fileData.fileUrl)}" target="_blank" rel="noopener">View image</a>` : '';
+                 info.innerHTML = `Uploaded: <b>${escapeHtml(label)}</b>${link ? ` · ${link}` : ''}`;
+             } else {
+-                info.textContent = 'Choose image. It will be stored after Save Vehicle.';
++                info.textContent = '';
+             }
+         }
+ 
+@@ -493,7 +486,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+                 const link = fileData.fileUrl ? `<a href="${escapeHtml(fileData.fileUrl)}" target="_blank" rel="noopener">View file</a>` : '';
+                 info.innerHTML = `Uploaded: <b>${escapeHtml(label)}</b>${link ? ` · ${link}` : ''}`;
+             } else {
+-                info.textContent = 'Choose image/PDF. It will be stored after Save Vehicle.';
++                info.textContent = '';
+             }
+         }
+ 
+@@ -509,7 +502,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+ 
+             if (!type) {
+                 if (force) input.value = '';
+-                if (hint) hint.textContent = 'Select fuel type to load latest active rate.';
++                if (hint) hint.textContent = '';
+                 return;
+             }
+ 
+@@ -548,7 +541,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+                 <div class="field">
+                     <label>Default Rate</label>
+                     <input class="fuelRate" type="number" placeholder="Auto from latest active fuel price" value="${escapeHtml(row.rate || '')}" readonly>
+-                    <small class="upload-meta fuelRateHint">Select fuel type to load latest active rate.</small>
++                    <small class="upload-meta fuelRateHint"></small>
+                 </div>
+                 <button type="button" class="mini-btn remove-row">Remove</button>`;
+             wrapper.appendChild(div);
+@@ -998,17 +991,16 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+             if (pageTarget) { renderTable(); setVisible(pageTarget.dataset.pageTarget); }
+             const remove = event.target.closest('.remove-row');
+             if (remove) remove.parentElement.remove();
+-            const view = event.target.closest('.view-vehicle');
+-            if (view) viewVehicle(view.dataset.id);
+-            const edit = event.target.closest('.edit-vehicle');
+-            if (edit) editVehicle(edit.dataset.id);
+-            const del = event.target.closest('.delete-vehicle');
+             if (del) deleteVehicle(del.dataset.id);
+         });
+ 
+         resetForm();
+         renderTable();
+-        setVisible('vehicleListPage');
++        if (window.location.search.includes('action=add')) {
++            setVisible('vehicleAddPage');
++        } else {
++            setVisible('vehicleListPage');
++        }
+     }
+ 
+     function initFuelPrices() {
+@@ -1170,7 +1162,11 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+ 
+         resetForm();
+         renderList();
+-        setVisible('fuelPriceListPage');
++        if (window.location.search.includes('action=add')) {
++            setVisible('fuelPriceAddPage');
++        } else {
++            setVisible('fuelPriceListPage');
++        }
+     }
+ 
+     function initFuelRecharge() {
+@@ -1857,6 +1853,8 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+             }
+             if (saved) {
+                 resetFuelRechargeForm();
++                renderRechargeList();
++                setVisible('rechargeListPage');
+                 toast('Fuel recharge submitted successfully. Form reset for next entry.');
+             }
+         }
+@@ -1878,15 +1876,132 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+             }
+             if (saved) {
+                 resetFuelRechargeForm();
++                renderRechargeList();
++                setVisible('rechargeListPage');
+                 toast('Draft saved to database. Form reset for next entry.');
+             }
+         }
+ 
++        function renderRechargeList() {
++            const q = value('#rechargeSearch').toLowerCase();
++            const status = value('#rechargeFilterStatus');
++            const rows = recharges.filter((r) => {
++                const combined = [r.rechargeId, r.contract, r.vehicle, r.driver, r.primaryStation, r.secondaryStation].join(' ').toLowerCase();
++                return (!q || combined.includes(q)) && (!status || r.status === status);
++            });
++
++            const tbody = $('#rechargeTbody');
++            if (tbody) {
++                tbody.innerHTML = rows.length ? rows.map(r => {
++                    const statClass = r.status === 'Submitted' ? 'ok' : 'warn';
++                    const primaryRow = r.primaryFuelName ? `<div class="chipRow"><span class="chip">${escapeHtml(r.primaryFuelName)}</span><span>${Number(r.primaryQty||0).toFixed(2)} L</span></div>` : '-';
++                    const secondaryRow = r.secondaryFuelName ? `<div class="chipRow"><span class="chip">${escapeHtml(r.secondaryFuelName)}</span><span>${Number(r.secondaryQty||0).toFixed(2)}</span></div>` : '-';
++                    const imgClass = r.imageFlag === 'All 3 Images Taken' ? 'ok' : (r.imageFlag === 'Not Taken' ? 'danger' : 'warn');
++                    return `<tr>
++                        <td><div class="listCell"><div class="listIcon">⛽</div><div><b>${escapeHtml(r.rechargeId)}</b></div></div></td>
++                        <td>${escapeHtml(r.createdAt || r.date || new Date().toISOString().slice(0, 10))}</td>
++                        <td>${escapeHtml(r.contract || '')}</td>
++                        <td>${escapeHtml(r.vehicle || '')}</td>
++                        <td>${escapeHtml(r.driver || '')}</td>
++                        <td>${primaryRow}</td>
++                        <td>${escapeHtml(r.primaryStation || '-')}</td>
++                        <td>${secondaryRow}</td>
++                        <td>${escapeHtml(r.secondaryStation || '-')}</td>
++                        <td>${escapeHtml(r.startKm || '')}</td>
++                        <td>${escapeHtml(r.endKm || '')}</td>
++                        <td>${escapeHtml(r.totalKm || '')}</td>
++                        <td>${r.mileage ? Number(r.mileage).toFixed(2) : '-'}</td>
++                        <td><span class="badge ${imgClass}">${escapeHtml(r.imageFlag || 'Not Taken')}</span></td>
++                        <td><span class="badge ${statClass}">${escapeHtml(r.status || 'Draft')}</span></td>
++                        <td>${escapeHtml(r.submittedBy || '')}</td>
++                        <td>
++                            <button class="mini-btn view-recharge" type="button" onclick="window.viewRechargeEntry('${r.rechargeId}')">View</button>
++                            <button class="mini-btn edit-recharge" type="button" onclick="window.editRechargeEntry('${r.rechargeId}')">Edit</button>
++                            <button class="mini-btn danger delete-recharge" type="button" onclick="window.deleteRechargeEntry('${r.rechargeId}')">Delete</button>
++                        </td>
++                    </tr>`;
++                }).join('') : `<tr><td colspan="17" class="empty">No fuel recharge entry found. Click “Add Fuel Recharge” to create one.</td></tr>`;
++            }
++
++            const kpiTotal = $('#rechargeKpiTotal');
++            const kpiSubmitted = $('#rechargeKpiSubmitted');
++            const kpiDraft = $('#rechargeKpiDraft');
++            const kpiMileage = $('#rechargeKpiMileage');
++            if (kpiTotal) kpiTotal.textContent = recharges.length;
++            if (kpiSubmitted) kpiSubmitted.textContent = recharges.filter(x => x.status === 'Submitted').length;
++            if (kpiDraft) kpiDraft.textContent = recharges.filter(x => x.status === 'Draft').length;
++            if (kpiMileage) {
++                const withMileage = recharges.filter(x => Number(x.mileage) > 0);
++                const avg = withMileage.length ? withMileage.reduce((sum, x) => sum + Number(x.mileage), 0) / withMileage.length : 0;
++                kpiMileage.textContent = avg.toFixed(2);
++            }
++        }
++
++        window.viewRechargeEntry = (id) => {
++            const rec = recharges.find(r => r.rechargeId === id);
++            if (!rec) return;
++            window.FleetmanDetailViewer?.show('Fuel Recharge Details', rec);
++        };
++
++        window.editRechargeEntry = (id) => {
++            const rec = recharges.find(r => r.rechargeId === id);
++            if (!rec) return;
++            resetFuelRechargeForm();
++            setValue('#contractSelect', rec.contractId);
++            updateVehicles();
++            setTimeout(() => {
++                setValue('#vehicleSelect', rec.vehicleId);
++                updateVehicleSetup();
++                setValue('#primaryStation', rec.primaryStation);
++                setValue('#primaryQty', rec.primaryQty);
++                if (rec.secondaryFuel) {
++                    const toggle = $('#hasSecondaryFuel');
++                    if (toggle) { toggle.checked = true; toggle.dispatchEvent(new Event('change')); }
++                    setValue('#secondaryStation', rec.secondaryStation);
++                    setValue('#secondaryQty', rec.secondaryQty);
++                }
++                setValue('#endKm', rec.endKm);
++                setValue('#rechargeRemarks', rec.remarks);
++                recalculate();
++                setVisible('rechargeAddPage');
++            }, 50);
++        };
++
++        window.deleteRechargeEntry = async (id) => {
++            if (!confirm('Delete this fuel recharge entry?')) return;
++            const previous = [...recharges];
++            recharges = recharges.filter(r => r.rechargeId !== id);
++            const result = await syncFuelRecharges(recharges);
++            if (result?.syncFailed || result?.ok === false) {
++                recharges = previous;
++            } else {
++                toast('Entry deleted.');
++            }
++            renderRechargeList();
++        };
++
+         $('#contractSelect')?.addEventListener('change', updateVehicles);
+         $('#vehicleSelect')?.addEventListener('change', updateVehicleSetup);
+         $('#primaryQty')?.addEventListener('input', recalculate);
+         $('#secondaryQty')?.addEventListener('input', recalculate);
+         $('#endKm')?.addEventListener('input', recalculate);
++        $('#rechargeSearch')?.addEventListener('input', renderRechargeList);
++        $('#rechargeFilterStatus')?.addEventListener('change', renderRechargeList);
++        $('#applyRechargeFiltersBtn')?.addEventListener('click', renderRechargeList);
++        $('#clearRechargeFiltersBtn')?.addEventListener('click', () => {
++            setValue('#rechargeSearch', '');
++            setValue('#rechargeFilterStatus', '');
++            renderRechargeList();
++        });
++        $('#newRechargeBtn')?.addEventListener('click', () => {
++            resetFuelRechargeForm();
++            setVisible('rechargeAddPage');
++        });
++        $('#exportRechargesBtn')?.addEventListener('click', () => {
++            const rows = [['Entry ID', 'Date', 'Contract', 'Vehicle', 'Driver', 'Primary Fuel', 'Primary Qty', 'Primary Station', 'Secondary Fuel', 'Secondary Qty', 'Secondary Station', 'Start KM', 'End KM', 'Total KM', 'Mileage', 'Images Taken?', 'Status', 'Submitted By', 'Remarks']];
++            recharges.forEach(r => rows.push([r.entryId, r.createdAt, r.contractName, r.vehicleName, r.driver, r.primaryFuel, r.primaryQty, r.primaryStation, r.secondaryFuel, r.secondaryQty, r.secondaryStation, r.startKm, r.endKm, r.totalKm, r.mileage, r.imageFlag, r.status, r.submittedBy, r.remarks]));
++            exportCsv(rows, 'fleetman-fuel-recharges.csv');
++        });
+         $('#recalculateFuelRechargeBtn')?.addEventListener('click', recalculate);
+         $('#hasSecondaryFuel')?.addEventListener('change', function () {
+             const vehicle = selectedVehicle();
+@@ -1907,6 +2022,12 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+         updateVehicles();
+         updateCounter();
+         recalculate();
++        renderRechargeList();
++        if (window.location.search.includes('action=add')) {
++            setVisible('rechargeAddPage');
++        } else {
++            setVisible('rechargeListPage');
++        }
+     }
+ 
+     document.addEventListener('DOMContentLoaded', () => {
+@@ -1915,2302 +2036,189 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+         if (page === 'vehicles') initVehicles();
+         if (page === 'fuel-prices') initFuelPrices();
+         if (page === 'fuel-recharge') initFuelRecharge();
++    });
++                renderStatusChoices();
++                updateSummary();
++            }
++            const now = event.target.closest('[data-time-now]');
++            if (now) setNow(now.dataset.timeNow);
++            const clear = event.target.closest('[data-clear-field]');
++            if (clear) {
++                setValue('#' + clear.dataset.clearField, '');
++                updateSummary();
++            }
++            const view = event.target.closest('.view-attendance');
++            if (view) viewLog(view.dataset.id);
++            const edit = event.target.closest('.edit-attendance');
++            if (edit) editLog(edit.dataset.id);
++            const del = event.target.closest('.delete-attendance');
++            if (del) deleteLog(del.dataset.id);
++        });
++
++        populateBase();
++        resetForm();
++        renderList();
++        if (window.location.search.includes('action=add')) {
++            setVisible('attendanceAddPage');
++        } else {
++            setVisible('attendanceListPage');
++        }
++    }
++
++    document.addEventListener('DOMContentLoaded', () => {
++        bindPageTargets();
++        const page = document.body.dataset.page;
++        if (page === 'vendors') initVendors();
++        if (page === 'trips') initTrips();
++        if (page === 'drivers') initDrivers();
++        if (page === 'clients') initClients();
++        if (page === 'employees') initEmployees();
++        if (page === 'driver-attendance') initDriverAttendance();
+     });
+ })();
+ 
+-/* Vendor / Party and Large List Trip page logic. Kept separate so existing FleetMan pages stay untouched. */
++/* Master Data page logic: dynamic database-backed lookup rows for app-wide dropdowns. */
+ (() => {
++    'use strict';
++
+     const data = window.FLEETMAN || {};
+-    const options = data.options || {};
+-    const samples = data.samples || {};
+-    const records = data.records || samples || {};
+     const resources = data.resources || {};
++    const masterData = data.masterData || { vehicle_categories: [], vehicle_sub_categories: [], party_types: [], document_names: [], licence_types: [], client_types: [], contact_methods: [], fuel_types: [], fuel_units: [] };
++    const $ = (selector, root = document) => root.querySelector(selector);
++    const value = (selector) => $(selector)?.value || '';
++    const setValue = (selector, nextValue) => { const element = $(selector); if (element) element.value = nextValue ?? ''; };
++    const setText = (selector, nextValue) => { const element = $(selector); if (element) element.textContent = nextValue ?? ''; };
++    const escapeHtml = (input) => String(input ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char]));
+ 
+     function csrfToken() {
+         return document.querySelector('meta[name="csrf-token"]')?.content || '';
+     }
+ 
+-    async function syncResource(resource, rows) {
+-        const endpoint = resources?.[resource]?.sync;
+-        if (!endpoint) return { ok: true, skipped: true };
+-
+-        try {
+-            const response = await fetch(endpoint, {
+-                method: 'POST',
+-                headers: {
+-                    'Content-Type': 'application/json',
+-                    'Accept': 'application/json',
+-                    'X-CSRF-TOKEN': csrfToken(),
+-                },
+-                body: JSON.stringify({ rows: rows || [] }),
+-            });
+-
+-            if (!response.ok) {
+-                let message = 'Database sync failed. Please check required fields and server logs.';
+-                try {
+-                    const error = await response.json();
+-                    message = error.message || Object.values(error.errors || {}).flat().join(' ') || message;
+-                } catch (_) {}
+-                throw new Error(message);
+-            }
+-
+-            return await response.json().catch(() => ({ ok: true }));
+-        } catch (error) {
+-            toast(error.message || 'Saved locally in screen state, but database sync failed. Check server connection.');
+-            return { ok: false, syncFailed: true, message: error.message };
+-        }
+-    }
+-    const tripMasters = data.tripMasters || { vehicles: [], drivers: [] };
+-
+-    const $ = (selector, root = document) => root.querySelector(selector);
+-    const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+-    const value = (selector) => $(selector)?.value || '';
+-    const setValue = (selector, val) => { const element = $(selector); if (element) element.value = val ?? ''; };
+-    const escapeHtml = (input) => String(input ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char]));
+-    const money = (amount) => '৳ ' + Number(amount || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+-
+     function toast(message) {
+         const node = $('#toast');
+         if (!node) return;
+         node.textContent = message;
+         node.classList.add('show');
+-        setTimeout(() => node.classList.remove('show'), 2600);
++        setTimeout(() => node.classList.remove('show'), 2800);
+     }
+ 
+-    function setVisible(pageId) {
+-        const page = document.body.dataset.page;
+-        let ids = [];
+-        if (page === 'vendors') ids = ['vendorAddPage', 'vendorListPage'];
+-        if (page === 'trips') ids = ['tripAddPage', 'tripListPage'];
+-        if (page === 'drivers') ids = ['driverAddPage', 'driverListPage'];
+-        if (page === 'clients') ids = ['clientAddPage', 'clientListPage'];
+-        if (page === 'driver-attendance') ids = ['attendanceAddPage', 'attendanceListPage'];
+-        if (page === 'employees') ids = ['employeeAddPage', 'employeeListPage'];
+-        ids.forEach((id) => {
+-            const element = document.getElementById(id);
+-            if (element) element.classList.toggle('hidden', id !== pageId);
+-        });
+-        window.scrollTo(0, 0);
+-    }
++    function codeFrom(input) {
++        const code = String(input || '')
++            .trim()
++            .toUpperCase()
++            .replace(/[^A-Z0-9]+/g, '_')
++            .replace(/^_+|_+$/g, '');
+ 
+-    function exportCsv(rows, filename) {
+-        const csv = rows.map((row) => row.map((value) => `"${String(value || '').replaceAll('"', '""')}"`).join(',')).join('\n');
+-        const link = document.createElement('a');
+-        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+-        link.download = filename;
+-        link.click();
++        return code || 'MASTER_' + Math.random().toString(36).slice(2, 8).toUpperCase();
+     }
+ 
+-    function bindPageTargets() {
+-        document.addEventListener('click', (event) => {
+-            const target = event.target.closest('[data-page-target]');
+-            if (!target) return;
+-            setVisible(target.dataset.pageTarget);
++    function sortRows(rows) {
++        return rows.slice().sort((a, b) => {
++            const sortA = Number(a.sortOrder || 0);
++            const sortB = Number(b.sortOrder || 0);
++            if (sortA !== sortB) return sortA - sortB;
++            return String(a.name || '').localeCompare(String(b.name || ''));
+         });
+     }
+ 
+-    function initVendors() {
+-        let parties = Array.isArray(records.parties) ? records.parties : (samples.parties || []);
+-        const partyDocumentTemplates = options.party_document_templates || [];
+-
+-        function genId() {
+-            return 'VND' + new Date().toISOString().slice(2, 10).replaceAll('-', '') + Math.floor(100 + Math.random() * 900);
+-        }
+-
+-        function hasPendingFiles(documentFilesByParty = {}) {
+-            return Object.values(documentFilesByParty).some((documentMap) => Object.values(documentMap || {}).some(Boolean));
+-        }
+-
+-        function validatePendingFiles(documentFiles = {}) {
+-            const allowed = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+-            for (const file of Object.values(documentFiles || {})) {
+-                if (!file) continue;
+-                const ext = String(file.name || '').split('.').pop().toLowerCase();
+-                if (!allowed.includes(ext)) {
+-                    toast('Only JPG, JPEG, PNG, WEBP or PDF documents are allowed.');
+-                    return false;
+-                }
+-                if (file.size > 5 * 1024 * 1024) {
+-                    toast('Each document file must be 5 MB or smaller.');
+-                    return false;
+-                }
+-            }
+-            return true;
+-        }
+-
+-        async function syncParties(rows, documentFilesByParty = {}) {
+-            const endpoint = resources?.parties?.sync;
+-            if (!endpoint) return { ok: true, skipped: true };
+-
+-            const containsFiles = hasPendingFiles(documentFilesByParty);
+-            if (!containsFiles) {
+-                return syncResource('parties', rows);
+-            }
++    function initMasterData() {
++        let vehicleCategories = Array.isArray(masterData.vehicle_categories) ? masterData.vehicle_categories.slice() : [];
++        let vehicleSubCategories = Array.isArray(masterData.vehicle_sub_categories) ? masterData.vehicle_sub_categories.slice() : [];
++        let partyTypes = Array.isArray(masterData.party_types) ? masterData.party_types.slice() : [];
++        let documentNames = Array.isArray(masterData.document_names) ? masterData.document_names.slice() : [];
++        let licenceTypes = Array.isArray(masterData.licence_types) ? masterData.licence_types.slice() : [];
++        let clientTypes = Array.isArray(masterData.client_types) ? masterData.client_types.slice() : [];
++        let contactMethods = Array.isArray(masterData.contact_methods) ? masterData.contact_methods.slice() : [];
++        let fuelTypes = Array.isArray(masterData.fuel_types) ? masterData.fuel_types.slice() : [];
++        let fuelUnits = Array.isArray(masterData.fuel_units) ? masterData.fuel_units.slice() : [];
+ 
+-            const formData = new FormData();
+-            formData.append('rows', JSON.stringify(rows || []));
+-            Object.entries(documentFilesByParty).forEach(([partyIndex, documentMap]) => {
+-                Object.entries(documentMap || {}).forEach(([documentIndex, file]) => {
+-                    if (file) formData.append(`document_files[${partyIndex}][${documentIndex}]`, file);
+-                });
+-            });
++        function populateVehicleCategorySelect(selectedValue = '') {
++            const select = $('#vehicleSubCategoryParent');
++            if (!select) return;
+ 
+-            try {
+-                const response = await fetch(endpoint, {
+-                    method: 'POST',
+-                    headers: {
+-                        'Accept': 'application/json',
+-                        'X-CSRF-TOKEN': csrfToken(),
+-                    },
+-                    body: formData,
++            const currentValue = selectedValue || select.value;
++            select.innerHTML = '<option value="">Select vehicle category</option>';
++            sortRows(vehicleCategories)
++                .filter((row) => row.status !== 'Inactive')
++                .forEach((row) => {
++                    const option = document.createElement('option');
++                    option.value = row.code;
++                    option.textContent = row.name;
++                    select.appendChild(option);
+                 });
+ 
+-                if (!response.ok) {
+-                    let message = 'Vendor / Party could not be saved.';
+-                    try {
+-                        const error = await response.json();
+-                        message = error.message || Object.values(error.errors || {}).flat().join(' ') || message;
+-                    } catch (_) {}
+-                    throw new Error(message);
+-                }
+-
+-                return await response.json().catch(() => ({ ok: true }));
+-            } catch (error) {
+-                toast(error.message || 'Vendor / Party could not be saved.');
+-                return { ok: false, syncFailed: true, message: error.message };
++            if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
++                select.value = currentValue;
+             }
+         }
+ 
+-        function saveStore(documentFilesByParty = {}) {
+-            return syncParties(parties, documentFilesByParty);
++        function vehicleCategoryName(code) {
++            return vehicleCategories.find((row) => row.code === code)?.name || code || '—';
+         }
+ 
+-        function addContact(row = {}) {
+-            const wrapper = $('#partyContacts');
+-            if (!wrapper) return;
+-            const div = document.createElement('div');
+-            div.className = 'repeat-row contact-row';
+-            const meta = row.email || row.whatsapp || '';
+-            div.innerHTML = `
+-                <div class="field"><label>Name <span class="req">*</span></label><input class="partyContactName" placeholder="Example: Md. Karim" value="${escapeHtml(row.name || '')}"></div>
+-                <div class="field"><label>Role</label><input class="partyContactRole" placeholder="Example: Manager" value="${escapeHtml(row.role || '')}"></div>
+-                <div class="field"><label>Phone Number <span class="req">*</span></label><input class="partyContactPhone" placeholder="01XXXXXXXXX" value="${escapeHtml(row.phone || '')}"></div>
+-                <div class="field"><label>Email / WhatsApp</label><input class="partyContactMeta" placeholder="Email or WhatsApp" value="${escapeHtml(meta)}"></div>
+-                <button type="button" class="mini-btn danger remove-row">Remove</button>`;
+-            wrapper.appendChild(div);
++        function codeForVehicleSubCategory() {
++            const categoryCode = value('#vehicleSubCategoryParent');
++            const name = value('#vehicleSubCategoryMasterName');
++            return codeFrom([categoryCode, name].filter(Boolean).join('_'));
+         }
+ 
+-        function normalizeDocumentFile(row = {}) {
+-            if (row.file && typeof row.file === 'object') return row.file;
+-            if (row.filePath || row.fileUrl || row.originalName) {
+-                return {
+-                    filePath: row.filePath || '',
+-                    fileUrl: row.fileUrl || '',
+-                    fileName: row.fileName || '',
+-                    originalName: row.originalName || row.fileName || '',
+-                    mimeType: row.mimeType || '',
+-                    sizeBytes: row.sizeBytes || '',
+-                    uploadedAt: row.uploadedAt || '',
+-                };
++        function saveStore() {
++            const endpoint = resources?.master_data?.sync;
++            if (!endpoint) {
++                toast('Master Data route is missing. Please check routes/web.php.');
++                return;
+             }
+-            return {};
+-        }
+ 
+-        function fileDataFromRow(row) {
+-            const hidden = $('.partyDocFileData', row);
+-            if (!hidden?.value) return {};
+-            try {
+-                return JSON.parse(hidden.value) || {};
+-            } catch (_) {
+-                return {};
+-            }
++            fetch(endpoint, {
++                method: 'POST',
++                headers: {
++                    'Content-Type': 'application/json',
++                    'Accept': 'application/json',
++                    'X-CSRF-TOKEN': csrfToken(),
++                },
++                body: JSON.stringify({ vehicle_categories: vehicleCategories, vehicle_sub_categories: vehicleSubCategories, party_types: partyTypes, document_names: documentNames, licence_types: licenceTypes, client_types: clientTypes, contact_methods: contactMethods, fuel_types: fuelTypes, fuel_units: fuelUnits }),
++            })
++                .then(async (response) => {
++                    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Master data sync failed.');
++                    return response.json();
++                })
++                .then((payload) => {
++                    if (payload.masterData) {
++                        vehicleCategories = Array.isArray(payload.masterData.vehicle_categories) ? payload.masterData.vehicle_categories : vehicleCategories;
++                        vehicleSubCategories = Array.isArray(payload.masterData.vehicle_sub_categories) ? payload.masterData.vehicle_sub_categories : vehicleSubCategories;
++                        partyTypes = Array.isArray(payload.masterData.party_types) ? payload.masterData.party_types : partyTypes;
++                        documentNames = Array.isArray(payload.masterData.document_names) ? payload.masterData.document_names : documentNames;
++                        licenceTypes = Array.isArray(payload.masterData.licence_types) ? payload.masterData.licence_types : licenceTypes;
++                        clientTypes = Array.isArray(payload.masterData.client_types) ? payload.masterData.client_types : clientTypes;
++                        contactMethods = Array.isArray(payload.masterData.contact_methods) ? payload.masterData.contact_methods : contactMethods;
++                        fuelTypes = Array.isArray(payload.masterData.fuel_types) ? payload.masterData.fuel_types : fuelTypes;
++                        fuelUnits = Array.isArray(payload.masterData.fuel_units) ? payload.masterData.fuel_units : fuelUnits;
++                        renderAll();
++                    }
++                })
++                .catch((error) => toast(error.message || 'Could not save master data to database.'));
+         }
+ 
+-        function selectedFileFromRow(row) {
+-            const input = $('.partyDocFile', row);
+-            return input?.files?.[0] || null;
++        function resetVehicleCategoryForm() {
++            setValue('#vehicleCategoryEditingCode', '');
++            setValue('#vehicleCategoryMasterName', '');
++            setValue('#vehicleCategoryMasterCode', '');
++            setValue('#vehicleCategoryMasterSort', '0');
++            setValue('#vehicleCategoryMasterStatus', 'Active');
++            setValue('#vehicleCategoryMasterDescription', '');
++            setText('#saveVehicleCategoryMasterBtn', 'Save Vehicle Category');
+         }
+ 
+-        function renderDocumentFileInfo(row, fileData = {}, selectedFile = null) {
+-            const info = $('.partyDocUploadInfo', row);
+-            if (!info) return;
+-
+-            if (selectedFile) {
+-                info.innerHTML = `<span class="pending-upload">Selected: <b>${escapeHtml(selectedFile.name)}</b>. It will upload only after Save Vendor / Party.</span>`;
+-                return;
+-            }
+-
+-            if (fileData.fileUrl || fileData.filePath) {
+-                const label = fileData.originalName || fileData.fileName || 'Uploaded document';
+-                const link = fileData.fileUrl ? `<a href="${escapeHtml(fileData.fileUrl)}" target="_blank" rel="noopener">View file</a>` : '';
+-                info.innerHTML = `Uploaded: <b>${escapeHtml(label)}</b>${link ? ` · ${link}` : ''}`;
+-            } else {
+-                info.textContent = 'Choose image/PDF. It will be stored only when this vendor/party is saved.';
+-            }
+-        }
+-
+-        function addDocument(row = {}) {
+-            const wrapper = $('#partyDocuments');
+-            if (!wrapper) return;
+-            const div = document.createElement('div');
+-            div.className = 'repeat-row document-row';
+-            const docOptions = [''].concat(partyDocumentTemplates);
+-            const fileData = normalizeDocumentFile(row);
+-            div.innerHTML = `
+-                <div class="field"><label>Document Name</label><select class="partyDocName">${docOptions.map((doc) => `<option value="${escapeHtml(doc)}" ${row.name === doc ? 'selected' : ''}>${escapeHtml(doc || 'Select document')}</option>`).join('')}</select></div>
+-                <div class="field"><label>Reference No.</label><input class="partyDocNumber" placeholder="Optional" value="${escapeHtml(row.number || '')}"></div>
+-                <div class="field"><label>Expiry Date</label><input class="partyDocExpiry" type="date" value="${escapeHtml(row.expiry || '')}"></div>
+-                <div class="field"><label>Upload Picture / File</label><input class="partyDocFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf"><input class="partyDocFileData" type="hidden" value="${escapeHtml(JSON.stringify(fileData || {}))}"><small class="upload-meta partyDocUploadInfo"></small></div>
+-                <button type="button" class="mini-btn danger remove-row">Remove</button>`;
+-            wrapper.appendChild(div);
+-            renderDocumentFileInfo(div, fileData);
+-        }
+-
+-        function resetForm() {
+-            $$('#vendorAddPage input, #vendorAddPage select, #vendorAddPage textarea').forEach((element) => { element.value = ''; });
+-            setValue('#partyId', genId());
+-            setValue('#partyStatus', 'Active');
+-            setValue('#paymentTerms', 'Cash');
+-            $('#partyContacts').innerHTML = '';
+-            $('#partyDocuments').innerHTML = '';
+-            addContact();
+-            addDocument({ name: 'Trade License Copy' });
+-        }
+-
+-        function collect(statusOverride) {
+-            const contacts = $$('.contact-row').map((row) => {
+-                const meta = $('.partyContactMeta', row)?.value.trim() || '';
+-                return {
+-                    name: $('.partyContactName', row)?.value.trim() || '',
+-                    role: $('.partyContactRole', row)?.value.trim() || '',
+-                    phone: $('.partyContactPhone', row)?.value.trim() || '',
+-                    email: meta.includes('@') ? meta : '',
+-                    whatsapp: meta.includes('@') ? '' : meta,
+-                };
+-            }).filter((contact) => contact.name || contact.role || contact.phone || contact.email || contact.whatsapp);
+-
+-            const documentFiles = {};
+-            const documents = [];
+-            $$('.document-row').forEach((row) => {
+-                const existingFile = fileDataFromRow(row);
+-                const pendingFile = selectedFileFromRow(row);
+-                const doc = {
+-                    name: $('.partyDocName', row)?.value.trim() || '',
+-                    number: $('.partyDocNumber', row)?.value.trim() || '',
+-                    expiry: $('.partyDocExpiry', row)?.value || '',
+-                    file: existingFile,
+-                };
+-
+-                if (doc.name || doc.number || doc.expiry || doc.file?.filePath || doc.file?.fileUrl || pendingFile) {
+-                    const documentIndex = documents.length;
+-                    documents.push(doc);
+-                    if (pendingFile) documentFiles[documentIndex] = pendingFile;
+-                }
+-            });
+-
+-            return {
+-                party: {
+-                    partyId: value('#partyId'),
+-                    partyName: value('#partyName').trim(),
+-                    partyType: value('#partyType'),
+-                    status: statusOverride || value('#partyStatus'),
+-                    phone: value('#partyPhone').trim(),
+-                    email: value('#partyEmail').trim(),
+-                    whatsapp: value('#partyWhatsapp').trim(),
+-                    tradeLicense: value('#tradeLicense').trim(),
+-                    tinBin: value('#tinBin').trim(),
+-                    paymentTerms: value('#paymentTerms'),
+-                    address: value('#partyAddress').trim(),
+-                    about: value('#partyAbout').trim(),
+-                    contacts,
+-                    documents,
+-                },
+-                documentFiles,
+-            };
+-        }
+-
+-        function validate(party) {
+-            if (!party.partyName || !party.partyType || !party.phone || !party.address || !party.status) {
+-                toast('Please fill required vendor / party information.');
+-                return false;
+-            }
+-            if (!party.contacts.length || !party.contacts[0].name || !party.contacts[0].phone) {
+-                toast('Please add at least one contact person with name and phone.');
+-                return false;
+-            }
+-            return true;
+-        }
+-
+-        function upsert(party) {
+-            const index = parties.findIndex((item) => item.partyId === party.partyId);
+-            if (index >= 0) {
+-                parties[index] = party;
+-                return index;
+-            }
+-            parties.unshift(party);
+-            return 0;
+-        }
+-
+-        function cloneParties() {
+-            return JSON.parse(JSON.stringify(parties || []));
+-        }
+-
+-        async function saveParty(statusOverride) {
+-            const form = collect(statusOverride);
+-            const party = form.party;
+-
+-            if (statusOverride === 'Draft') {
+-                if (!party.partyName) party.partyName = 'Draft Vendor / Party';
+-                if (!party.partyType) party.partyType = 'Other';
+-            } else if (!validate(party)) {
+-                return;
+-            }
+-
+-            if (!validatePendingFiles(form.documentFiles)) return;
+-
+-            const saveBtn = statusOverride === 'Draft' ? $('#savePartyDraftBtn') : $('#savePartyBtn');
+-            const originalText = saveBtn?.textContent || '';
+-            if (saveBtn) {
+-                saveBtn.disabled = true;
+-                saveBtn.textContent = hasPendingFiles({ 0: form.documentFiles }) ? 'Saving & uploading...' : 'Saving...';
+-            }
+-
+-            const previousParties = cloneParties();
+-            const partyIndex = upsert(party);
+-            const filesForSync = hasPendingFiles({ [partyIndex]: form.documentFiles }) ? { [partyIndex]: form.documentFiles } : {};
+-            const result = await saveStore(filesForSync);
+-
+-            if (saveBtn) {
+-                saveBtn.disabled = false;
+-                saveBtn.textContent = originalText;
+-            }
+-
+-            if (result?.syncFailed || result?.ok === false) {
+-                parties = previousParties;
+-                renderList();
+-                return;
+-            }
+-
+-            if (Array.isArray(result?.rows)) parties = result.rows;
+-
+-            renderList();
+-            toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Vendor / Party saved.');
+-            setVisible('vendorListPage');
+-        }
+-
+-        function loadSample() {
+-            const sample = (samples.parties || [])[0];
+-            if (!sample) return;
+-            resetForm();
+-            setValue('#partyId', sample.partyId);
+-            setValue('#partyName', sample.partyName);
+-            setValue('#partyType', sample.partyType);
+-            setValue('#partyStatus', sample.status);
+-            setValue('#partyPhone', sample.phone);
+-            setValue('#partyEmail', sample.email);
+-            setValue('#partyWhatsapp', sample.whatsapp);
+-            setValue('#tradeLicense', sample.tradeLicense);
+-            setValue('#tinBin', sample.tinBin);
+-            setValue('#paymentTerms', sample.paymentTerms);
+-            setValue('#partyAddress', sample.address);
+-            setValue('#partyAbout', sample.about);
+-            $('#partyContacts').innerHTML = '';
+-            (sample.contacts || []).forEach(addContact);
+-            $('#partyDocuments').innerHTML = '';
+-            (sample.documents || []).forEach(addDocument);
+-            toast('Sample vendor / party data loaded.');
+-        }
+-
+-        function editParty(id) {
+-            const party = parties.find((item) => item.partyId === id);
+-            if (!party) return;
+-            resetForm();
+-            setValue('#partyId', party.partyId);
+-            setValue('#partyName', party.partyName);
+-            setValue('#partyType', party.partyType);
+-            setValue('#partyStatus', party.status);
+-            setValue('#partyPhone', party.phone);
+-            setValue('#partyEmail', party.email);
+-            setValue('#partyWhatsapp', party.whatsapp);
+-            setValue('#tradeLicense', party.tradeLicense);
+-            setValue('#tinBin', party.tinBin);
+-            setValue('#paymentTerms', party.paymentTerms);
+-            setValue('#partyAddress', party.address);
+-            setValue('#partyAbout', party.about);
+-            $('#partyContacts').innerHTML = '';
+-            (party.contacts || []).forEach(addContact);
+-            $('#partyDocuments').innerHTML = '';
+-            (party.documents || []).forEach(addDocument);
+-            setVisible('vendorAddPage');
+-        }
+-
+-        function deleteParty(id) {
+-            if (!confirm('Delete this vendor / party from list?')) return;
+-            const previousParties = cloneParties();
+-            parties = parties.filter((party) => party.partyId !== id);
+-            saveStore().then((result) => {
+-                if (result?.syncFailed || result?.ok === false) {
+-                    parties = previousParties;
+-                    renderList();
+-                    return;
+-                }
+-                renderList();
+-                toast('Vendor / Party deleted.');
+-            });
+-        }
+-
+-        function viewParty(id) {
+-            const party = parties.find((item) => item.partyId === id);
+-            if (!party) return;
+-            window.FleetmanDetailViewer?.show('Vendor / Party Details', party);
+-        }
+-
+-        function rowHtml(party) {
+-            const main = (party.contacts || [])[0] || {};
+-            const uploadedCount = (party.documents || []).filter((doc) => doc.file?.filePath || doc.file?.fileUrl).length;
+-            const cls = party.status === 'Active' ? 'ok' : party.status === 'Blacklisted' ? 'danger' : party.status === 'Draft' ? 'soft' : 'warn';
+-            return `<tr>
+-                <td><div class="party-cell"><div class="party-icon">🤝</div><div><b>${escapeHtml(party.partyName)}</b><br><small>${escapeHtml(party.partyId)}</small></div></div></td>
+-                <td><span class="badge soft">${escapeHtml(party.partyType || '-')}</span></td>
+-                <td>${escapeHtml(party.phone || '-')}<br><small>${escapeHtml(party.email || '')}</small></td>
+-                <td><b>${escapeHtml(main.name || '-')}</b><br><small>${escapeHtml(main.phone || '')}${(party.contacts || []).length > 1 ? ` · +${(party.contacts || []).length - 1} more` : ''}</small></td>
+-                <td>${escapeHtml(party.paymentTerms || '-')}</td>
+-                <td>${(party.documents || []).length} document(s)<br><small>${uploadedCount} uploaded file(s)</small></td>
+-                <td><span class="badge ${cls}">${escapeHtml(party.status || '-')}</span></td>
+-                <td>${escapeHtml(party.address || '-')}</td>
+-                <td><button type="button" class="mini-btn view-party" data-id="${escapeHtml(party.partyId)}">View</button><button type="button" class="mini-btn edit-party" data-id="${escapeHtml(party.partyId)}">Edit</button><button type="button" class="mini-btn danger delete-party" data-id="${escapeHtml(party.partyId)}">Delete</button></td>
+-            </tr>`;
+-        }
+-
+-        function renderList() {
+-            const query = value('#partySearch').toLowerCase();
+-            const type = value('#partyFilterType');
+-            const status = value('#partyFilterStatus');
+-            const terms = value('#partyFilterTerms');
+-            const list = parties.filter((party) => {
+-                const contactText = (party.contacts || []).map((contact) => [contact.name, contact.phone, contact.role, contact.email, contact.whatsapp].join(' ')).join(' ');
+-                return (!query || [party.partyId, party.partyName, party.phone, party.email, party.tradeLicense, contactText].join(' ').toLowerCase().includes(query))
+-                    && (!type || party.partyType === type)
+-                    && (!status || party.status === status)
+-                    && (!terms || party.paymentTerms === terms);
+-            });
+-            $('#partyTbody').innerHTML = list.length ? list.map(rowHtml).join('') : '<tr><td colspan="9" class="empty">No vendor / party found. Click “Add Vendor / Party” to create one.</td></tr>';
+-            $('#partyKpiTotal').textContent = parties.length;
+-            $('#partyKpiActive').textContent = parties.filter((party) => party.status === 'Active').length;
+-            $('#partyKpiTypes').textContent = new Set(parties.map((party) => party.partyType).filter(Boolean)).size;
+-            $('#partyKpiContacts').textContent = parties.reduce((sum, party) => sum + (party.contacts || []).length, 0);
+-        }
+-
+-        function clearFilters() {
+-            setValue('#partySearch', '');
+-            setValue('#partyFilterType', '');
+-            setValue('#partyFilterStatus', '');
+-            setValue('#partyFilterTerms', '');
+-            renderList();
+-        }
+-
+-        function exportParties() {
+-            const rows = [['Party ID', 'Party Name', 'Party Type', 'Status', 'Phone', 'Email', 'WhatsApp', 'Trade License', 'TIN/BIN', 'Payment Terms', 'Address', 'About', 'Contacts', 'Documents']];
+-            parties.forEach((party) => rows.push([
+-                party.partyId, party.partyName, party.partyType, party.status, party.phone, party.email, party.whatsapp, party.tradeLicense, party.tinBin, party.paymentTerms, party.address, party.about,
+-                (party.contacts || []).map((contact) => `${contact.name} / ${contact.role || ''} / ${contact.phone || ''}`).join('; '),
+-                (party.documents || []).map((doc) => `${doc.name} / ${doc.number || ''} / ${doc.expiry || ''} / ${(doc.file?.originalName || doc.file?.fileName || '')}`).join('; '),
+-            ]));
+-            exportCsv(rows, 'fleetman-vendor-party-list.csv');
+-        }
+-
+-        $('#addPartyContactBtn')?.addEventListener('click', () => addContact());
+-        $('#addPartyDocumentBtn')?.addEventListener('click', () => addDocument());
+-        $('#resetPartyBtn')?.addEventListener('click', resetForm);
+-        $('#savePartyBtn')?.addEventListener('click', () => saveParty());
+-        $('#savePartyDraftBtn')?.addEventListener('click', () => saveParty('Draft'));
+-        $('#loadPartySampleBtn')?.addEventListener('click', loadSample);
+-        $('#newPartyBtn')?.addEventListener('click', () => { resetForm(); setVisible('vendorAddPage'); });
+-        $('#exportPartiesBtn')?.addEventListener('click', exportParties);
+-        $('#applyPartyFiltersBtn')?.addEventListener('click', renderList);
+-        $('#clearPartyFiltersBtn')?.addEventListener('click', clearFilters);
+-        ['#partySearch', '#partyFilterType', '#partyFilterStatus', '#partyFilterTerms'].forEach((selector) => $(selector)?.addEventListener('input', renderList));
+-        document.addEventListener('change', (event) => {
+-            const input = event.target.closest('.partyDocFile');
+-            if (!input) return;
+-            const row = input.closest('.document-row');
+-            if (row) renderDocumentFileInfo(row, fileDataFromRow(row), selectedFileFromRow(row));
+-        });
+-        document.addEventListener('click', (event) => {
+-            if (event.target.closest('.remove-row')) event.target.closest('.repeat-row')?.remove();
+-            const view = event.target.closest('.view-party');
+-            if (view) viewParty(view.dataset.id);
+-            const edit = event.target.closest('.edit-party');
+-            if (edit) editParty(edit.dataset.id);
+-            const del = event.target.closest('.delete-party');
+-            if (del) deleteParty(del.dataset.id);
+-        });
+-
+-        resetForm();
+-        renderList();
+-        setVisible('vendorListPage');
+-    }
+-
+-    function initTrips() {
+-        const RECENT_KEY = 'fleetman_trip_selector_recent_v2';
+-        let trips = Array.isArray(records.trips) ? records.trips : (samples.trips || []);
+-        const vehicles = (tripMasters.vehicles || []).map((item) => ({
+-            id: String(item.id || ''),
+-            name: String(item.name || ''),
+-            label: String(item.label || [item.id, item.name].filter(Boolean).join(' - ')),
+-            type: String(item.type || item.category || item.subCategory || 'Vehicle'),
+-            note: String(item.note || [item.regNo, item.model, item.status].filter(Boolean).join(' • ') || 'From vehicle table'),
+-            status: String(item.status || ''),
+-            regNo: String(item.regNo || ''),
+-            model: String(item.model || ''),
+-        })).filter((item) => item.label || item.id || item.name);
+-        const drivers = (tripMasters.drivers || []).map((item) => ({
+-            id: String(item.id || ''),
+-            name: String(item.name || ''),
+-            label: String(item.label || [item.id, item.name].filter(Boolean).join(' - ')),
+-            phone: String(item.phone || item.contact || ''),
+-            area: String(item.area || item.presentAddress || item.duty || 'Driver'),
+-            duty: String(item.duty || ''),
+-            status: String(item.status || ''),
+-            note: String(item.note || [item.phone || item.contact, item.duty, item.status].filter(Boolean).join(' • ') || 'From driver table'),
+-        })).filter((item) => item.label || item.id || item.name);
+-        const statusOptions = options.trip_statuses || [];
+-        const aroundOptions = options.trip_around || [];
+-        const periodOptions = options.trip_periods || [];
+-        const purposeOptions = options.trip_purposes || [];
+-        let selectedVehicle = '';
+-        let selectedDriver = '';
+-        let selectedStatus = statusOptions[0] || 'Initiated';
+-        let selectedAround = '';
+-        let selectedPeriod = '';
+-        let selectorType = 'vehicle';
+-        let selectorTab = 'recent';
+-
+-        function saveStore() { syncResource('trips', trips); }
+-        function getRecent() { return JSON.parse(localStorage.getItem(RECENT_KEY) || '{"vehicle":[],"driver":[]}'); }
+-        function setRecent(recent) { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); }
+-        function pushRecent(type, selected) {
+-            if (!selected) return;
+-            const recent = getRecent();
+-            recent[type] = [selected, ...(recent[type] || []).filter((item) => item !== selected)].slice(0, 6);
+-            setRecent(recent);
+-            renderRecentChips();
+-        }
+-        function genId() { return 'TRP' + new Date().toISOString().slice(2, 10).replaceAll('-', '') + Math.floor(100 + Math.random() * 900); }
+-        function toNum(v) { return Number(v || 0); }
+-
+-        function calculateTotal() {
+-            const total = toNum(value('#tripFuelCost')) + toNum(value('#tripFoodCost')) + toNum(value('#tripTolls')) + toNum(value('#tripOtherCost')) + toNum(value('#tripAccommodationCost'));
+-            setValue('#tripTotalCost', total.toFixed(2).replace(/\.00$/, ''));
+-            $('#tripSideTotal').textContent = Number(total).toLocaleString();
+-            return total;
+-        }
+-
+-        function vehicleValue(item) { return item?.label || [item?.id, item?.name].filter(Boolean).join(' - '); }
+-        function driverValue(item) { return item?.label || [item?.id, item?.name].filter(Boolean).join(' - '); }
+-        function findVehicle(selected) { return vehicles.find((item) => vehicleValue(item) === selected || item.id === selected); }
+-        function findDriver(selected) { return drivers.find((item) => driverValue(item) === selected || item.id === selected); }
+-
+-        function renderChoiceGroup(containerId, opts, selectedValue, callbackName) {
+-            const box = document.getElementById(containerId);
+-            if (!box) return;
+-            box.innerHTML = opts.map((opt) => `<button type="button" class="choice-btn ${selectedValue === opt ? 'active' : ''}" data-choice-callback="${callbackName}" data-value="${escapeHtml(opt)}">${escapeHtml(opt)}</button>`).join('');
+-        }
+-        function renderPurposeChoices(active) {
+-            const box = $('#tripPurposeChoices');
+-            if (!box) return;
+-            box.innerHTML = purposeOptions.map((opt) => `<button type="button" class="choice-btn ${active === opt ? 'active' : ''}" data-trip-purpose="${escapeHtml(opt)}">${escapeHtml(opt)}</button>`).join('');
+-        }
+-        function setStatus(value) { selectedStatus = value; renderChoiceGroup('tripStatusChoices', statusOptions, selectedStatus, 'status'); }
+-        function setAround(value) { selectedAround = value; renderChoiceGroup('tripAroundChoices', aroundOptions, selectedAround, 'around'); }
+-        function setPeriod(value) { selectedPeriod = value; renderChoiceGroup('tripPeriodChoices', periodOptions, selectedPeriod, 'period'); }
+-
+-        function renderSelectionSummary() {
+-            const vehicle = findVehicle(selectedVehicle);
+-            const driver = findDriver(selectedDriver);
+-            $('#tripVehicleSummary').innerHTML = vehicle
+-                ? `<div><b>${escapeHtml(vehicleValue(vehicle))}</b><small>${escapeHtml([vehicle.type, vehicle.note].filter(Boolean).join(' • '))}</small></div><span>✓</span>`
+-                : selectedVehicle
+-                    ? `<div><b>${escapeHtml(selectedVehicle)}</b><small>This saved vehicle is not currently available in the vehicle table.</small></div><span>!</span>`
+-                    : '<div><b>No vehicle selected</b><small>Tap the button to search and choose from saved vehicles</small></div>';
+-            $('#tripDriverSummary').innerHTML = driver
+-                ? `<div><b>${escapeHtml(driverValue(driver))}</b><small>${escapeHtml([driver.phone, driver.area, driver.note].filter(Boolean).join(' • '))}</small></div><span>✓</span>`
+-                : selectedDriver
+-                    ? `<div><b>${escapeHtml(selectedDriver)}</b><small>This saved driver is not currently available in the driver table.</small></div><span>!</span>`
+-                    : '<div><b>No driver selected</b><small>Tap the button to search and choose from saved drivers</small></div>';
+-        }
+-        function renderRecentChips() {
+-            const recent = getRecent();
+-            $('#recentTripVehicleChips').innerHTML = (recent.vehicle || []).map((item) => `<button type="button" class="quick-chip ${selectedVehicle === item ? 'active' : ''}" data-recent-type="vehicle" data-value="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join('');
+-            $('#recentTripDriverChips').innerHTML = (recent.driver || []).map((item) => `<button type="button" class="quick-chip ${selectedDriver === item ? 'active' : ''}" data-recent-type="driver" data-value="${escapeHtml(item)}">${escapeHtml(item)}</button>`).join('');
+-        }
+-
+-        function openSelector(type) {
+-            selectorType = type;
+-            selectorTab = 'all';
+-            setValue('#tripSelectorSearch', '');
+-            $('#tripSelectorTitle').textContent = type === 'vehicle' ? 'Select Vehicle' : 'Select Driver';
+-            $('#tripSelectorSubtitle').textContent = type === 'vehicle' ? 'Search, filter, and choose from a large vehicle list' : 'Search, filter, and choose from a large driver list';
+-            const filter = $('#tripSelectorFilter');
+-            if (type === 'vehicle') {
+-                const types = [...new Set(vehicles.map((vehicle) => vehicle.type).filter(Boolean))];
+-                filter.innerHTML = '<option value="">All Types</option>' + types.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('');
+-            } else {
+-                const areas = [...new Set(drivers.map((driver) => driver.area).filter(Boolean))];
+-                filter.innerHTML = '<option value="">All Areas</option>' + areas.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('');
+-            }
+-            $('#tripSelectorOverlay').classList.add('show');
+-            setSelectorTab('all');
+-            renderSelectorList();
+-        }
+-        function closeSelector() { $('#tripSelectorOverlay').classList.remove('show'); }
+-        function setSelectorTab(tab) {
+-            selectorTab = tab;
+-            $('#tripSelectorRecentTab').classList.toggle('active', tab === 'recent');
+-            $('#tripSelectorAllTab').classList.toggle('active', tab === 'all');
+-            renderSelectorList();
+-        }
+-        function getDataset() { return selectorType === 'vehicle' ? vehicles : drivers; }
+-        function getSelectedValue() { return selectorType === 'vehicle' ? selectedVehicle : selectedDriver; }
+-        function setSelectedValue(val) {
+-            if (selectorType === 'vehicle') {
+-                selectedVehicle = val;
+-                pushRecent('vehicle', val);
+-            } else {
+-                selectedDriver = val;
+-                pushRecent('driver', val);
+-            }
+-            renderSelectionSummary();
+-            renderRecentChips();
+-            renderSelectorList();
+-        }
+-        function clearSelectorChoice() {
+-            if (selectorType === 'vehicle') selectedVehicle = '';
+-            else selectedDriver = '';
+-            renderSelectionSummary();
+-            renderRecentChips();
+-            renderSelectorList();
+-        }
+-        function renderSelectorList() {
+-            const dataset = getDataset();
+-            const query = value('#tripSelectorSearch').toLowerCase();
+-            const filter = value('#tripSelectorFilter');
+-            const recent = getRecent()[selectorType] || [];
+-            let filtered = dataset.filter((item) => {
+-                const combined = selectorType === 'vehicle'
+-                    ? `${item.id} ${item.name} ${item.label} ${item.type} ${item.note} ${item.regNo} ${item.model} ${item.status}`
+-                    : `${item.id} ${item.name} ${item.label} ${item.phone} ${item.area} ${item.duty} ${item.status} ${item.note}`;
+-                const filterOk = selectorType === 'vehicle' ? (!filter || item.type === filter) : (!filter || item.area === filter);
+-                return (!query || combined.toLowerCase().includes(query)) && filterOk;
+-            });
+-            if (selectorTab === 'recent') {
+-                filtered = filtered.filter((item) => recent.includes(selectorType === 'vehicle' ? vehicleValue(item) : driverValue(item)));
+-            }
+-            $('#tripSelectorStats').innerHTML = `<span class="stat-pill">${dataset.length} total ${selectorType}s</span><span class="stat-pill">${filtered.length} shown</span><span class="stat-pill">${recent.length} recent</span>`;
+-            const selectedVal = getSelectedValue();
+-            $('#tripSelectorList').innerHTML = filtered.length ? filtered.map((item) => {
+-                const val = selectorType === 'vehicle' ? vehicleValue(item) : driverValue(item);
+-                const meta = selectorType === 'vehicle' ? [item.type, item.note].filter(Boolean).join(' • ') : [item.phone, item.area, item.note].filter(Boolean).join(' • ');
+-                const icon = selectorType === 'vehicle' ? '🚘' : '🧑‍✈️';
+-                return `<div class="list-row ${selectedVal === val ? 'active' : ''}" data-selector-value="${escapeHtml(val)}"><div class="icon">${icon}</div><div><b>${escapeHtml(val)}</b><small>${escapeHtml(meta)}</small></div><div class="radio-dot"></div></div>`;
+-            }).join('') : `<div class="empty">${selectorTab === 'recent' ? 'No recent items found. Switch to All or search.' : 'No matching results found.'}</div>`;
+-        }
+-
+-        function resetForm() {
+-            $$('#tripAddPage input, #tripAddPage textarea').forEach((element) => { element.value = ''; });
+-            setValue('#tripId', genId());
+-            const today = new Date().toISOString().slice(0, 10);
+-            setValue('#tripStartDate', today);
+-            setValue('#tripEndDate', today);
+-            selectedVehicle = '';
+-            selectedDriver = '';
+-            selectedStatus = statusOptions[0] || 'Initiated';
+-            selectedAround = '';
+-            selectedPeriod = '';
+-            setStatus(selectedStatus);
+-            setAround(selectedAround);
+-            setPeriod(selectedPeriod);
+-            renderPurposeChoices('');
+-            renderSelectionSummary();
+-            renderRecentChips();
+-            calculateTotal();
+-        }
+-
+-        function collect(statusOverride) {
+-            const vehicle = findVehicle(selectedVehicle);
+-            const driver = findDriver(selectedDriver);
+-            return {
+-                tripId: value('#tripId'),
+-                startDate: value('#tripStartDate'),
+-                endDate: value('#tripEndDate'),
+-                vehicle: selectedVehicle,
+-                vehicleId: vehicle?.id || '',
+-                driver: selectedDriver,
+-                driverId: driver?.id || '',
+-                status: statusOverride || selectedStatus,
+-                tripAround: selectedAround,
+-                tripPeriod: selectedPeriod,
+-                purpose: value('#tripPurpose').trim(),
+-                fromLocation: value('#tripFromLocation').trim(),
+-                toLocation: value('#tripToLocation').trim(),
+-                odoStart: value('#tripOdoStart'),
+-                odoEnd: value('#tripOdoEnd'),
+-                fuelCost: value('#tripFuelCost'),
+-                foodCost: value('#tripFoodCost'),
+-                tolls: value('#tripTolls'),
+-                otherCost: value('#tripOtherCost'),
+-                accommodationCost: value('#tripAccommodationCost'),
+-                totalCost: String(calculateTotal()),
+-                details: value('#tripDetails').trim(),
+-            };
+-        }
+-        function validate(trip) {
+-            if (!trip.tripId || !trip.startDate || !trip.endDate || !trip.vehicle || !trip.driver || !trip.status || !trip.tripAround || !trip.tripPeriod || !trip.odoStart || !trip.details) {
+-                toast('Please fill the required trip information.');
+-                return false;
+-            }
+-            if (!findVehicle(trip.vehicle)) {
+-                toast('Please select a vehicle from the saved vehicle table.');
+-                return false;
+-            }
+-            if (!findDriver(trip.driver)) {
+-                toast('Please select a driver from the saved driver table.');
+-                return false;
+-            }
+-            if (trip.endDate < trip.startDate) {
+-                toast('End date cannot be earlier than start date.');
+-                return false;
+-            }
+-            return true;
+-        }
+-        function upsert(trip) {
+-            const index = trips.findIndex((item) => item.tripId === trip.tripId);
+-            if (index >= 0) trips[index] = trip;
+-            else trips.unshift(trip);
+-            saveStore();
+-        }
+-        function saveTrip(statusOverride) {
+-            const trip = collect(statusOverride);
+-            if (statusOverride === 'Draft') {
+-                if (!trip.vehicle) trip.vehicle = 'Pending vehicle';
+-                if (!trip.driver) trip.driver = 'Pending driver';
+-            } else if (!validate(trip)) {
+-                return;
+-            }
+-            if (trip.vehicle !== 'Pending vehicle') pushRecent('vehicle', trip.vehicle);
+-            if (trip.driver !== 'Pending driver') pushRecent('driver', trip.driver);
+-            upsert(trip);
+-            renderList();
+-            toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Trip saved.');
+-            setVisible('tripListPage');
+-        }
+-        function loadSample() {
+-            const sample = (samples.trips || [])[0];
+-            if (!sample) return;
+-            resetForm();
+-            setValue('#tripId', sample.tripId);
+-            setValue('#tripStartDate', sample.startDate);
+-            setValue('#tripEndDate', sample.endDate);
+-            selectedVehicle = sample.vehicle;
+-            selectedDriver = sample.driver;
+-            selectedStatus = sample.status;
+-            selectedAround = sample.tripAround;
+-            selectedPeriod = sample.tripPeriod;
+-            setValue('#tripPurpose', sample.purpose);
+-            setValue('#tripFromLocation', sample.fromLocation);
+-            setValue('#tripToLocation', sample.toLocation);
+-            setValue('#tripOdoStart', sample.odoStart);
+-            setValue('#tripOdoEnd', sample.odoEnd);
+-            setValue('#tripFuelCost', sample.fuelCost);
+-            setValue('#tripFoodCost', sample.foodCost);
+-            setValue('#tripTolls', sample.tolls);
+-            setValue('#tripOtherCost', sample.otherCost);
+-            setValue('#tripAccommodationCost', sample.accommodationCost);
+-            setValue('#tripDetails', sample.details);
+-            setStatus(selectedStatus);
+-            setAround(selectedAround);
+-            setPeriod(selectedPeriod);
+-            renderPurposeChoices(sample.purpose);
+-            pushRecent('vehicle', selectedVehicle);
+-            pushRecent('driver', selectedDriver);
+-            renderSelectionSummary();
+-            calculateTotal();
+-            toast('Existing trip data loaded.');
+-        }
+-        function editTrip(id) {
+-            const trip = trips.find((item) => item.tripId === id);
+-            if (!trip) return;
+-            resetForm();
+-            setValue('#tripId', trip.tripId);
+-            setValue('#tripStartDate', trip.startDate);
+-            setValue('#tripEndDate', trip.endDate);
+-            selectedVehicle = trip.vehicle;
+-            selectedDriver = trip.driver;
+-            selectedStatus = trip.status;
+-            selectedAround = trip.tripAround;
+-            selectedPeriod = trip.tripPeriod;
+-            setValue('#tripPurpose', trip.purpose);
+-            setValue('#tripFromLocation', trip.fromLocation);
+-            setValue('#tripToLocation', trip.toLocation);
+-            setValue('#tripOdoStart', trip.odoStart);
+-            setValue('#tripOdoEnd', trip.odoEnd);
+-            setValue('#tripFuelCost', trip.fuelCost);
+-            setValue('#tripFoodCost', trip.foodCost);
+-            setValue('#tripTolls', trip.tolls);
+-            setValue('#tripOtherCost', trip.otherCost);
+-            setValue('#tripAccommodationCost', trip.accommodationCost);
+-            setValue('#tripDetails', trip.details);
+-            setStatus(selectedStatus);
+-            setAround(selectedAround);
+-            setPeriod(selectedPeriod);
+-            renderPurposeChoices(trip.purpose);
+-            renderSelectionSummary();
+-            renderRecentChips();
+-            calculateTotal();
+-            setVisible('tripAddPage');
+-        }
+-        function deleteTrip(id) {
+-            if (!confirm('Delete this trip from the trip list?')) return;
+-            trips = trips.filter((trip) => trip.tripId !== id);
+-            saveStore();
+-            renderList();
+-            toast('Trip deleted.');
+-        }
+-        function viewTrip(id) {
+-            const trip = trips.find((item) => item.tripId === id);
+-            if (!trip) return;
+-            window.FleetmanDetailViewer?.show('Trip Details', trip);
+-        }
+-        function rowHtml(trip) {
+-            const cls = trip.status === 'Completed' ? 'ok' : trip.status === 'Running' ? 'warn' : trip.status === 'Initiated' || trip.status === 'Draft' ? 'soft' : 'danger';
+-            return `<tr>
+-                <td><div class="trip-cell"><div class="trip-icon">🧭</div><div><b>${escapeHtml(trip.tripId)}</b><br><small>${escapeHtml(trip.purpose || 'Trip')}</small></div></div></td>
+-                <td>${escapeHtml(trip.startDate || '-')}<br><small>to ${escapeHtml(trip.endDate || '-')}</small></td>
+-                <td><b>${escapeHtml(trip.vehicle || '-')}</b><br><small>${escapeHtml(trip.driver || '-')}</small></td>
+-                <td>${escapeHtml(trip.fromLocation || '-')} → ${escapeHtml(trip.toLocation || '-')}<div class="chip-row" style="margin-top:6px"><span class="chip">${escapeHtml(trip.tripAround || '-')}</span><span class="chip">${escapeHtml(trip.tripPeriod || '-')}</span></div></td>
+-                <td>Start: ${escapeHtml(trip.odoStart || '-')}<br><small>End: ${escapeHtml(trip.odoEnd || '-')}</small></td>
+-                <td>${money(trip.totalCost || 0)}<br><small>Fuel ${Number(trip.fuelCost || 0).toLocaleString()} | Food ${Number(trip.foodCost || 0).toLocaleString()}</small></td>
+-                <td><span class="badge ${cls}">${escapeHtml(trip.status || '-')}</span></td>
+-                <td><button type="button" class="mini-btn view-trip" data-id="${escapeHtml(trip.tripId)}">View</button><button type="button" class="mini-btn edit-trip" data-id="${escapeHtml(trip.tripId)}">Edit</button><button type="button" class="mini-btn danger delete-trip" data-id="${escapeHtml(trip.tripId)}">Delete</button></td>
+-            </tr>`;
+-        }
+-        function renderList() {
+-            const query = value('#tripSearch').toLowerCase();
+-            const vehicleQuery = value('#tripVehicleSearch').toLowerCase();
+-            const status = value('#tripFilterStatus');
+-            const around = value('#tripFilterAround');
+-            const list = trips.filter((trip) => (!query || [trip.tripId, trip.vehicle, trip.driver, trip.fromLocation, trip.toLocation, trip.status, trip.purpose].join(' ').toLowerCase().includes(query))
+-                && (!vehicleQuery || String(trip.vehicle || '').toLowerCase().includes(vehicleQuery))
+-                && (!status || trip.status === status)
+-                && (!around || trip.tripAround === around));
+-            $('#tripTbody').innerHTML = list.length ? list.map(rowHtml).join('') : '<tr><td colspan="8" class="empty">No trip found. Click “Add Trip” to create one.</td></tr>';
+-            $('#tripKpiTotal').textContent = trips.length;
+-            $('#tripKpiRunning').textContent = trips.filter((trip) => trip.status === 'Running').length;
+-            $('#tripKpiCompleted').textContent = trips.filter((trip) => trip.status === 'Completed').length;
+-            $('#tripKpiCost').textContent = '৳ ' + trips.reduce((sum, trip) => sum + Number(trip.totalCost || 0), 0).toLocaleString();
+-        }
+-        function clearFilters() {
+-            setValue('#tripSearch', '');
+-            setValue('#tripVehicleSearch', '');
+-            setValue('#tripFilterStatus', '');
+-            setValue('#tripFilterAround', '');
+-            renderList();
+-        }
+-        function exportTrips() {
+-            const rows = [['Trip ID', 'Start Date', 'End Date', 'Vehicle', 'Driver', 'Status', 'Trip Around', 'Trip Period', 'Purpose', 'From Location', 'To Location', 'Odo Start', 'Odo End', 'Fuel Cost', 'Food Cost', 'Tolls', 'Other Cost', 'Accommodation Cost', 'Total Cost', 'Details']];
+-            trips.forEach((trip) => rows.push([trip.tripId, trip.startDate, trip.endDate, trip.vehicle, trip.driver, trip.status, trip.tripAround, trip.tripPeriod, trip.purpose, trip.fromLocation, trip.toLocation, trip.odoStart, trip.odoEnd, trip.fuelCost, trip.foodCost, trip.tolls, trip.otherCost, trip.accommodationCost, trip.totalCost, trip.details]));
+-            exportCsv(rows, 'fleetman-trip-list.csv');
+-        }
+-
+-        ['#tripFuelCost', '#tripFoodCost', '#tripTolls', '#tripOtherCost', '#tripAccommodationCost'].forEach((selector) => $(selector)?.addEventListener('input', calculateTotal));
+-        $('#selectTripVehicleBtn')?.addEventListener('click', () => openSelector('vehicle'));
+-        $('#selectTripDriverBtn')?.addEventListener('click', () => openSelector('driver'));
+-        $('#closeTripSelectorBtn')?.addEventListener('click', closeSelector);
+-        $('#doneTripSelectorBtn')?.addEventListener('click', closeSelector);
+-        $('#tripSelectorOverlay')?.addEventListener('click', (event) => { if (event.target.id === 'tripSelectorOverlay') closeSelector(); });
+-        $('#tripSelectorSearch')?.addEventListener('input', renderSelectorList);
+-        $('#tripSelectorFilter')?.addEventListener('change', renderSelectorList);
+-        $('#tripSelectorRecentTab')?.addEventListener('click', () => setSelectorTab('recent'));
+-        $('#tripSelectorAllTab')?.addEventListener('click', () => setSelectorTab('all'));
+-        $('#clearTripSelectorChoiceBtn')?.addEventListener('click', clearSelectorChoice);
+-        $('#resetTripBtn')?.addEventListener('click', resetForm);
+-        $('#saveTripBtn')?.addEventListener('click', () => saveTrip());
+-        $('#saveTripDraftBtn')?.addEventListener('click', () => saveTrip('Draft'));
+-        $('#loadTripSampleBtn')?.addEventListener('click', loadSample);
+-        $('#newTripBtn')?.addEventListener('click', () => { resetForm(); setVisible('tripAddPage'); });
+-        $('#exportTripsBtn')?.addEventListener('click', exportTrips);
+-        $('#applyTripFiltersBtn')?.addEventListener('click', renderList);
+-        $('#clearTripFiltersBtn')?.addEventListener('click', clearFilters);
+-        ['#tripSearch', '#tripVehicleSearch', '#tripFilterStatus', '#tripFilterAround'].forEach((selector) => $(selector)?.addEventListener('input', renderList));
+-        document.addEventListener('click', (event) => {
+-            const choice = event.target.closest('[data-choice-callback]');
+-            if (choice) {
+-                const choiceValue = choice.dataset.value;
+-                if (choice.dataset.choiceCallback === 'status') setStatus(choiceValue);
+-                if (choice.dataset.choiceCallback === 'around') setAround(choiceValue);
+-                if (choice.dataset.choiceCallback === 'period') setPeriod(choiceValue);
+-            }
+-            const purpose = event.target.closest('[data-trip-purpose]');
+-            if (purpose) {
+-                setValue('#tripPurpose', purpose.dataset.tripPurpose);
+-                renderPurposeChoices(purpose.dataset.tripPurpose);
+-            }
+-            const recent = event.target.closest('[data-recent-type]');
+-            if (recent) {
+-                if (recent.dataset.recentType === 'vehicle') selectedVehicle = recent.dataset.value;
+-                if (recent.dataset.recentType === 'driver') selectedDriver = recent.dataset.value;
+-                renderSelectionSummary();
+-                renderRecentChips();
+-            }
+-            const selected = event.target.closest('[data-selector-value]');
+-            if (selected) setSelectedValue(selected.dataset.selectorValue);
+-            const view = event.target.closest('.view-trip');
+-            if (view) viewTrip(view.dataset.id);
+-            const edit = event.target.closest('.edit-trip');
+-            if (edit) editTrip(edit.dataset.id);
+-            const del = event.target.closest('.delete-trip');
+-            if (del) deleteTrip(del.dataset.id);
+-        });
+-
+-        resetForm();
+-        renderList();
+-        setVisible('tripListPage');
+-    }
+-
+-
+-    function initDrivers() {
+-        const STORAGE = 'fleetman_drivers_v2';
+-        let drivers = Array.isArray(records.drivers) ? records.drivers : (samples.drivers || []);
+-        const docTemplates = options.driver_document_templates || [];
+-        const docReminders = options.document_reminders || [];
+-        const licenseWarnDays = 180;
+-        let docRowCounter = 0;
+-
+-        async function syncDrivers(rows, driverIndex) {
+-            const endpoint = resources?.drivers?.sync;
+-            if (!endpoint) return { ok: true, skipped: true };
+-
+-            const photoFile = $('#driverPhoto')?.files?.[0] || null;
+-            const docFileInputs = $$('#driverDocuments .driver-document-row .driverDocFile');
+-            const docFiles = docFileInputs.map((input) => input.files?.[0] || null).filter(Boolean);
+-
+-            if (!photoFile && docFiles.length === 0) {
+-                return syncResource('drivers', rows);
+-            }
+-
+-            const formData = new FormData();
+-            formData.append('rows', JSON.stringify(rows || []));
+-
+-            if (photoFile) {
+-                formData.append(`driver_photo_files[${driverIndex}]`, photoFile);
+-            }
+-
+-            docFileInputs.forEach((input, seqIdx) => {
+-                const file = input.files?.[0];
+-                if (file) {
+-                    formData.append(`driver_document_files[${driverIndex}][${seqIdx}]`, file);
+-                }
+-            });
+-
+-            return fetch(endpoint, {
+-                method: 'POST',
+-                headers: {
+-                    'Accept': 'application/json',
+-                    'X-CSRF-TOKEN': csrfToken(),
+-                },
+-                body: formData,
+-            }).then(async (res) => {
+-                if (!res.ok) throw new Error((await res.json().catch(()=>({}))).message || 'Driver save failed.');
+-                return res.json();
+-            });
+-        }
+-
+-        function saveStore(driverIndex){ syncDrivers(drivers, driverIndex); }
+-        function genId(){ return 'DVR' + new Date().toISOString().slice(2,10).replaceAll('-','') + Math.floor(100 + Math.random()*900); }
+-        
+-        function renderDocFileInfo(infoContainer, fileData) {
+-            if (!infoContainer) return;
+-            const info = infoContainer.querySelector('.upload-meta');
+-            if (!info) return;
+-            if (fileData && (fileData.fileUrl || fileData.filePath)) {
+-                const label = fileData.originalName || fileData.fileName || 'Uploaded file';
+-                const link = fileData.fileUrl ? ` · <a href="${escapeHtml(fileData.fileUrl)}" target="_blank" rel="noopener">View file</a>` : '';
+-                info.innerHTML = `✅ Uploaded: <b>${escapeHtml(label)}</b>${link}`;
+-            } else {
+-                info.innerHTML = '';
+-            }
+-        }
+-
+-        function addContact(row = {}) {
+-            const wrapper = $('#driverContacts');
+-            if (!wrapper) return;
+-            const div = document.createElement('div');
+-            div.className = 'repeat-row driver-contact-row';
+-            const typeValue = row.type || 'Personal';
+-            
+-            div.innerHTML = `
+-                <div class="field">
+-                    <label>Type <span class="req">*</span></label>
+-                    <select class="driverContactType">
+-                        <option value="Personal" ${typeValue === 'Personal' ? 'selected' : ''}>Personal</option>
+-                        <option value="Home" ${typeValue === 'Home' ? 'selected' : ''}>Home</option>
+-                        <option value="Relative" ${typeValue === 'Relative' ? 'selected' : ''}>Relative</option>
+-                    </select>
+-                </div>
+-                <div class="field">
+-                    <label>Phone Number <span class="req">*</span></label>
+-                    <input class="driverContactPhone" placeholder="01XXXXXXXXX" value="${escapeHtml(row.phone || '')}">
+-                </div>
+-                <div class="field rel-field" style="display: ${typeValue === 'Relative' ? 'block' : 'none'};">
+-                    <label>Relationship</label>
+-                    <input class="driverContactRel" placeholder="e.g. Brother, Wife" value="${escapeHtml(row.relationship || '')}">
+-                </div>
+-                <button type="button" class="mini-btn danger remove-row" style="align-self:flex-end">Remove</button>
+-            `;
+-            wrapper.appendChild(div);
+-            
+-            const typeSelect = $('.driverContactType', div);
+-            const relField = $('.rel-field', div);
+-            typeSelect.addEventListener('change', () => {
+-                relField.style.display = typeSelect.value === 'Relative' ? 'block' : 'none';
+-            });
+-        }
+-
+-        function addDocument(row = {}) {
+-            const wrapper = $('#driverDocuments');
+-            if (!wrapper) return;
+-            const rowIdx = docRowCounter++;
+-            const existingFile = (row.file && typeof row.file === 'object' && (row.file.filePath || row.file.fileUrl)) ? row.file : null;
+-            const div = document.createElement('div');
+-            div.className = 'repeat-row driver-document-row';
+-            div.dataset.docIdx = rowIdx;
+-            if (existingFile) div.dataset.fileJson = JSON.stringify(existingFile);
+-            
+-            const docOptions = [''].concat(docTemplates);
+-            
+-            div.innerHTML = `
+-                <div class="field">
+-                    <label>Document Name</label>
+-                    <select class="driverDocName">${docOptions.map((doc) => `<option value="${escapeHtml(doc)}" ${row.name === doc ? 'selected' : ''}>${escapeHtml(doc || 'Select document')}</option>`).join('')}</select>
+-                </div>
+-                <div class="field">
+-                    <label>Upload File</label>
+-                    <input type="file" class="driverDocFile" accept="image/*,application/pdf" data-doc-idx="${rowIdx}">
+-                    <div class="upload-meta"></div>
+-                </div>
+-                <div class="field">
+-                    <label>Document No./Reference</label>
+-                    <input class="driverDocNumber" placeholder="Optional" value="${escapeHtml(row.number || '')}">
+-                </div>
+-                <div class="field">
+-                    <label>Expiry Date</label>
+-                    <input class="driverDocExpiry" type="date" value="${escapeHtml(row.expiry || '')}">
+-                </div>
+-                <div class="field">
+-                    <label>Reminder</label>
+-                    <select class="driverDocReminder">${docReminders.map((reminder) => `<option value="${escapeHtml(reminder)}" ${row.reminder === reminder ? 'selected' : ''}>${escapeHtml(reminder)}</option>`).join('')}</select>
+-                </div>
+-                <button type="button" class="mini-btn danger remove-row" style="align-self:flex-end">Remove</button>
+-            `;
+-            wrapper.appendChild(div);
+-            if (existingFile) renderDocFileInfo(div, existingFile);
+-        }
+-
+-        function resetForm(){
+-            $$('#driverAddPage input, #driverAddPage select, #driverAddPage textarea').forEach((el)=>{ if(el.type==='radio') el.checked=false; else if(el.type==='file') el.value=''; else el.value=''; });
+-            docRowCounter = 0;
+-            setValue('#driverId', genId()); setValue('#driverOtRate', '50'); setValue('#driverWorkingHour', '270'); setValue('#driverSalaryTenure','Monthly'); setValue('#driverStatus','Active');
+-            $('#driverContacts').innerHTML=''; addContact(); addContact({type: 'Relative'});
+-            $('#driverDocuments').innerHTML=''; addDocument({name:'NID Scan Copy'}); addDocument({name:'Driving License Copy'});
+-        }
+-
+-        function collect(statusOverride){
+-            const contacts = $$('#driverContacts .driver-contact-row').map((row) => ({
+-                type: $('.driverContactType', row).value,
+-                relationship: $('.driverContactRel', row).value.trim(),
+-                phone: $('.driverContactPhone', row).value.trim()
+-            })).filter(c => c.phone);
+-
+-            const documents = $$('#driverDocuments .driver-document-row').map((domRow) => {
+-                let existingFile = {};
+-                try { existingFile = domRow.dataset.fileJson ? JSON.parse(domRow.dataset.fileJson) : {}; } catch (_) {}
+-                const hasNewFile = !!$('.driverDocFile', domRow)?.files?.[0];
+-                return {
+-                    name: $('.driverDocName', domRow)?.value.trim() || '',
+-                    number: $('.driverDocNumber', domRow)?.value.trim() || '',
+-                    expiry: $('.driverDocExpiry', domRow)?.value || '',
+-                    reminder: $('.driverDocReminder', domRow)?.value || '',
+-                    file: hasNewFile ? {} : existingFile,
+-                };
+-            }).filter(d => d.name || d.number || d.expiry);
+-
+-            const primaryContact = contacts[0]?.phone || '';
+-            const secondaryContact = contacts[1]?.phone || '';
+-
+-            return {
+-                driverId: value('#driverId'),
+-                fullName: value('#driverFullName').trim(),
+-                fatherName: value('#driverFatherName').trim(),
+-                motherName: value('#driverMotherName').trim(),
+-                contact: primaryContact,
+-                secondaryContact: secondaryContact,
+-                whatsapp: value('#driverWhatsapp').trim(),
+-                email: value('#driverEmail').trim(),
+-                dob: value('#driverDob'),
+-                age: value('#driverAge'),
+-                nid: value('#driverNid').trim(),
+-                reference: value('#driverReference').trim(),
+-                licenseNo: value('#driverLicenseNo').trim(),
+-                licenseType: value('#driverLicenseType'),
+-                licenseValidity: value('#driverLicenseValidity'),
+-                salary: value('#driverSalary'),
+-                salaryTenure: value('#driverSalaryTenure'),
+-                otRate: value('#driverOtRate'),
+-                workingHour: value('#driverWorkingHour'),
+-                vendor: value('#driverVendor'),
+-                status: statusOverride || value('#driverStatus'),
+-                duty: document.querySelector('input[name="driverDuty"]:checked')?.value || '',
+-                presentAddress: value('#driverPresentAddress').trim(),
+-                permanentAddress: value('#driverPermanentAddress').trim(),
+-                about: value('#driverAbout').trim(),
+-                contacts: contacts,
+-                documents: documents,
+-                photoName: $('#driverPhoto')?.files?.[0]?.name || ''
+-            };
+-        }
+-
+-        function validate(row){
+-            const required=['fullName','fatherName','motherName','contact','nid','licenseNo','licenseType','licenseValidity','salary','workingHour','presentAddress','permanentAddress'];
+-            if(required.some((key)=>!row[key])){ toast('Please fill required fields before saving.'); return false; }
+-            return true;
+-        }
+-
+-        function upsert(row){ 
+-            const idx = drivers.findIndex((item) => item.driverId === row.driverId); 
+-            if (idx >= 0) drivers[idx] = row; 
+-            else { drivers.unshift(row); } 
+-            const newIdx = drivers.findIndex((item) => item.driverId === row.driverId);
+-            saveStore(newIdx); 
+-        }
+-
+-        function saveDriver(statusOverride){ 
+-            const row=collect(statusOverride); 
+-            if(statusOverride==='Draft' && !row.fullName) row.fullName='Draft Driver'; 
+-            if(statusOverride!=='Draft' && !validate(row)) return; 
+-            
+-            // Re-merge old file paths for photo if not overridden
+-            const oldRow = drivers.find(r => r.driverId === row.driverId);
+-            if (oldRow && !$('#driverPhoto')?.files?.[0]) {
+-                row.photo = oldRow.photo;
+-            }
+-
+-            upsert(row); 
+-            toast(statusOverride==='Draft'?'Draft saved.':'Driver saved. Redirecting to driver list.'); 
+-            setTimeout(()=>{ renderList(); setVisible('driverListPage'); },450); 
+-        }
+-
+-        function loadSample(){ 
+-            resetForm(); 
+-            const row=(samples.drivers||[])[0]; 
+-            if(!row) return; 
+-            const map={driverId:'#driverId',fullName:'#driverFullName',fatherName:'#driverFatherName',motherName:'#driverMotherName',whatsapp:'#driverWhatsapp',email:'#driverEmail',dob:'#driverDob',age:'#driverAge',nid:'#driverNid',reference:'#driverReference',licenseNo:'#driverLicenseNo',licenseType:'#driverLicenseType',licenseValidity:'#driverLicenseValidity',salary:'#driverSalary',salaryTenure:'#driverSalaryTenure',otRate:'#driverOtRate',workingHour:'#driverWorkingHour',vendor:'#driverVendor',status:'#driverStatus',presentAddress:'#driverPresentAddress',permanentAddress:'#driverPermanentAddress',about:'#driverAbout'}; 
+-            Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); 
+-            const duty=document.querySelector(`input[name="driverDuty"][value="${CSS.escape(row.duty||'')}"]`); 
+-            if(duty) duty.checked=true; 
+-            $('#driverContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); 
+-            if (!row.contacts) { addContact({type: 'Personal', phone: row.contact}); addContact({type: 'Relative', phone: row.secondaryContact}); }
+-            $('#driverDocuments').innerHTML=''; (row.documents||[]).forEach(addDocument); 
+-            toast('Sample driver data added.'); 
+-        }
+-
+-        function isExpiringSoon(row){ if(!row.licenseValidity) return false; return (new Date(row.licenseValidity)-new Date())/86400000 < licenseWarnDays; }
+-
+-        function rowHtml(row){ 
+-            const exp=isExpiringSoon(row); 
+-            const statusClass=row.status==='Active'?'ok':row.status==='Draft'?'warn':row.status==='Blacklisted'?'danger':'soft'; 
+-            return `<tr><td><div class="driver-cell"><div class="driver-icon">🧑‍✈️</div><div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`; 
+-        }
+-
+-        function renderList(){ 
+-            const q=value('#driverSearch').toLowerCase(), status=value('#driverFilterStatus'), license=value('#driverFilterLicense'), tenure=value('#driverFilterTenure'); 
+-            const rows=drivers.filter((row)=>(!q||[row.fullName,row.contact,row.nid,row.licenseNo,row.driverId].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!license||row.licenseType===license)&&(!tenure||row.salaryTenure===tenure)); 
+-            $('#driverTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="10" class="empty">No driver found. Click “Add Driver” to create one.</td></tr>'; 
+-            $('#driverKpiTotal').textContent=drivers.length; $('#driverKpiActive').textContent=drivers.filter((r)=>r.status==='Active').length; $('#driverKpiExpired').textContent=drivers.filter(isExpiringSoon).length; $('#driverKpiDocs').textContent=drivers.reduce((sum,r)=>sum+(r.documents||[]).length,0); 
+-        }
+-
+-        function editDriver(id){ 
+-            const row=drivers.find((r)=>r.driverId===id); 
+-            if(!row) return; 
+-            resetForm(); 
+-            const map={driverId:'#driverId',fullName:'#driverFullName',fatherName:'#driverFatherName',motherName:'#driverMotherName',whatsapp:'#driverWhatsapp',email:'#driverEmail',dob:'#driverDob',age:'#driverAge',nid:'#driverNid',reference:'#driverReference',licenseNo:'#driverLicenseNo',licenseType:'#driverLicenseType',licenseValidity:'#driverLicenseValidity',salary:'#driverSalary',salaryTenure:'#driverSalaryTenure',otRate:'#driverOtRate',workingHour:'#driverWorkingHour',vendor:'#driverVendor',status:'#driverStatus',presentAddress:'#driverPresentAddress',permanentAddress:'#driverPermanentAddress',about:'#driverAbout'}; 
+-            Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); 
+-            const duty=document.querySelector(`input[name="driverDuty"][value="${CSS.escape(row.duty||'')}"]`); 
+-            if(duty) duty.checked=true; 
+-            
+-            $('#driverContacts').innerHTML=''; 
+-            if (row.contacts && row.contacts.length) {
+-                row.contacts.forEach(addContact);
+-            } else {
+-                if (row.contact) addContact({type: 'Personal', phone: row.contact});
+-                if (row.secondaryContact) addContact({type: 'Relative', phone: row.secondaryContact});
+-            }
+-            
+-            $('#driverDocuments').innerHTML=''; 
+-            (row.documents||[]).forEach(addDocument); 
+-            setVisible('driverAddPage'); 
+-        }
+-
+-        function viewDriver(id){ const row=drivers.find((r)=>r.driverId===id); if(row) window.FleetmanDetailViewer?.show('Driver Details', row); }
+-        function deleteDriver(id){ if(!confirm('Delete this driver from prototype list?')) return; drivers=drivers.filter((row)=>row.driverId!==id); saveStore(); renderList(); toast('Driver deleted.'); }
+-        function exportDrivers(){ const rows=[['Driver ID','Full Name','Contact','NID','License No','License Type','License Validity','Salary','Salary Tenure','Working Hour','Vendor','Status','Documents']]; drivers.forEach((row)=>rows.push([row.driverId,row.fullName,row.contact,row.nid,row.licenseNo,row.licenseType,row.licenseValidity,row.salary,row.salaryTenure,row.workingHour,row.vendor,row.status,(row.documents||[]).map((doc)=>doc.name).join('; ')])); exportCsv(rows,'fleetman-driver-list.csv'); }
+-
+-        $('#addDriverDocumentBtn')?.addEventListener('click',()=>addDocument()); 
+-        $('#addDriverContactBtn')?.addEventListener('click',()=>addContact());
+-        $('#resetDriverBtn')?.addEventListener('click',resetForm); 
+-        $('#saveDriverBtn')?.addEventListener('click',()=>saveDriver()); 
+-        $('#saveDriverDraftBtn')?.addEventListener('click',()=>saveDriver('Draft')); 
+-        $('#loadDriverSampleBtn')?.addEventListener('click',loadSample); 
+-        $('#newDriverBtn')?.addEventListener('click',()=>{resetForm();setVisible('driverAddPage');}); 
+-        $('#exportDriversBtn')?.addEventListener('click',exportDrivers); 
+-        $('#clearDriverFiltersBtn')?.addEventListener('click',()=>{['#driverSearch','#driverFilterStatus','#driverFilterLicense','#driverFilterTenure'].forEach((sel)=>setValue(sel,'')); renderList();}); 
+-        ['#driverSearch','#driverFilterStatus','#driverFilterLicense','#driverFilterTenure'].forEach((sel)=>$(sel)?.addEventListener('input',renderList)); 
+-        
+-        document.addEventListener('click',(e)=>{ 
+-            if(e.target.closest('.remove-row')) e.target.closest('.remove-row').parentElement.remove(); 
+-            const view=e.target.closest('.view-driver'); if(view) viewDriver(view.dataset.id); 
+-            const edit=e.target.closest('.edit-driver'); if(edit) editDriver(edit.dataset.id); 
+-            const del=e.target.closest('.delete-driver'); if(del) deleteDriver(del.dataset.id); 
+-        });
+-
+-        resetForm(); renderList(); setVisible('driverListPage');
+-    }
+-
+-
+-    function initClients() {
+-        const STORAGE='fleetman_clients_v2'; let clients=Array.isArray(records.clients) ? records.clients : (samples.clients||[]);
+-        function saveStore(){ syncResource('clients', clients); }
+-        function genId(){ return 'CLI' + new Date().toISOString().slice(2,10).replaceAll('-','') + Math.floor(100 + Math.random()*900); }
+-        function addContact(row={}){ const wrapper=$('#clientContacts'); if(!wrapper) return; const meta=row.whatsapp || row.email || ''; const div=document.createElement('div'); div.className='repeat-row contact-row'; div.innerHTML=`<div class="field"><label>Contact Person Name <span class="req">*</span></label><input class="clientContactName" placeholder="Example: Md. Karim" value="${escapeHtml(row.name||'')}"></div><div class="field"><label>Contact Type</label><select class="clientContactType">${((window.FLEETMAN.options||{}).client_contact_methods||[]).map(t => '<option value="'+escapeHtml(t)+'" '+(row.type===t?'selected':'')+'>'+escapeHtml(t)+'</option>').join('')}</select></div><div class="field"><label>Role / Designation</label><input class="clientContactRole" placeholder="Example: Operations Manager" value="${escapeHtml(row.role||'')}"></div><div class="field"><label>Phone Number <span class="req">*</span></label><input class="clientContactPhone" placeholder="01XXXXXXXXX" value="${escapeHtml(row.phone||'')}"></div><div class="field"><label>WhatsApp / Email</label><input class="clientContactMeta" placeholder="WhatsApp or email" value="${escapeHtml(meta)}"></div><button type="button" class="mini-btn danger remove-row">Remove</button>`; wrapper.appendChild(div); }
+-        function resetForm(){ $$('#clientAddPage input,#clientAddPage select,#clientAddPage textarea').forEach((el)=>{el.value='';}); setValue('#clientId',genId()); setValue('#clientType','Corporate'); setValue('#clientStatus','Active'); setValue('#clientContactMethod','Phone'); $('#clientContacts').innerHTML=''; addContact(); }
+-        function collect(statusOverride){ const contacts=$$('#clientContacts .contact-row').map((row)=>{ const meta=$('.clientContactMeta',row)?.value.trim()||''; return {name:$('.clientContactName',row)?.value.trim()||'',type:$('.clientContactType',row)?.value||'',role:$('.clientContactRole',row)?.value.trim()||'',phone:$('.clientContactPhone',row)?.value.trim()||'',whatsapp:meta.includes('@')?'':meta,email:meta.includes('@')?meta:''}; }).filter((c)=>c.name||c.phone||c.role||c.whatsapp||c.email||c.type); return {clientId:value('#clientId'),clientName:value('#clientName').trim(),email:value('#clientEmail').trim(),phone:value('#clientPhone').trim(),whatsapp:value('#clientWhatsapp').trim(),reference:value('#clientReference').trim(),clientType:value('#clientType'),status:statusOverride||value('#clientStatus'),contactMethod:value('#clientContactMethod'),address:value('#clientAddress').trim(),about:value('#clientAbout').trim(),contacts}; }
+-        function validate(row){ if(!row.clientName || !row.phone || !row.address){ toast('Please fill client name, phone number, and address.'); return false; } if(!row.contacts.length || !row.contacts[0].name || !row.contacts[0].phone){ toast('Please add at least one contact person with name and phone number.'); return false; } return true; }
+-        function upsert(row){ const idx=clients.findIndex((item)=>item.clientId===row.clientId); if(idx>=0) clients[idx]=row; else clients.unshift(row); saveStore(); }
+-        function saveClient(statusOverride){ const row=collect(statusOverride); if(statusOverride==='Draft' && !row.clientName) row.clientName='Draft Client'; if(statusOverride!=='Draft' && !validate(row)) return; upsert(row); toast(statusOverride==='Draft'?'Draft saved.':'Client saved. Redirecting to client list.'); setTimeout(()=>{renderList();setVisible('clientListPage');},450); }
+-        function loadSample(){ resetForm(); const row=(samples.clients||[])[0]; if(!row) return; const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); toast('Sample client data added.'); }
+-        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b> <span class="badge soft" style="font-size:10px">${escapeHtml(main.type||'')}</span><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
+-        function renderList(){ const q=value('#clientSearch').toLowerCase(), status=value('#clientFilterStatus'), type=value('#clientFilterType'), method=value('#clientFilterMethod'); const rows=clients.filter((row)=>{ const people=(row.contacts||[]).map((person)=>[person.name,person.phone,person.role,person.whatsapp,person.email].join(' ')).join(' '); return (!q||[row.clientName,row.phone,row.email,row.clientId,row.reference,people].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!type||row.clientType===type)&&(!method||row.contactMethod===method); }); $('#clientTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="8" class="empty">No client found. Click “Add Client” to create one.</td></tr>'; $('#clientKpiTotal').textContent=clients.length; $('#clientKpiActive').textContent=clients.filter((c)=>c.status==='Active').length; $('#clientKpiContacts').textContent=clients.reduce((sum,c)=>sum+(c.contacts||[]).length,0); $('#clientKpiEmail').textContent=clients.filter((c)=>c.email).length; }
+-        function editClient(id){ const row=clients.find((r)=>r.clientId===id); if(!row) return; resetForm(); const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); setVisible('clientAddPage'); }
+-        function viewClient(id){ const row=clients.find((r)=>r.clientId===id); if(row) window.FleetmanDetailViewer?.show('Client Details', row); }
+-        function deleteClient(id){ if(!confirm('Delete this client from prototype list?')) return; clients=clients.filter((row)=>row.clientId!==id); saveStore(); renderList(); toast('Client deleted.'); }
+-        function exportClients(){ const rows=[['Client ID','Client Name','Phone','WhatsApp','Email','Reference','Client Type','Status','Preferred Contact','Address','About','Contact Persons']]; clients.forEach((row)=>rows.push([row.clientId,row.clientName,row.phone,row.whatsapp,row.email,row.reference,row.clientType,row.status,row.contactMethod,row.address,row.about,(row.contacts||[]).map((p)=>`${p.name} / ${p.role||''} / ${p.phone||''}`).join('; ')])); exportCsv(rows,'fleetman-client-list.csv'); }
+-        $('#addClientContactBtn')?.addEventListener('click',()=>addContact()); $('#resetClientBtn')?.addEventListener('click',resetForm); $('#saveClientBtn')?.addEventListener('click',()=>saveClient()); $('#saveClientDraftBtn')?.addEventListener('click',()=>saveClient('Draft')); $('#loadClientSampleBtn')?.addEventListener('click',loadSample); $('#newClientBtn')?.addEventListener('click',()=>{resetForm();setVisible('clientAddPage');}); $('#exportClientsBtn')?.addEventListener('click',exportClients); $('#applyClientFiltersBtn')?.addEventListener('click',renderList); $('#clearClientFiltersBtn')?.addEventListener('click',()=>{['#clientSearch','#clientFilterStatus','#clientFilterType','#clientFilterMethod'].forEach((sel)=>setValue(sel,'')); renderList();}); ['#clientSearch','#clientFilterStatus','#clientFilterType','#clientFilterMethod'].forEach((sel)=>$(sel)?.addEventListener('input',renderList)); document.addEventListener('click',(e)=>{ if(e.target.closest('.remove-row')) e.target.closest('.remove-row').parentElement.remove(); const view=e.target.closest('.view-client'); if(view) viewClient(view.dataset.id); const edit=e.target.closest('.edit-client'); if(edit) editClient(edit.dataset.id); const del=e.target.closest('.delete-client'); if(del) deleteClient(del.dataset.id); });
+-        saveStore(); resetForm(); renderList(); setVisible('clientListPage');
+-    }
+-
+-
+-    function initEmployees() {
+-        let employees = Array.isArray(records.employees) ? records.employees : (samples.employees || []);
+-        const docTemplates = (window.FLEETMAN_EMPLOYEE_DOC_TEMPLATES || options.employee_document_templates || []);
+-        // Track pending document files: { docRowIndex: File }
+-        let docRowCounter = 0;
+-
+-        /* ── async sync: supports multipart FormData when files are present ── */
+-        async function syncEmployees(rows, empIndex) {
+-            const endpoint = resources?.employees?.sync;
+-            if (!endpoint) return { ok: true, skipped: true };
+-
+-            // Collect file inputs directly from the live DOM at save-time
+-            const photoFile = $('#employeePhoto')?.files?.[0] || null;
+-            const docFileInputs = $$('#employeeDocuments .emp-document-row .empDocFile');
+-            const docFiles = docFileInputs.map((input) => input.files?.[0] || null).filter(Boolean);
+-
+-            if (!photoFile && docFiles.length === 0) {
+-                // No files → plain JSON sync
+-                return syncResource('employees', rows);
+-            }
+-
+-            const formData = new FormData();
+-            formData.append('rows', JSON.stringify(rows || []));
+-
+-            // empIndex is the position of this employee in the rows array
+-            // Backend maps employee_photo_files[empIndex] → rows[empIndex]
+-            if (photoFile) {
+-                formData.append(`employee_photo_files[${empIndex}]`, photoFile);
+-            }
+-
+-            // For documents: use sequential index matching collect()'s documents array
+-            // collect() builds documents[0], documents[1], ... in DOM order
+-            // We match that same sequential order here
+-            docFileInputs.forEach((input, seqIdx) => {
+-                const file = input.files?.[0];
+-                if (file) formData.append(`employee_document_files[${empIndex}][${seqIdx}]`, file);
+-            });
+-
+-            try {
+-                const response = await fetch(endpoint, {
+-                    method: 'POST',
+-                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+-                    body: formData,
+-                });
+-                if (!response.ok) {
+-                    let message = 'Employee could not be saved.';
+-                    try { const err = await response.json(); message = err.message || Object.values(err.errors || {}).flat().join(' ') || message; } catch (_) {}
+-                    throw new Error(message);
+-                }
+-                return await response.json().catch(() => ({ ok: true }));
+-            } catch (error) {
+-                toast(error.message || 'Employee could not be saved.');
+-                return { ok: false, syncFailed: true, message: error.message };
+-            }
+-        }
+-
+-        function saveStore(empIndex) { return syncEmployees(employees, empIndex); }
+-        function genId() { return 'EMP' + new Date().toISOString().slice(2,10).replaceAll('-','') + Math.floor(100 + Math.random()*900); }
+-
+-        /* ── Contact rows ── */
+-        const CONTACT_TYPES = ['Office', 'Home', 'Relative', 'Other'];
+-
+-        function addContact(row = {}) {
+-            const wrapper = $('#employeeContacts');
+-            if (!wrapper) return;
+-            const div = document.createElement('div');
+-            div.className = 'repeat-row emp-contact-row';
+-            const typeOptions = CONTACT_TYPES.map((t) =>
+-                `<option value="${t}" ${(row.type || 'Office') === t ? 'selected' : ''}>${t}</option>`
+-            ).join('');
+-            const showRel = (row.type === 'Relative') ? '' : ' style="display:none"';
+-            div.innerHTML = `
+-                <div class="field">
+-                    <label>Type <span class="req">*</span></label>
+-                    <select class="empContactType">${typeOptions}</select>
+-                </div>
+-                <div class="field">
+-                    <label>Phone Number <span class="req">*</span></label>
+-                    <input class="empContactNumber" type="tel" placeholder="01XXXXXXXXX" value="${escapeHtml(row.number || '')}">
+-                </div>
+-                <div class="field emp-relationship-field"${showRel}>
+-                    <label>Relationship</label>
+-                    <input class="empContactRelationship" placeholder="e.g. Brother, Wife, Father" value="${escapeHtml(row.relationship || '')}">
+-                </div>
+-                <button type="button" class="mini-btn danger remove-row" style="align-self:flex-end">Remove</button>`;
+-            wrapper.appendChild(div);
+-        }
+-
+-        /* ── Document rows ── */
+-        function renderDocFileInfo(wrapper, fileData, selectedFile) {
+-            const info = $('.emp-upload-info', wrapper);
+-            if (!info) return;
+-            if (selectedFile) {
+-                info.innerHTML = `<span class="pending-upload">📎 Selected: <b>${escapeHtml(selectedFile.name)}</b> — will upload on Save.</span>`;
+-                return;
+-            }
+-            if (fileData && (fileData.fileUrl || fileData.filePath)) {
+-                const label = fileData.originalName || fileData.fileName || 'Uploaded file';
+-                const link = fileData.fileUrl ? ` · <a href="${escapeHtml(fileData.fileUrl)}" target="_blank" rel="noopener">View file</a>` : '';
+-                info.innerHTML = `✅ Uploaded: <b>${escapeHtml(label)}</b>${link}`;
+-            } else {
+-                info.innerHTML = '';
+-            }
+-        }
+-
+-        function addDocument(row = {}) {
+-            const wrapper = $('#employeeDocuments');
+-            if (!wrapper) return;
+-            const rowIdx = docRowCounter++;
+-            // Must declare existingFile BEFORE using it below
+-            const existingFile = (row.file && typeof row.file === 'object' && (row.file.filePath || row.file.fileUrl)) ? row.file : null;
+-            const div = document.createElement('div');
+-            div.className = 'repeat-row emp-document-row';
+-            div.dataset.docIdx = rowIdx;
+-            // Store existing (already-uploaded) file data so collect() can preserve it
+-            if (existingFile) div.dataset.fileJson = JSON.stringify(existingFile);
+-            const docOptions = ['', ...docTemplates].map((d) =>
+-                `<option value="${escapeHtml(d)}" ${(row.name === d && d) ? 'selected' : ''}>${escapeHtml(d || 'Select document type')}</option>`
+-            ).join('');
+-            div.innerHTML = `
+-                <div class="field">
+-                    <label>Document Type</label>
+-                    <select class="empDocName">${docOptions}</select>
+-                </div>
+-                <div class="field">
+-                    <label>Reference / Number</label>
+-                    <input class="empDocRef" placeholder="Optional reference" value="${escapeHtml(row.reference || row.number || '')}">
+-                </div>
+-                <div class="field">
+-                    <label>Upload File</label>
+-                    <input class="empDocFile" type="file" accept="image/jpg,image/jpeg,image/png,image/webp,application/pdf" data-doc-idx="${rowIdx}">
+-                    <div class="emp-upload-info upload-meta"></div>
+-                </div>
+-                <button type="button" class="mini-btn danger remove-row" style="align-self:flex-end">Remove</button>`;
+-            wrapper.appendChild(div);
+-            if (existingFile) renderDocFileInfo(div, existingFile, null);
+-        }
+-
+-        /* ── reset ── */
+-        function resetForm() {
+-            $$('#employeeAddPage input, #employeeAddPage select, #employeeAddPage textarea').forEach((el) => {
+-                if (el.type === 'file') el.value = '';
+-                else el.value = '';
+-            });
+-            docRowCounter = 0;
+-            setValue('#employeeId', genId());
+-            setValue('#employeeStatus', 'Active');
+-            setValue('#employeeSalaryTenure', 'Monthly');
+-            setValue('#employeeJoiningDate', new Date().toISOString().slice(0, 10));
+-            const contactsWrap = $('#employeeContacts');
+-            if (contactsWrap) { contactsWrap.innerHTML = ''; addContact({ type: 'Office' }); }
+-            const docsWrap = $('#employeeDocuments');
+-            if (docsWrap) { docsWrap.innerHTML = ''; addDocument(); }
+-            const preview = $('#employeePhotoPreview');
+-            if (preview) preview.textContent = '👤';
+-        }
+-
+-        /* ── collect ── */
+-        function collect(statusOverride) {
+-            // contacts
+-            const contacts = $$('#employeeContacts .emp-contact-row').map((row) => ({
+-                type: $('.empContactType', row)?.value || 'Office',
+-                number: $('.empContactNumber', row)?.value.trim() || '',
+-                relationship: $('.empContactRelationship', row)?.value.trim() || '',
+-            })).filter((c) => c.number);
+-
+-            // documents: sequential array in DOM order, matching FormData doc file indices
+-            const documents = $$('#employeeDocuments .emp-document-row').map((domRow) => {
+-                // Recover previously-uploaded file data if no new file was chosen
+-                let existingFile = {};
+-                try { existingFile = domRow.dataset.fileJson ? JSON.parse(domRow.dataset.fileJson) : {}; } catch (_) {}
+-                const hasNewFile = !!$('.empDocFile', domRow)?.files?.[0];
+-                return {
+-                    name: $('.empDocName', domRow)?.value.trim() || '',
+-                    reference: $('.empDocRef', domRow)?.value.trim() || '',
+-                    // If a new file is chosen, server will overwrite; otherwise keep existing
+-                    file: hasNewFile ? {} : existingFile,
+-                };
+-            });
+-
+-            // primary contact fallback for backward compat
+-            const primaryContact = contacts[0]?.number || '';
+-
+-            return {
+-                employeeId: value('#employeeId'),
+-                fullName: value('#employeeFullName').trim(),
+-                fatherName: value('#employeeFatherName').trim(),
+-                motherName: value('#employeeMotherName').trim(),
+-                nid: value('#employeeNid').trim(),
+-                contactNumber: primaryContact,
+-                contacts,
+-                email: value('#employeeEmail').trim(),
+-                reference: value('#employeeReference').trim(),
+-                designation: value('#employeeDesignation').trim(),
+-                joiningDate: value('#employeeJoiningDate'),
+-                status: statusOverride || value('#employeeStatus'),
+-                socialMedia: value('#employeeSocialMedia').trim(),
+-                age: value('#employeeAge'),
+-                salary: value('#employeeSalary'),
+-                salaryTenure: value('#employeeSalaryTenure'),
+-                overtimeRate: value('#employeeOvertimeRate'),
+-                presentAddress: value('#employeePresentAddress').trim(),
+-                permanentAddress: value('#employeePermanentAddress').trim(),
+-                about: value('#employeeAbout').trim(),
+-                photoName: $('#employeePhoto')?.files?.[0]?.name || '',
+-                documents,
+-            };
+-        }
+-
+-        /* ── validate ── */
+-        function validate(row) {
+-            const required = ['fullName','fatherName','motherName','nid','designation','joiningDate','salary','salaryTenure','presentAddress','permanentAddress'];
+-            if (required.some((key) => !row[key])) {
+-                toast('Please fill all required employee fields.');
+-                return false;
+-            }
+-            if (!row.contacts || !row.contacts.length || !row.contacts[0].number) {
+-                toast('Please add at least one contact number.');
+-                return false;
+-            }
+-            return true;
+-        }
+-
+-        function upsert(row) {
+-            const index = employees.findIndex((item) => item.employeeId === row.employeeId);
+-            if (index >= 0) employees[index] = row;
+-            else employees.unshift(row);
+-            // Return the actual array index of this employee after upsert
+-            return employees.findIndex((item) => item.employeeId === row.employeeId);
+-        }
+-
+-        /* ── save ── */
+-        async function saveEmployee(statusOverride) {
+-            const row = collect(statusOverride);
+-            if (statusOverride === 'Draft') {
+-                if (!row.fullName) row.fullName = 'Draft Employee';
+-                if (!row.designation) row.designation = 'Other';
+-                if (!row.contactNumber) row.contactNumber = 'Pending';
+-            } else if (!validate(row)) {
+-                return;
+-            }
+-            // upsert returns the index of this employee in the array
+-            const empIndex = upsert(row);
+-            const result = await saveStore(empIndex);
+-            // If server returned updated rows (with file paths), refresh employees + restore docs
+-            if (result && result.rows) {
+-                employees = result.rows;
+-                // Update document rows with server-returned file paths so "View file" links appear
+-                const savedEmp = employees.find((e) => e.employeeId === row.employeeId);
+-                if (savedEmp && savedEmp.documents) {
+-                    $$('#employeeDocuments .emp-document-row').forEach((domRow, seqIdx) => {
+-                        const savedDoc = savedEmp.documents[seqIdx];
+-                        if (savedDoc && savedDoc.file && (savedDoc.file.fileUrl || savedDoc.file.filePath)) {
+-                            // Update the data attribute so future collects preserve this file
+-                            domRow.dataset.fileJson = JSON.stringify(savedDoc.file);
+-                            renderDocFileInfo(domRow, savedDoc.file, null);
+-                        }
+-                    });
+-                }
+-            }
+-            toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Employee saved. Redirecting to employee list.');
+-            setTimeout(() => { renderList(); setVisible('employeeListPage'); }, 450);
+-        }
+-
+-        /* ── load sample ── */
+-        function loadSample() {
+-            resetForm();
+-            const row = (samples.employees || [])[0];
+-            if (!row) { toast('No sample data available.'); return; }
+-            const map = {
+-                employeeId: '#employeeId', fullName: '#employeeFullName', fatherName: '#employeeFatherName', motherName: '#employeeMotherName',
+-                nid: '#employeeNid', email: '#employeeEmail', reference: '#employeeReference',
+-                designation: '#employeeDesignation', joiningDate: '#employeeJoiningDate', status: '#employeeStatus', socialMedia: '#employeeSocialMedia',
+-                age: '#employeeAge', salary: '#employeeSalary', salaryTenure: '#employeeSalaryTenure', overtimeRate: '#employeeOvertimeRate',
+-                presentAddress: '#employeePresentAddress', permanentAddress: '#employeePermanentAddress', about: '#employeeAbout'
+-            };
+-            Object.entries(map).forEach(([key, selector]) => setValue(selector, row[key] || ''));
+-            // populate contacts
+-            const contactsWrap = $('#employeeContacts');
+-            if (contactsWrap) {
+-                contactsWrap.innerHTML = '';
+-                if (row.contacts && row.contacts.length) {
+-                    row.contacts.forEach((c) => addContact(c));
+-                } else if (row.contactNumber) {
+-                    addContact({ type: 'Office', number: row.contactNumber });
+-                } else {
+-                    addContact({ type: 'Office' });
+-                }
+-            }
+-            // populate documents
+-            const docsWrap = $('#employeeDocuments');
+-            if (docsWrap) {
+-                docsWrap.innerHTML = '';
+-                if (row.documents && row.documents.length) {
+-                    row.documents.forEach((d) => addDocument(d));
+-                } else {
+-                    addDocument();
+-                }
+-            }
+-            toast('Sample employee data loaded.');
+-        }
+-
+-        /* ── list ── */
+-        function statusClass(status) {
+-            if (status === 'Active') return 'ok';
+-            if (status === 'On Leave') return 'warn';
+-            if (status === 'Draft') return 'soft';
+-            return 'danger';
+-        }
+-
+-        function formatContacts(row) {
+-            if (row.contacts && row.contacts.length) {
+-                const first = row.contacts[0];
+-                const more = row.contacts.length > 1 ? `<br><small>+${row.contacts.length - 1} more</small>` : '';
+-                const rel = first.type === 'Relative' && first.relationship ? ` (${escapeHtml(first.relationship)})` : '';
+-                return `<span class="badge soft" style="font-size:11px">${escapeHtml(first.type)}</span> ${escapeHtml(first.number)}${rel}${more}`;
+-            }
+-            return escapeHtml(row.contactNumber || '-');
+-        }
+-
+-        function rowHtml(row) {
+-            const docCount = (row.documents || []).length;
+-            return `<tr>
+-                <td><div class="employee-cell"><div class="employee-icon">👤</div><div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.employeeId)}</small></div></div></td>
+-                <td>${formatContacts(row)}<br><small style="color:#667085">${escapeHtml(row.email || '')}</small></td>
+-                <td>${escapeHtml(row.designation || '-')}</td>
+-                <td>${escapeHtml(row.joiningDate || '-')}</td>
+-                <td>${Number(row.salary || 0).toLocaleString()}<br><small>${escapeHtml(row.salaryTenure || '')}</small></td>
+-                <td><span class="badge ${statusClass(row.status)}">${escapeHtml(row.status || '-')}</span></td>
+-                <td>${escapeHtml(row.presentAddress || '-')}</td>
+-                <td>${docCount > 0 ? `<span class="badge soft">${docCount} file${docCount > 1 ? 's' : ''}</span>` : '<span style="color:#aaa">—</span>'}</td>
+-                <td><button type="button" class="mini-btn view-employee" data-id="${escapeHtml(row.employeeId)}">View</button><button type="button" class="mini-btn edit-employee" data-id="${escapeHtml(row.employeeId)}">Edit</button><button type="button" class="mini-btn danger delete-employee" data-id="${escapeHtml(row.employeeId)}">Delete</button></td>
+-            </tr>`;
+-        }
+-
+-        function renderList() {
+-            const query = value('#employeeSearch').toLowerCase();
+-            const status = value('#employeeFilterStatus');
+-            const tenure = value('#employeeFilterTenure');
+-            const designation = value('#employeeFilterDesignation');
+-            const rows = employees.filter((row) => {
+-                const contactStr = (row.contacts || []).map((c) => c.number + ' ' + c.type).join(' ');
+-                return (!query || [row.employeeId, row.fullName, row.designation, row.contactNumber, row.nid, contactStr].join(' ').toLowerCase().includes(query)) &&
+-                    (!status || row.status === status) &&
+-                    (!tenure || row.salaryTenure === tenure) &&
+-                    (!designation || row.designation === designation);
+-            });
+-            $('#employeeTbody').innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="9" class="empty">No employee found. Click \u201cAdd Employee\u201d to create one.</td></tr>';
+-            $('#employeeKpiTotal').textContent = employees.length;
+-            $('#employeeKpiActive').textContent = employees.filter((row) => row.status === 'Active').length;
+-            $('#employeeKpiMonthly').textContent = employees.filter((row) => row.salaryTenure === 'Monthly').length;
+-            $('#employeeKpiPayroll').textContent = employees.reduce((sum, row) => sum + Number(row.salary || 0), 0).toLocaleString();
+-        }
+-
+-        /* ── edit ── */
+-        function editEmployee(id) {
+-            const row = employees.find((item) => item.employeeId === id);
+-            if (!row) return;
+-            resetForm();
+-            const map = {
+-                employeeId: '#employeeId', fullName: '#employeeFullName', fatherName: '#employeeFatherName', motherName: '#employeeMotherName',
+-                nid: '#employeeNid', email: '#employeeEmail', reference: '#employeeReference',
+-                designation: '#employeeDesignation', joiningDate: '#employeeJoiningDate', status: '#employeeStatus', socialMedia: '#employeeSocialMedia',
+-                age: '#employeeAge', salary: '#employeeSalary', salaryTenure: '#employeeSalaryTenure', overtimeRate: '#employeeOvertimeRate',
+-                presentAddress: '#employeePresentAddress', permanentAddress: '#employeePermanentAddress', about: '#employeeAbout'
+-            };
+-            Object.entries(map).forEach(([key, selector]) => setValue(selector, row[key] || ''));
+-            // restore contacts
+-            const contactsWrap = $('#employeeContacts');
+-            if (contactsWrap) {
+-                contactsWrap.innerHTML = '';
+-                if (row.contacts && row.contacts.length) {
+-                    row.contacts.forEach((c) => addContact(c));
+-                } else if (row.contactNumber) {
+-                    addContact({ type: 'Office', number: row.contactNumber });
+-                } else {
+-                    addContact({ type: 'Office' });
+-                }
+-            }
+-            // restore documents
+-            const docsWrap = $('#employeeDocuments');
+-            if (docsWrap) {
+-                docsWrap.innerHTML = '';
+-                if (row.documents && row.documents.length) {
+-                    row.documents.forEach((d) => addDocument(d));
+-                } else {
+-                    addDocument();
+-                }
+-            }
+-            setVisible('employeeAddPage');
+-        }
+-
+-        function viewEmployee(id) {
+-            const row = employees.find((item) => item.employeeId === id);
+-            if (!row) return;
+-            window.FleetmanDetailViewer?.show('Employee Details', row);
+-        }
+-
+-        function deleteEmployee(id) {
+-            if (!confirm('Delete this employee?')) return;
+-            employees = employees.filter((row) => row.employeeId !== id);
+-            saveStore();
+-            renderList();
+-            toast('Employee deleted.');
+-        }
+-
+-        function exportEmployees() {
+-            const rows = [['Employee ID','Full Name','Father Name','Mother Name','NID','Primary Contact','All Contacts','Email','Reference','Designation','Joining Date','Status','Social Media','Age','Salary','Salary Tenure','Overtime Rate','Present Address','Permanent Address','About','Documents']];
+-            employees.forEach((row) => {
+-                const contactStr = (row.contacts || []).map((c) => `${c.type}: ${c.number}${c.relationship ? ' (' + c.relationship + ')' : ''}`).join('; ') || row.contactNumber || '';
+-                const docStr = (row.documents || []).map((d) => d.name || 'Document').join('; ');
+-                rows.push([row.employeeId, row.fullName, row.fatherName, row.motherName, row.nid, row.contactNumber, contactStr, row.email, row.reference, row.designation, row.joiningDate, row.status, row.socialMedia, row.age, row.salary, row.salaryTenure, row.overtimeRate, row.presentAddress, row.permanentAddress, row.about, docStr]);
+-            });
+-            exportCsv(rows, 'fleetman-employee-list.csv');
+-        }
+-
+-        /* ── event listeners ── */
+-        $('#addEmployeeContactBtn')?.addEventListener('click', () => addContact({ type: 'Office' }));
+-        $('#addEmployeeDocumentBtn')?.addEventListener('click', () => addDocument());
+-        $('#resetEmployeeBtn')?.addEventListener('click', resetForm);
+-        $('#saveEmployeeBtn')?.addEventListener('click', () => saveEmployee());
+-        $('#saveEmployeeDraftBtn')?.addEventListener('click', () => saveEmployee('Draft'));
+-        $('#loadEmployeeSampleBtn')?.addEventListener('click', loadSample);
+-        $('#newEmployeeBtn')?.addEventListener('click', () => { resetForm(); setVisible('employeeAddPage'); });
+-        $('#exportEmployeesBtn')?.addEventListener('click', exportEmployees);
+-        $('#applyEmployeeFiltersBtn')?.addEventListener('click', renderList);
+-        $('#clearEmployeeFiltersBtn')?.addEventListener('click', () => { ['#employeeSearch','#employeeFilterStatus','#employeeFilterTenure','#employeeFilterDesignation'].forEach((selector) => setValue(selector, '')); renderList(); });
+-        ['#employeeSearch','#employeeFilterStatus','#employeeFilterTenure','#employeeFilterDesignation'].forEach((selector) => $(selector)?.addEventListener('input', renderList));
+-
+-        // Photo preview
+-        $('#employeePhoto')?.addEventListener('change', (e) => {
+-            const file = e.target.files?.[0];
+-            const preview = $('#employeePhotoPreview');
+-            if (file && preview) {
+-                const reader = new FileReader();
+-                reader.onload = (ev) => { preview.innerHTML = `<img src="${ev.target.result}" style="width:66px;height:66px;border-radius:16px;object-fit:cover">`; };
+-                reader.readAsDataURL(file);
+-            }
+-        });
+-
+-        // Delegated events for dynamic rows
+-        document.addEventListener('click', (event) => {
+-            // remove-row inside employee sections
+-            const removeBtn = event.target.closest('#employeeContacts .remove-row, #employeeDocuments .remove-row');
+-            if (removeBtn) {
+-                const row = removeBtn.closest('.emp-contact-row, .emp-document-row');
+-                if (row) row.remove();
+-            }
+-            const view = event.target.closest('.view-employee');
+-            if (view) viewEmployee(view.dataset.id);
+-            const edit = event.target.closest('.edit-employee');
+-            if (edit) editEmployee(edit.dataset.id);
+-            const del = event.target.closest('.delete-employee');
+-            if (del) deleteEmployee(del.dataset.id);
+-        });
+-
+-        // Contact type change → show/hide relationship field
+-        document.addEventListener('change', (event) => {
+-            const typeSelect = event.target.closest('.empContactType');
+-            if (typeSelect) {
+-                const row = typeSelect.closest('.emp-contact-row');
+-                const relField = row?.querySelector('.emp-relationship-field');
+-                if (relField) relField.style.display = typeSelect.value === 'Relative' ? '' : 'none';
+-            }
+-            // Document file chosen → show preview info
+-            const docFile = event.target.closest('.empDocFile');
+-            if (docFile) {
+-                const file = docFile.files?.[0] || null;
+-                const row = docFile.closest('.emp-document-row');
+-                if (row) renderDocFileInfo(row, {}, file);
+-            }
+-        });
+-
+-        // Initial sync without files (plain JSON)
+-        syncResource('employees', employees);
+-        resetForm();
+-        renderList();
+-        setVisible('employeeListPage');
+-    }
+-
+-    function initDriverAttendance() {
+-        let logs = Array.isArray(records.driver_attendance) ? records.driver_attendance : (samples.driver_attendance || []);
+-        const masters = data.attendanceMasters || { contracts: [], vehicle_driver_map: {}, drivers: [] };
+-        let selectedStatus = 'Completed';
+-
+-        const normalize = (text) => String(text || '').trim();
+-        const unique = (items) => Array.from(new Set((items || []).map(normalize).filter(Boolean)));
+-        const labelOf = (item) => typeof item === 'string' ? item : (item?.label || item?.name || item?.id || '');
+-        const contractLabel = (contract = {}) => contract.label || [contract.id || contract.contractId, contract.name || contract.partyName].filter(Boolean).join(' - ');
+-        const contractLabels = unique((masters.contracts || []).map(contractLabel));
+-
+-        function saveStore() {
+-            syncResource('driver_attendance', logs);
+-        }
+-
+-        function genId() {
+-            return 'DL' + new Date().toISOString().slice(2, 10).replaceAll('-', '') + Math.floor(100 + Math.random() * 900);
+-        }
+-
+-        function fillDatalist(id, items) {
+-            const node = document.getElementById(id);
+-            if (!node) return;
+-            node.innerHTML = unique(items || []).map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+-        }
+-
+-        function selectedContract() {
+-            const current = normalize(value('#attendanceContract'));
+-            return (masters.contracts || []).find((contract) => {
+-                return contractLabel(contract) === current || normalize(contract.id) === current || normalize(contract.contractId) === current;
+-            }) || null;
+-        }
+-
+-        function assignmentsFor(contract) {
+-            return Array.isArray(contract?.assignments) ? contract.assignments : [];
+-        }
+-
+-        function vehicleLabel(assignment = {}) {
+-            return normalize(assignment.vehicleLabel || assignment.vehicle || assignment.vehicleName || assignment.vehicleId || assignment.id);
+-        }
+-
+-        function driverLabel(assignment = {}) {
+-            return normalize(assignment.driverLabel || assignment.driver || assignment.driverName || assignment.driverId || assignment.id);
+-        }
+-
+-        function vehiclesFor(contract) {
+-            if (!contract) return [];
+-            const fromAssignments = assignmentsFor(contract).map(vehicleLabel);
+-            const fromContract = (contract.vehicles || []).map(labelOf);
+-            return unique([...fromAssignments, ...fromContract]);
+-        }
+-
+-        function driversFor(contract, vehicle = '') {
+-            if (!contract) return [];
+-            const currentVehicle = normalize(vehicle);
+-            const assignments = assignmentsFor(contract).filter((assignment) => !currentVehicle || vehicleLabel(assignment) === currentVehicle);
+-            const fromAssignments = assignments.map(driverLabel);
+-            const fromContract = currentVehicle ? [] : (contract.drivers || []).map(labelOf);
+-            return unique([...fromAssignments, ...fromContract]);
+-        }
+-
+-        function selectedAssignment(contract = selectedContract()) {
+-            if (!contract) return null;
+-            const currentVehicle = normalize(value('#attendanceVehicle'));
+-            const currentDriver = normalize(value('#attendanceDriver'));
+-            return assignmentsFor(contract).find((assignment) => {
+-                const vehicleMatches = !currentVehicle || vehicleLabel(assignment) === currentVehicle;
+-                const driverMatches = !currentDriver || driverLabel(assignment) === currentDriver;
+-                return vehicleMatches && driverMatches;
+-            }) || assignmentsFor(contract).find((assignment) => vehicleLabel(assignment) === currentVehicle) || null;
+-        }
+-
+-        function populateBase() {
+-            fillDatalist('attendanceContractList', contractLabels);
+-            fillDatalist('attendanceStatusFilterList', options.attendance_statuses || ['Initiated', 'Running', 'Completed']);
+-            fillDatalist('attendanceFilterContractList', contractLabels);
+-        }
+-
+-        function populateDriversBySelection() {
+-            const found = selectedContract();
+-            const drivers = driversFor(found, value('#attendanceVehicle'));
+-            fillDatalist('attendanceDriverList', drivers);
+-
+-            if (value('#attendanceDriver') && !drivers.includes(value('#attendanceDriver'))) {
+-                setValue('#attendanceDriver', '');
+-            }
+-
+-            const assigned = selectedAssignment(found);
+-            const assignedDriver = assigned ? driverLabel(assigned) : '';
+-            if (assignedDriver) {
+-                setValue('#attendanceDriver', assignedDriver);
+-            } else if (!value('#attendanceDriver') && drivers.length === 1) {
+-                setValue('#attendanceDriver', drivers[0]);
+-            }
+-        }
+-
+-        function populateByContract() {
+-            const found = selectedContract();
+-            const vehicles = vehiclesFor(found);
+-            fillDatalist('attendanceVehicleList', vehicles);
+-
+-            if (value('#attendanceVehicle') && !vehicles.includes(value('#attendanceVehicle'))) {
+-                setValue('#attendanceVehicle', '');
+-            }
+-
+-            if (!value('#attendanceVehicle') && vehicles.length === 1) {
+-                setValue('#attendanceVehicle', vehicles[0]);
+-            }
+-
+-            populateDriversBySelection();
+-        }
+-
+-        function onVehicleChange() {
+-            populateDriversBySelection();
+-        }
+-
+-        function renderStatusChoices() {
+-            const statuses = options.attendance_statuses || ['Initiated', 'Running', 'Completed'];
+-            const wrap = $('#attendanceStatusChoices');
+-            if (!wrap) return;
+-            wrap.innerHTML = statuses.map((status) => `<button type="button" class="choice-btn ${selectedStatus === status ? 'active' : ''}" data-attendance-status="${escapeHtml(status)}">${escapeHtml(status)}</button>`).join('');
+-        }
+-
+-        function setNow(fieldId) {
+-            const d = new Date();
+-            setValue('#' + fieldId, String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'));
+-            updateSummary();
+-        }
+-
+-        function calcHours(start, end) {
+-            if (!start || !end) return '0h 0m';
+-            const [sh, sm] = start.split(':').map(Number);
+-            const [eh, em] = end.split(':').map(Number);
+-            let minutes = (eh * 60 + em) - (sh * 60 + sm);
+-            if (minutes < 0) minutes = 0;
+-            return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+-        }
+-
+-        function updateSummary() {
+-            const hours = $('#attendanceSummaryHours');
+-            if (hours) hours.textContent = calcHours(value('#attendanceStartTime'), value('#attendanceEndTime'));
+-        }
+-
+-        function resetForm() {
+-            $$('#attendanceAddPage input,#attendanceAddPage textarea').forEach((el) => { el.value = ''; });
+-            setValue('#attendanceId', genId());
+-            setValue('#attendanceDate', new Date().toISOString().slice(0, 10));
+-            selectedStatus = 'Completed';
+-            populateBase();
+-            populateByContract();
+-            renderStatusChoices();
+-            updateSummary();
+-        }
+-
+-        function collect(statusOverride) {
+-            updateSummary();
+-            const contract = selectedContract();
+-            const assignment = selectedAssignment(contract);
+-            return {
+-                logId: value('#attendanceId') || genId(),
+-                date: value('#attendanceDate'),
+-                contract: value('#attendanceContract'),
+-                contractId: contract?.id || contract?.contractId || '',
+-                contractParty: contract?.partyName || contract?.name || '',
+-                vehicle: value('#attendanceVehicle'),
+-                vehicleId: assignment?.vehicleId || '',
+-                driver: value('#attendanceDriver'),
+-                driverId: assignment?.driverId || '',
+-                startTime: value('#attendanceStartTime'),
+-                endTime: value('#attendanceEndTime'),
+-                status: statusOverride || selectedStatus,
+-                hours: $('#attendanceSummaryHours')?.textContent || '0h 0m',
+-                notes: value('#attendanceNotes').trim(),
+-                savedAt: new Date().toISOString(),
+-            };
+-        }
+-
+-        function validate(row) {
+-            const found = selectedContract();
+-            if (!row.date || !row.contract || !row.vehicle || !row.driver || !row.startTime || !row.status) {
+-                toast('Please fill Date, Contract, Vehicle, Driver, Start Time, and Status.');
+-                return false;
+-            }
+-
+-            if (!found) {
+-                toast('Please choose a valid contract from the real contract list.');
+-                return false;
+-            }
+-
+-            const allowedVehicles = vehiclesFor(found);
+-            if (!allowedVehicles.includes(row.vehicle)) {
+-                toast('Please choose a vehicle assigned to the selected contract.');
+-                return false;
+-            }
+-
+-            const allowedDrivers = driversFor(found, row.vehicle);
+-            if (!allowedDrivers.includes(row.driver)) {
+-                toast('Please choose a driver assigned to the selected contract/vehicle.');
+-                return false;
+-            }
+-
+-            return true;
+-        }
+-
+-        function upsert(row) {
+-            const idx = logs.findIndex((item) => item.logId === row.logId);
+-            if (idx >= 0) logs[idx] = row;
+-            else logs.unshift(row);
+-            saveStore();
+-        }
+-
+-        function saveLog(statusOverride) {
+-            const row = collect(statusOverride);
+-            if (statusOverride !== 'Draft' && !validate(row)) return;
+-            upsert(row);
+-            toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Attendance saved. Redirecting to list.');
+-            setTimeout(() => {
+-                renderList();
+-                setVisible('attendanceListPage');
+-            }, 450);
+-        }
+-
+-        function loadSample() {
+-            resetForm();
+-            const firstContract = (masters.contracts || [])[0];
+-            if (!firstContract) {
+-                toast('No saved contract assignment found. Please create a contract first.');
+-                return;
+-            }
+-            setValue('#attendanceContract', contractLabel(firstContract));
+-            populateByContract();
+-            const firstVehicle = vehiclesFor(firstContract)[0] || '';
+-            if (firstVehicle) setValue('#attendanceVehicle', firstVehicle);
+-            populateDriversBySelection();
+-            setValue('#attendanceStartTime', '09:00');
+-            setValue('#attendanceEndTime', '17:00');
+-            selectedStatus = 'Completed';
+-            renderStatusChoices();
+-            updateSummary();
+-            toast('First saved contract assignment loaded.');
+-        }
+-
+-        function badgeClass(status) {
+-            if (status === 'Completed') return 'ok';
+-            if (status === 'Running') return 'warn';
+-            if (status === 'Initiated' || status === 'Draft') return 'soft';
+-            return 'danger';
+-        }
+-
+-        function rowHtml(row) {
+-            const cls = badgeClass(row.status);
+-            return `<tr>
+-                <td><div class="list-cell"><div class="list-icon">📝</div><div><b>${escapeHtml(row.logId)}</b><br><small>${escapeHtml(row.date)}</small></div></div></td>
+-                <td>${escapeHtml(row.date || '-')}<br><small>${escapeHtml(row.startTime || '-')} to ${escapeHtml(row.endTime || '-')}</small></td>
+-                <td><b>${escapeHtml(row.contract || '-')}</b><br><small>${escapeHtml(row.vehicle || '-')}</small></td>
+-                <td><b>${escapeHtml(row.driver || '-')}</b></td>
+-                <td>${escapeHtml(row.hours || '0h 0m')}</td>
+-                <td><span class="badge ${cls}">${escapeHtml(row.status || '-')}</span></td>
+-                <td><button type="button" class="mini-btn view-attendance" data-id="${escapeHtml(row.logId)}">View</button><button type="button" class="mini-btn edit-attendance" data-id="${escapeHtml(row.logId)}">Edit</button><button type="button" class="mini-btn danger delete-attendance" data-id="${escapeHtml(row.logId)}">Delete</button></td>
+-            </tr>`;
+-        }
+-
+-        function hoursToMinutes(text) {
+-            const match = String(text || '0h 0m').match(/(\d+)h\s+(\d+)m/);
+-            return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+-        }
+-
+-        function renderList() {
+-            const q = value('#attendanceSearch').toLowerCase();
+-            const status = value('#attendanceFilterStatus');
+-            const contract = value('#attendanceFilterContract');
+-            const rows = logs.filter((row) => {
+-                const haystack = [row.logId, row.contract, row.contractId, row.contractParty, row.vehicle, row.driver].join(' ').toLowerCase();
+-                return (!q || haystack.includes(q)) && (!status || row.status === status) && (!contract || row.contract === contract);
+-            });
+-            const tbody = $('#attendanceTbody');
+-            if (tbody) tbody.innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="7" class="empty">No attendance found. Click “Add Attendance” to create one.</td></tr>';
+-            if ($('#attendanceKpiTotal')) $('#attendanceKpiTotal').textContent = logs.length;
+-            if ($('#attendanceKpiCompleted')) $('#attendanceKpiCompleted').textContent = logs.filter((row) => row.status === 'Completed').length;
+-            if ($('#attendanceKpiRunning')) $('#attendanceKpiRunning').textContent = logs.filter((row) => row.status === 'Running').length;
+-            if ($('#attendanceKpiHours')) $('#attendanceKpiHours').textContent = (logs.reduce((sum, row) => sum + hoursToMinutes(row.hours), 0) / 60).toFixed(1);
+-        }
+-
+-        function editLog(id) {
+-            const row = logs.find((item) => item.logId === id);
+-            if (!row) return;
+-            resetForm();
+-            setValue('#attendanceId', row.logId);
+-            setValue('#attendanceDate', row.date);
+-            setValue('#attendanceContract', row.contract);
+-            populateByContract();
+-            setValue('#attendanceVehicle', row.vehicle);
+-            onVehicleChange();
+-            setValue('#attendanceDriver', row.driver);
+-            setValue('#attendanceStartTime', row.startTime);
+-            setValue('#attendanceEndTime', row.endTime);
+-            selectedStatus = row.status === 'Draft' ? 'Initiated' : row.status;
+-            renderStatusChoices();
+-            setValue('#attendanceNotes', row.notes);
+-            updateSummary();
+-            setVisible('attendanceAddPage');
+-        }
+-
+-        function viewLog(id) {
+-            const row = logs.find((item) => item.logId === id);
+-            if (row) {
+-                alert(`${row.logId}\nDate: ${row.date}\nContract: ${row.contract}\nVehicle: ${row.vehicle}\nDriver: ${row.driver}\nTime: ${row.startTime} to ${row.endTime || '-'}\nHours: ${row.hours}\nStatus: ${row.status}\nNotes: ${row.notes || '-'}`);
+-            }
+-        }
+-
+-        function deleteLog(id) {
+-            if (!confirm('Delete this attendance record?')) return;
+-            logs = logs.filter((row) => row.logId !== id);
+-            saveStore();
+-            renderList();
+-            toast('Attendance deleted.');
+-        }
+-
+-        function exportLogs() {
+-            const rows = [['Attendance ID', 'Date', 'Contract', 'Contract ID', 'Vehicle', 'Vehicle ID', 'Driver', 'Driver ID', 'Start Time', 'End Time', 'Status', 'Hours', 'Notes']];
+-            logs.forEach((row) => rows.push([row.logId, row.date, row.contract, row.contractId, row.vehicle, row.vehicleId, row.driver, row.driverId, row.startTime, row.endTime, row.status, row.hours, row.notes]));
+-            exportCsv(rows, 'fleetman-driver-attendance-list.csv');
+-        }
+-
+-        $('#attendanceContract')?.addEventListener('change', populateByContract);
+-        $('#attendanceContract')?.addEventListener('input', populateByContract);
+-        $('#attendanceVehicle')?.addEventListener('change', onVehicleChange);
+-        $('#attendanceVehicle')?.addEventListener('input', onVehicleChange);
+-        ['#attendanceStartTime', '#attendanceEndTime'].forEach((selector) => $(selector)?.addEventListener('input', updateSummary));
+-        $('#resetAttendanceBtn')?.addEventListener('click', resetForm);
+-        $('#saveAttendanceBtn')?.addEventListener('click', () => saveLog());
+-        $('#saveAttendanceDraftBtn')?.addEventListener('click', () => saveLog('Draft'));
+-        $('#loadAttendanceSampleBtn')?.addEventListener('click', loadSample);
+-        $('#newAttendanceBtn')?.addEventListener('click', () => { resetForm(); setVisible('attendanceAddPage'); });
+-        $('#exportAttendanceBtn')?.addEventListener('click', exportLogs);
+-        $('#applyAttendanceFiltersBtn')?.addEventListener('click', renderList);
+-        $('#clearAttendanceFiltersBtn')?.addEventListener('click', () => {
+-            ['#attendanceSearch', '#attendanceFilterStatus', '#attendanceFilterContract'].forEach((selector) => setValue(selector, ''));
+-            renderList();
+-        });
+-        ['#attendanceSearch', '#attendanceFilterStatus', '#attendanceFilterContract'].forEach((selector) => $(selector)?.addEventListener('input', renderList));
+-
+-        document.addEventListener('click', (event) => {
+-            const status = event.target.closest('[data-attendance-status]');
+-            if (status) {
+-                selectedStatus = status.dataset.attendanceStatus;
+-                renderStatusChoices();
+-                updateSummary();
+-            }
+-            const now = event.target.closest('[data-time-now]');
+-            if (now) setNow(now.dataset.timeNow);
+-            const clear = event.target.closest('[data-clear-field]');
+-            if (clear) {
+-                setValue('#' + clear.dataset.clearField, '');
+-                updateSummary();
+-            }
+-            const view = event.target.closest('.view-attendance');
+-            if (view) viewLog(view.dataset.id);
+-            const edit = event.target.closest('.edit-attendance');
+-            if (edit) editLog(edit.dataset.id);
+-            const del = event.target.closest('.delete-attendance');
+-            if (del) deleteLog(del.dataset.id);
+-        });
+-
+-        populateBase();
+-        resetForm();
+-        renderList();
+-        setVisible('attendanceListPage');
+-    }
+-
+-    document.addEventListener('DOMContentLoaded', () => {
+-        bindPageTargets();
+-        const page = document.body.dataset.page;
+-        if (page === 'vendors') initVendors();
+-        if (page === 'trips') initTrips();
+-        if (page === 'drivers') initDrivers();
+-        if (page === 'clients') initClients();
+-        if (page === 'employees') initEmployees();
+-        if (page === 'driver-attendance') initDriverAttendance();
+-    });
+-})();
+-
+-/* Master Data page logic: dynamic database-backed lookup rows for app-wide dropdowns. */
+-(() => {
+-    'use strict';
+-
+-    const data = window.FLEETMAN || {};
+-    const resources = data.resources || {};
+-    const masterData = data.masterData || { vehicle_categories: [], vehicle_sub_categories: [], party_types: [], document_names: [], licence_types: [], client_types: [], contact_methods: [], fuel_types: [], fuel_units: [] };
+-    const $ = (selector, root = document) => root.querySelector(selector);
+-    const value = (selector) => $(selector)?.value || '';
+-    const setValue = (selector, nextValue) => { const element = $(selector); if (element) element.value = nextValue ?? ''; };
+-    const setText = (selector, nextValue) => { const element = $(selector); if (element) element.textContent = nextValue ?? ''; };
+-    const escapeHtml = (input) => String(input ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[char]));
+-
+-    function csrfToken() {
+-        return document.querySelector('meta[name="csrf-token"]')?.content || '';
+-    }
+-
+-    function toast(message) {
+-        const node = $('#toast');
+-        if (!node) return;
+-        node.textContent = message;
+-        node.classList.add('show');
+-        setTimeout(() => node.classList.remove('show'), 2800);
+-    }
+-
+-    function codeFrom(input) {
+-        const code = String(input || '')
+-            .trim()
+-            .toUpperCase()
+-            .replace(/[^A-Z0-9]+/g, '_')
+-            .replace(/^_+|_+$/g, '');
+-
+-        return code || 'MASTER_' + Math.random().toString(36).slice(2, 8).toUpperCase();
+-    }
+-
+-    function sortRows(rows) {
+-        return rows.slice().sort((a, b) => {
+-            const sortA = Number(a.sortOrder || 0);
+-            const sortB = Number(b.sortOrder || 0);
+-            if (sortA !== sortB) return sortA - sortB;
+-            return String(a.name || '').localeCompare(String(b.name || ''));
+-        });
+-    }
+-
+-    function initMasterData() {
+-        let vehicleCategories = Array.isArray(masterData.vehicle_categories) ? masterData.vehicle_categories.slice() : [];
+-        let vehicleSubCategories = Array.isArray(masterData.vehicle_sub_categories) ? masterData.vehicle_sub_categories.slice() : [];
+-        let partyTypes = Array.isArray(masterData.party_types) ? masterData.party_types.slice() : [];
+-        let documentNames = Array.isArray(masterData.document_names) ? masterData.document_names.slice() : [];
+-        let licenceTypes = Array.isArray(masterData.licence_types) ? masterData.licence_types.slice() : [];
+-        let clientTypes = Array.isArray(masterData.client_types) ? masterData.client_types.slice() : [];
+-        let contactMethods = Array.isArray(masterData.contact_methods) ? masterData.contact_methods.slice() : [];
+-        let fuelTypes = Array.isArray(masterData.fuel_types) ? masterData.fuel_types.slice() : [];
+-        let fuelUnits = Array.isArray(masterData.fuel_units) ? masterData.fuel_units.slice() : [];
+-
+-        function populateVehicleCategorySelect(selectedValue = '') {
+-            const select = $('#vehicleSubCategoryParent');
+-            if (!select) return;
+-
+-            const currentValue = selectedValue || select.value;
+-            select.innerHTML = '<option value="">Select vehicle category</option>';
+-            sortRows(vehicleCategories)
+-                .filter((row) => row.status !== 'Inactive')
+-                .forEach((row) => {
+-                    const option = document.createElement('option');
+-                    option.value = row.code;
+-                    option.textContent = row.name;
+-                    select.appendChild(option);
+-                });
+-
+-            if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+-                select.value = currentValue;
+-            }
+-        }
+-
+-        function vehicleCategoryName(code) {
+-            return vehicleCategories.find((row) => row.code === code)?.name || code || '—';
+-        }
+-
+-        function codeForVehicleSubCategory() {
+-            const categoryCode = value('#vehicleSubCategoryParent');
+-            const name = value('#vehicleSubCategoryMasterName');
+-            return codeFrom([categoryCode, name].filter(Boolean).join('_'));
+-        }
+-
+-        function saveStore() {
+-            const endpoint = resources?.master_data?.sync;
+-            if (!endpoint) {
+-                toast('Master Data route is missing. Please check routes/web.php.');
+-                return;
+-            }
+-
+-            fetch(endpoint, {
+-                method: 'POST',
+-                headers: {
+-                    'Content-Type': 'application/json',
+-                    'Accept': 'application/json',
+-                    'X-CSRF-TOKEN': csrfToken(),
+-                },
+-                body: JSON.stringify({ vehicle_categories: vehicleCategories, vehicle_sub_categories: vehicleSubCategories, party_types: partyTypes, document_names: documentNames, licence_types: licenceTypes, client_types: clientTypes, contact_methods: contactMethods, fuel_types: fuelTypes, fuel_units: fuelUnits }),
+-            })
+-                .then(async (response) => {
+-                    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || 'Master data sync failed.');
+-                    return response.json();
+-                })
+-                .then((payload) => {
+-                    if (payload.masterData) {
+-                        vehicleCategories = Array.isArray(payload.masterData.vehicle_categories) ? payload.masterData.vehicle_categories : vehicleCategories;
+-                        vehicleSubCategories = Array.isArray(payload.masterData.vehicle_sub_categories) ? payload.masterData.vehicle_sub_categories : vehicleSubCategories;
+-                        partyTypes = Array.isArray(payload.masterData.party_types) ? payload.masterData.party_types : partyTypes;
+-                        documentNames = Array.isArray(payload.masterData.document_names) ? payload.masterData.document_names : documentNames;
+-                        licenceTypes = Array.isArray(payload.masterData.licence_types) ? payload.masterData.licence_types : licenceTypes;
+-                        clientTypes = Array.isArray(payload.masterData.client_types) ? payload.masterData.client_types : clientTypes;
+-                        contactMethods = Array.isArray(payload.masterData.contact_methods) ? payload.masterData.contact_methods : contactMethods;
+-                        fuelTypes = Array.isArray(payload.masterData.fuel_types) ? payload.masterData.fuel_types : fuelTypes;
+-                        fuelUnits = Array.isArray(payload.masterData.fuel_units) ? payload.masterData.fuel_units : fuelUnits;
+-                        renderAll();
+-                    }
+-                })
+-                .catch((error) => toast(error.message || 'Could not save master data to database.'));
+-        }
+-
+-        function resetVehicleCategoryForm() {
+-            setValue('#vehicleCategoryEditingCode', '');
+-            setValue('#vehicleCategoryMasterName', '');
+-            setValue('#vehicleCategoryMasterCode', '');
+-            setValue('#vehicleCategoryMasterSort', '0');
+-            setValue('#vehicleCategoryMasterStatus', 'Active');
+-            setValue('#vehicleCategoryMasterDescription', '');
+-            setText('#saveVehicleCategoryMasterBtn', 'Save Vehicle Category');
+-        }
+-
+-        function resetVehicleSubCategoryForm() {
+-            setValue('#vehicleSubCategoryEditingCode', '');
+-            setValue('#vehicleSubCategoryParent', '');
+-            setValue('#vehicleSubCategoryMasterName', '');
+-            setValue('#vehicleSubCategoryMasterCode', '');
+-            setValue('#vehicleSubCategoryMasterSort', '0');
+-            setValue('#vehicleSubCategoryMasterStatus', 'Active');
+-            setValue('#vehicleSubCategoryMasterDescription', '');
+-            setText('#saveVehicleSubCategoryMasterBtn', 'Save Vehicle Sub Category');
+-        }
++        function resetVehicleSubCategoryForm() {
++            setValue('#vehicleSubCategoryEditingCode', '');
++            setValue('#vehicleSubCategoryParent', '');
++            setValue('#vehicleSubCategoryMasterName', '');
++            setValue('#vehicleSubCategoryMasterCode', '');
++            setValue('#vehicleSubCategoryMasterSort', '0');
++            setValue('#vehicleSubCategoryMasterStatus', 'Active');
++            setValue('#vehicleSubCategoryMasterDescription', '');
++            setText('#saveVehicleSubCategoryMasterBtn', 'Save Vehicle Sub Category');
++        }
+ 
+         function resetPartyTypeForm() {
+             setValue('#partyTypeEditingCode', '');
+@@ -5109,7 +3117,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+                 const link = file.fileUrl ? ` · <a href="${escapeHtml(file.fileUrl)}" target="_blank" rel="noopener">View file</a>` : '';
+                 return `Uploaded: <b>${escapeHtml(label)}</b>${link}`;
+             }
+-            return 'Choose PDF/image/office file. It will be stored after Save Contract.';
++            return '';
+         }
+ 
+         function renderFileInfo(row, selectedFile = null) {
+@@ -5131,7 +3139,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+                 <div class="contract-card-head">
+                     <div>
+                         <div class="contract-card-title">Assignment ${assignmentCounter}</div>
+-                        <div class="contract-card-hint">One vehicle and one driver pair with rate and duty hour.</div>
++                        <div class="contract-card-hint"></div>
+                     </div>
+                     <button class="btn light small remove-contract-card" type="button">Remove</button>
+                 </div>
+@@ -5171,7 +3179,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+                 <div class="contract-card-head">
+                     <div>
+                         <div class="contract-card-title">Document ${documentCounter}</div>
+-                        <div class="contract-card-hint">Name the document before attaching a file.</div>
++                        <div class="contract-card-hint"></div>
+                     </div>
+                     <button class="btn light small remove-contract-card" type="button">Remove</button>
+                 </div>
+@@ -5537,10 +3545,66 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
+ 
+         resetForm();
+         renderList();
+-        setPage('contractCreatePage');
++        setPage('contractListPage');
+     }
+ 
+     document.addEventListener('DOMContentLoaded', () => {
+         if (document.body.dataset.page === 'contracts') initContracts();
++        
++        document.querySelectorAll('.submenu-item').forEach((item) => {
++            item.addEventListener('click', (e) => {
++                try {
++                    const url = new URL(item.href);
++                    if (url.pathname === window.location.pathname) {
++                        e.preventDefault();
++                        window.history.pushState({}, '', url.href);
++                        
++                        document.querySelectorAll('.submenu-item').forEach(x => x.classList.remove('active'));
++                        item.classList.add('active');
++                        
++                        const action = url.searchParams.get('action');
++                        const page = document.body.dataset.page;
++                        
++                        let targetPageId = '';
++                        if (page === 'trips') {
++                            targetPageId = action === 'add' ? 'tripAddPage' : 'tripListPage';
++                        } else if (page === 'fuel-recharge') {
++                            targetPageId = action === 'add' ? 'rechargeAddPage' : 'rechargeListPage';
++                        } else if (page === 'driver-attendance') {
++                            targetPageId = action === 'add' ? 'attendanceAddPage' : 'attendanceListPage';
++                        } else if (page === 'vehicles') {
++                            targetPageId = action === 'add' ? 'vehicleAddPage' : 'vehicleListPage';
++                        } else if (page === 'fuel-prices') {
++                            targetPageId = action === 'add' ? 'fuelPriceAddPage' : 'fuelPriceListPage';
++                        }
++                        
++                        if (targetPageId) {
++                            const idsToToggle = page === 'trips' ? ['tripAddPage', 'tripListPage'] 
++                                              : page === 'fuel-recharge' ? ['rechargeAddPage', 'rechargeListPage']
++                                              : page === 'driver-attendance' ? ['attendanceAddPage', 'attendanceListPage']
++                                              : page === 'vehicles' ? ['vehicleAddPage', 'vehicleListPage']
++                                              : ['fuelPriceAddPage', 'fuelPriceListPage'];
++                            idsToToggle.forEach(id => {
++                                const el = document.getElementById(id);
++                                if (el) {
++                                    if (id === targetPageId) {
++                                        el.classList.remove('hidden');
++                                        el.style.display = 'block';
++                                    } else {
++                                        el.classList.add('hidden');
++                                        el.style.display = 'none';
++                                    }
++                                }
++                            });
++                            window.scrollTo(0, 0);
++                        } else {
++                            window.location.href = url.href;
++                        }
++                    }
++                } catch (err) {
++                    window.location.href = item.href;
++                }
++            });
++        });
+     });
+ })();

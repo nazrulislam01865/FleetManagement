@@ -5,9 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <title><?php echo $__env->yieldContent('title', $brand['name'] ?? 'FleetMan'); ?></title>
-    <link rel="stylesheet" href="<?php echo e(asset('css/fleetman.css')); ?>">
+    <?php
+        $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
+        $fleetJsVersion = filemtime(public_path('js/fleetman.js'));
+        $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
+    ?>
+    <link rel="stylesheet" href="<?php echo e(asset('css/fleetman.css')); ?>?v=<?php echo e($fleetCssVersion); ?>">
 </head>
-<body data-page="<?php echo e($fleetman['page'] ?? ''); ?>">
+<body class="preload" data-page="<?php echo e($fleetman['page'] ?? ''); ?>">
     <div class="mobile-top">
         <button type="button" id="menuBtn">☰ Menu</button>
         <b><?php echo e($brand['name'] ?? 'FleetMan'); ?></b>
@@ -40,20 +45,50 @@
             (function () {
                 try {
                     var sidebar = document.getElementById('fleetSidebar');
-                    if (!sidebar || !window.localStorage) return;
-                    var scrollTop = Number(localStorage.getItem('fleetman.sidebar.scrollTop') || 0);
-                    if (scrollTop > 0) sidebar.scrollTop = scrollTop;
+
+                    if (!sidebar || !window.localStorage) {
+                        return;
+                    }
+
+                    var pendingScrollValue = sessionStorage.getItem('fleetman.sidebar.pendingScrollTop');
+                    var savedScrollValue = localStorage.getItem('fleetman.sidebar.scrollTop');
+                    var pendingScrollTop = pendingScrollValue === null ? NaN : Number(pendingScrollValue);
+                    var savedScrollTop = savedScrollValue === null ? NaN : Number(savedScrollValue);
+                    var scrollTop = Number.isFinite(pendingScrollTop) && pendingScrollTop >= 0
+                        ? pendingScrollTop
+                        : (Number.isFinite(savedScrollTop) && savedScrollTop >= 0 ? savedScrollTop : 0);
+
+                    window.__fleetmanSidebarScrollTarget = scrollTop;
+
                     sidebar.querySelectorAll('[data-menu-block]').forEach(function (block) {
                         var key = block.getAttribute('data-menu-key') || '';
                         var toggle = block.querySelector('[data-submenu-toggle]');
-                        if (!key || !toggle) return;
+
+                        if (!key || !toggle) {
+                            return;
+                        }
+
+                        var routeActive = block.getAttribute('data-route-active') === '1';
                         var saved = localStorage.getItem('fleetman.sidebar.open.' + key);
-                        if (saved !== '1' && saved !== '0') return;
-                        var isOpen = saved === '1';
+                        var isOpen = routeActive;
+
+                        if (!routeActive && saved === '1') {
+                            isOpen = true;
+                        } else if (!routeActive && saved === '0') {
+                            isOpen = false;
+                        }
+
                         block.classList.toggle('open', isOpen);
                         toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
                     });
-                } catch (error) {}
+
+                    sidebar.scrollTop = scrollTop;
+                    requestAnimationFrame(function () {
+                        sidebar.scrollTop = scrollTop;
+                    });
+                } catch (error) {
+                    console.warn('Unable to restore the FleetMan sidebar state.', error);
+                }
             })();
         </script>
 
@@ -63,7 +98,7 @@
             <footer class="fleet-footer">
                 © <?php echo e(date('Y')); ?> <?php echo e($brand['name'] ?? 'FleetMan'); ?>. All Rights Reserved.<br>
                 System Design, Development &amp; Intellectual Property owned by
-                <a href="#"><?php echo e($brand['footer_owner'] ?? 'ITQAN Consulting'); ?></a>
+                <a href="https://itqanconsulting.com/" target="_blank"><b><?php echo e($brand['footer_owner'] ?? 'ITQAN Consulting'); ?></b></a>
             </footer>
         </main>
     </div>
@@ -72,7 +107,8 @@
     <script>
         window.FLEETMAN = <?php echo json_encode($fleetman ?? [], 15, 512) ?>;
     </script>
-    <script src="<?php echo e(asset('js/fleetman.js')); ?>"></script>
+    <script src="<?php echo e(asset('js/fleetman.js')); ?>?v=<?php echo e($fleetJsVersion); ?>"></script>
+    <script src="<?php echo e(asset('js/fleetman-navigation.js')); ?>?v=<?php echo e($fleetNavigationJsVersion); ?>"></script>
     <?php echo $__env->yieldPushContent('scripts'); ?>
 </body>
 </html>

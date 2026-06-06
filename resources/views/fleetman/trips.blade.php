@@ -5,7 +5,7 @@
 
 @section('content')
 <div class="page-section">
-    <div id="tripAddPage">
+    <div id="tripAddPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Add Trip']]">
             <x-slot:actions>
                 <button type="button" class="btn light" data-page-target="tripListPage">← Trip List</button>
@@ -25,7 +25,6 @@
             <div>
                 <x-fleetman.section-card
                     title="1. Basic Trip Information"
-                    description="Vehicle and driver selectors are populated from your saved vehicle and driver tables."
                 >
                     <div class="grid3">
                         <x-fleetman.input id="tripId" label="Trip ID" required readonly />
@@ -37,7 +36,7 @@
                         <label>Vehicle <span class="req">*</span></label>
                         <div class="picker-field">
                             <div class="picker-value" id="tripVehicleSummary">
-                                <div><b>No vehicle selected</b><small>Tap the button to search and choose from saved vehicles</small></div>
+                                <div><b>No vehicle selected</b></div>
                             </div>
                             <button type="button" class="btn secondary" id="selectTripVehicleBtn">Select Vehicle</button>
                         </div>
@@ -48,7 +47,7 @@
                         <label>Driver <span class="req">*</span></label>
                         <div class="picker-field">
                             <div class="picker-value" id="tripDriverSummary">
-                                <div><b>No driver selected</b><small>Tap the button to search and choose from saved drivers</small></div>
+                                <div><b>No driver selected</b></div>
                             </div>
                             <button type="button" class="btn secondary" id="selectTripDriverBtn">Select Driver</button>
                         </div>
@@ -80,7 +79,6 @@
 
                 <x-fleetman.section-card
                     title="2. Route & Odometer"
-                    description="Keep route and odometer together so users can complete the trip quickly from mobile."
                 >
                     <div class="grid">
                         <x-fleetman.input id="tripFromLocation" label="From Location" placeholder="Example: Head Office" />
@@ -94,7 +92,6 @@
 
                 <x-fleetman.section-card
                     title="3. Trip Costs"
-                    description="Cost fields remain simple. Total cost is calculated automatically."
                 >
                     <div class="grid">
                         <x-fleetman.input id="tripFuelCost" label="Fuel Cost" type="number" step="0.01" placeholder="0" />
@@ -112,24 +109,11 @@
 
                 <x-fleetman.section-card
                     title="4. Notes"
-                    description="Use this box for instructions, trip remarks, or anything special."
                 >
-                    <x-fleetman.textarea id="tripDetails" label="Details" placeholder="Write trip details, purpose, or special instructions." required hint="Example: Vehicle sent to client office pick-up and airport drop. Fuel paid by cash." />
+                    <x-fleetman.textarea id="tripDetails" label="Details" placeholder="Write trip details, purpose, or special instructions." required />
                 </x-fleetman.section-card>
             </div>
 
-            <aside>
-                <x-fleetman.side-note title="Dynamic trip assignment">
-                    <ul>
-                        <li><b>Vehicles</b> are loaded from the saved vehicle table.</li>
-                        <li><b>Drivers</b> are loaded from the saved driver table.</li>
-                        <li>Use the searchable selector when the saved list becomes large.</li>
-                        <li>Recent selections stay visible for faster repeat trip entry.</li>
-                    </ul>
-                </x-fleetman.side-note>
-                <div class="required-box"><b>Required before save:</b><br>Trip ID, start date, end date, vehicle, driver, status, trip around, trip period, odo start, and details.</div>
-                <div class="total-box"><span class="hint">Current Total Cost</span><b id="tripSideTotal">0</b><span class="hint">Automatically updated from cost fields</span></div>
-            </aside>
         </div>
 
         <div class="save-bar">
@@ -139,7 +123,7 @@
         </div>
     </div>
 
-    <div id="tripListPage" class="hidden">
+    <div id="tripListPage">
         <x-fleetman.topbar :items="[['label' => 'Trip List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportTripsBtn">⬇ Export CSV</button>
@@ -150,11 +134,7 @@
         <x-fleetman.title-card
             title="Trip List"
             subtitle="Saved trips with quick search, filters, export, and edit/delete actions."
-        >
-            <x-slot:action>
-                <div class="pillbar"><div class="pill active">All Trips</div><div class="pill">Running</div><div class="pill">Completed</div></div>
-            </x-slot:action>
-        </x-fleetman.title-card>
+        />
 
         <div class="kpi">
             <x-fleetman.kpi-card id="tripKpiTotal" label="Total Trips" />

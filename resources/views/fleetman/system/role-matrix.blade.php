@@ -28,13 +28,13 @@
     @endif
 
     <div class="role-overview-grid">
-        @foreach($roles as $role)
-            <div class="role-overview-card {{ $role->slug === 'super_admin' ? 'super' : '' }}">
-                <div class="role-overview-icon">{{ $role->slug === 'super_admin' ? '🛡️' : '👤' }}</div>
+        @foreach($users as $user)
+            <div class="role-overview-card {{ $user->isFleetSuperAdmin() ? 'super' : '' }}">
+                <div class="role-overview-icon">{{ $user->isFleetSuperAdmin() ? '🛡️' : '👤' }}</div>
                 <div>
-                    <strong>{{ $role->name }}</strong>
-                    <span>{{ $role->description }}</span>
-                    <small>{{ $role->users_count }} user{{ $role->users_count === 1 ? '' : 's' }}</small>
+                    <strong>{{ $user->name }}</strong>
+                    <span>{{ $user->email }}</span>
+                    <small>Role: {{ $user->fleetRole?->name ?? 'None' }}</small>
                 </div>
             </div>
         @endforeach
@@ -56,7 +56,7 @@
         @if($canManageUsers)
             <form method="POST" action="{{ route('fleet.role-matrix.users.store') }}">
                 @csrf
-                <div class="grid4">
+                <div class="grid3">
                     <x-fleetman.input id="matrixUserName" name="name" label="Name" placeholder="Enter user name" :value="old('name')" required />
                     <x-fleetman.input id="matrixUserEmail" name="email" label="Email" type="email" placeholder="name@example.com" :value="old('email')" required />
                     <div class="field">
@@ -118,15 +118,15 @@
                         <tr>
                             <th class="role-permission-col">Permission</th>
                             <th>Action</th>
-                            @foreach($roles as $role)
-                                <th>{{ $role->name }}</th>
+                            @foreach($users as $user)
+                                <th>{{ $user->name }}</th>
                             @endforeach
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($permissions->groupBy('module') as $module => $modulePermissions)
                             <tr class="role-module-row">
-                                <td colspan="{{ 2 + $roles->count() }}">{{ $module }}</td>
+                                <td colspan="{{ 2 + $users->count() }}">{{ $module }}</td>
                             </tr>
                             @foreach($modulePermissions as $permission)
                                 <tr>
@@ -136,18 +136,18 @@
                                         <code>{{ $permission->key }}</code>
                                     </td>
                                     <td><span class="badge {{ $permission->action === 'Manage' ? 'warn' : 'soft' }}">{{ $permission->action }}</span></td>
-                                    @foreach($roles as $role)
+                                    @foreach($users as $user)
                                         @php
-                                            $checked = $role->slug === 'super_admin'
+                                            $checked = $user->isFleetSuperAdmin()
                                                 ? true
-                                                : (bool) ($permissionMatrix[$role->id][$permission->key] ?? false);
-                                            $disabled = ! $canManageRoleMatrix || $role->slug === 'super_admin';
+                                                : (bool) ($permissionMatrix[$user->id][$permission->key] ?? false);
+                                            $disabled = ! $canManageRoleMatrix || $user->isFleetSuperAdmin();
                                         @endphp
                                         <td class="role-check-cell">
                                             <label class="role-check {{ $checked ? 'checked' : '' }} {{ $disabled ? 'disabled' : '' }}">
                                                 <input
                                                     type="checkbox"
-                                                    name="permissions[{{ $role->id }}][]"
+                                                    name="permissions[{{ $user->id }}][]"
                                                     value="{{ $permission->key }}"
                                                     @checked($checked)
                                                     @disabled($disabled)

@@ -2,7 +2,7 @@
     <div class="logo-card">
         <div class="logo-mark">
             <?php if(!empty($brand['logo_url'])): ?>
-                <img src="<?php echo e($brand['logo_url']); ?>" alt="<?php echo e($brand['name'] ?? 'FleetMan Logo'); ?>" style="max-height: 32px;">
+                <img src="<?php echo e($brand['logo_url']); ?>" alt="<?php echo e($brand['name'] ?? 'FleetMan Logo'); ?>" style="max-height: 96px; max-width: 100%; object-fit: contain;">
             <?php else: ?>
                 🚙 <?php echo e($brand['name'] ?? 'FleetMan'); ?>
 
@@ -28,19 +28,30 @@
                     $hasChildren = count($children) > 0;
                     $isChildActive = false;
 
-                    foreach ($children as $child) {
-                        if ($activeMenu === ($child['key'] ?? null)) {
+                    foreach ($children as &$child) {
+                        $child['isActive'] = $activeMenu === ($child['key'] ?? null);
+                        if (isset($child['routeParams']['action']) && request()->query('action') === $child['routeParams']['action'] && $activeMenu === ($item['key'] ?? null)) {
+                            $child['isActive'] = true;
+                        } elseif (!request()->query('action') && str_ends_with($child['key'] ?? '', '-list') && $activeMenu === ($item['key'] ?? null)) {
+                            $child['isActive'] = true;
+                        }
+                        if ($child['isActive']) {
                             $isChildActive = true;
-                            break;
                         }
                     }
+                    unset($child);
 
                     $isActive = $activeMenu === $item['key'];
                     $isOpen = $isActive || $isChildActive;
-                    $href = ! empty($item['route']) && Route::has($item['route']) ? route($item['route']) : '#';
+                    $href = ! empty($item['route']) && Route::has($item['route']) ? route($item['route'], $item['routeParams'] ?? []) : '#';
                 ?>
 
-                <div class="menu-block <?php echo e($isOpen ? 'open' : ''); ?>" data-menu-block data-menu-key="<?php echo e($item['key']); ?>">
+                <div
+                    class="menu-block <?php echo e($isOpen ? 'open' : ''); ?>"
+                    data-menu-block
+                    data-menu-key="<?php echo e($item['key']); ?>"
+                    data-route-active="<?php echo e($isOpen ? '1' : '0'); ?>"
+                >
                     <a href="<?php echo e($href); ?>"
                        class="menu-item <?php echo e($isOpen ? 'active' : ''); ?> <?php echo e($hasChildren ? 'has-children' : ''); ?>"
                        <?php if($hasChildren): ?>
@@ -60,8 +71,8 @@
                         <div class="submenu" id="submenu-<?php echo e($item['key']); ?>">
                             <?php $__currentLoopData = $children; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $child): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                 <?php
-                                    $childHref = ! empty($child['route']) && Route::has($child['route']) ? route($child['route']) : '#';
-                                    $childActive = $activeMenu === ($child['key'] ?? null);
+                                    $childHref = ! empty($child['route']) && Route::has($child['route']) ? route($child['route'], $child['routeParams'] ?? []) : '#';
+                                    $childActive = $child['isActive'] ?? false;
                                 ?>
                                 <a href="<?php echo e($childHref); ?>" class="submenu-item <?php echo e($childActive ? 'active' : ''); ?>">
                                     <span><?php echo e($child['icon'] ?? '↳'); ?></span>

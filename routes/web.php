@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\BrandAssetController;
 use App\Http\Controllers\Fleet\ClientController;
 use App\Http\Controllers\Fleet\ContractController;
 use App\Http\Controllers\Fleet\DashboardController;
@@ -19,6 +20,8 @@ use App\Http\Controllers\Fleet\VehicleController;
 use App\Http\Controllers\Fleet\VendorPartyController;
 use App\Http\Middleware\EnsureFleetPermission;
 use Illuminate\Support\Facades\Route;
+
+Route::get('/brand/logo', [BrandAssetController::class, 'logo'])->name('brand.logo');
 
 Route::get('/login', [LoginController::class, 'show'])->name('login');
 Route::post('/login', [LoginController::class, 'login'])->name('login.store');
@@ -51,6 +54,13 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::post('/fuel-recharge/sync', [FuelRechargeController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':fuel_recharge.manage')
         ->name('fuel-recharge.sync');
+
+    Route::get('/dues', [\App\Http\Controllers\Fleet\DueController::class, 'index'])
+        ->name('dues');
+    Route::post('/dues/sync', [\App\Http\Controllers\Fleet\DueController::class, 'sync'])
+        ->name('dues.sync');
+    Route::post('/dues/generate-payroll', [\App\Http\Controllers\Fleet\DueController::class, 'generatePayroll'])
+        ->name('dues.generate-payroll');
 
     Route::get('/vendors', [VendorPartyController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':vendors.view')

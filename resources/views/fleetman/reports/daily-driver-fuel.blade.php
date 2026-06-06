@@ -21,7 +21,6 @@
 
     <x-fleetman.report-filter-card
         title="Report Filters"
-        subtitle="Simple filters for non-technical users. Choose filters and click Apply Report."
     >
         <div class="report-filter-grid daily-filter-grid">
             <div class="field"><label for="fromDate">From Date</label><input id="fromDate" type="date"></div>
@@ -51,7 +50,6 @@
 
     <x-fleetman.report-shell
         title="Report Result"
-        subtitle="Only this report box has horizontal scrolling. Vertical space is fixed for 10 rows."
         table-min-width="2280px"
     >
         <x-slot:table>

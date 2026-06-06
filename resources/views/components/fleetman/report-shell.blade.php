@@ -6,7 +6,7 @@
             <h2>{{ $title }}</h2>
             <p>{{ $subtitle }}</p>
         </div>
-        <div class="scroll-hint">↔ Scroll horizontally inside the report box</div>
+
     </div>
 
     <div class="fixed-report-box">

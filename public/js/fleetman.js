@@ -1,4 +1,5 @@
 /* Shared record details modal for FleetMan entities. */
+document.addEventListener('DOMContentLoaded', () => document.body.classList.remove('preload'), { once: true });
 window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
     'use strict';
 
@@ -304,76 +305,6 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
 
     function money(number) {
         return '৳ ' + Number(number || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
-    function bindMobileDrawer() {
-        const body = document.body;
-        const sidebar = $('.sidebar');
-        const menuButton = $('#menuBtn');
-        const backdrop = $('#backdrop');
-        const scrollKey = 'fleetman.sidebar.scrollTop';
-        const openKey = (key) => `fleetman.sidebar.open.${key}`;
-
-        function setDrawer(open) {
-            body.classList.toggle('drawer-open', open);
-            menuButton?.setAttribute('aria-expanded', open ? 'true' : 'false');
-        }
-
-        function setMenuOpen(block, open, persist = true) {
-            const key = block?.dataset?.menuKey || '';
-            const toggle = $('[data-submenu-toggle]', block);
-            if (!block || !toggle || !key) return;
-
-            block.classList.toggle('open', open);
-            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (persist) localStorage.setItem(openKey(key), open ? '1' : '0');
-        }
-
-        if (sidebar) {
-            requestAnimationFrame(() => {
-                const savedScroll = Number(localStorage.getItem(scrollKey) || 0);
-                if (savedScroll > 0) sidebar.scrollTop = savedScroll;
-            });
-
-            sidebar.addEventListener('scroll', () => {
-                localStorage.setItem(scrollKey, String(sidebar.scrollTop || 0));
-            }, { passive: true });
-        }
-
-        $$('[data-menu-block]').forEach((block) => {
-            const key = block.dataset.menuKey || '';
-            if (!key || !$('[data-submenu-toggle]', block)) return;
-
-            const saved = localStorage.getItem(openKey(key));
-            if (saved === '1') setMenuOpen(block, true, false);
-            if (saved === '0') setMenuOpen(block, false, false);
-        });
-
-        menuButton?.setAttribute('aria-controls', 'fleetSidebar');
-        menuButton?.setAttribute('aria-expanded', 'false');
-        menuButton?.addEventListener('click', () => setDrawer(!body.classList.contains('drawer-open')));
-        backdrop?.addEventListener('click', () => setDrawer(false));
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') setDrawer(false);
-        });
-
-        document.addEventListener('click', (event) => {
-            const submenuToggle = event.target.closest('[data-submenu-toggle]');
-            if (submenuToggle) {
-                if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-                    event.preventDefault();
-                    const block = submenuToggle.closest('[data-menu-block]');
-                    if (block) setMenuOpen(block, !block.classList.contains('open'));
-                }
-                return;
-            }
-
-            const menuLink = event.target.closest('.menu-item,.submenu-item');
-            if (menuLink && sidebar?.contains(menuLink)) {
-                localStorage.setItem(scrollKey, String(sidebar.scrollTop || 0));
-                if (window.matchMedia('(max-width: 1050px)').matches) setDrawer(false);
-            }
-        });
     }
 
     function setVisible(pageId) {
@@ -1006,9 +937,14 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
             if (del) deleteVehicle(del.dataset.id);
         });
 
+        populateBase();
         resetForm();
         renderTable();
-        setVisible('vehicleListPage');
+        if (window.location.search.includes('action=add')) {
+            setVisible('vehicleAddPage');
+        } else {
+            setVisible('vehicleListPage');
+        }
     }
 
     function initFuelPrices() {
@@ -1170,7 +1106,11 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
 
         resetForm();
         renderList();
-        setVisible('fuelPriceListPage');
+        if (window.location.search.includes('action=add')) {
+            setVisible('fuelPriceAddPage');
+        } else {
+            setVisible('fuelPriceListPage');
+        }
     }
 
     function initFuelRecharge() {
@@ -1907,10 +1847,15 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
         updateVehicles();
         updateCounter();
         recalculate();
+        renderRechargeList();
+        if (window.location.search.includes('action=add')) {
+            setVisible('rechargeAddPage');
+        } else {
+            setVisible('rechargeListPage');
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        bindMobileDrawer();
         const page = document.body.dataset.page;
         if (page === 'vehicles') initVehicles();
         if (page === 'fuel-prices') initFuelPrices();
@@ -2448,7 +2393,11 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
 
         resetForm();
         renderList();
-        setVisible('vendorListPage');
+        if (window.location.search.includes('action=add')) {
+            setVisible('vendorAddPage');
+        } else {
+            setVisible('vendorListPage');
+        }
     }
 
     function initTrips() {
@@ -2874,7 +2823,11 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
 
         resetForm();
         renderList();
-        setVisible('tripListPage');
+        if (window.location.search.includes('action=add')) {
+            setVisible('tripAddPage');
+        } else {
+            setVisible('tripListPage');
+        }
     }
 
 
@@ -3182,7 +3135,13 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
             const del=e.target.closest('.delete-driver'); if(del) deleteDriver(del.dataset.id); 
         });
 
-        resetForm(); renderList(); setVisible('driverListPage');
+        resetForm(); 
+        renderList(); 
+        if (window.location.search.includes('action=add')) {
+            setVisible('driverAddPage');
+        } else {
+            setVisible('driverListPage');
+        }
     }
 
 
@@ -3685,7 +3644,11 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
         syncResource('employees', employees);
         resetForm();
         renderList();
-        setVisible('employeeListPage');
+        if (window.location.search.includes('action=add')) {
+            setVisible('employeeAddPage');
+        } else {
+            setVisible('employeeListPage');
+        }
     }
 
     function initDriverAttendance() {
@@ -4054,7 +4017,11 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
         populateBase();
         resetForm();
         renderList();
-        setVisible('attendanceListPage');
+        if (window.location.search.includes('action=add')) {
+            setVisible('attendanceAddPage');
+        } else {
+            setVisible('attendanceListPage');
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -4114,6 +4081,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
     }
 
     function initMasterData() {
+
         let vehicleCategories = Array.isArray(masterData.vehicle_categories) ? masterData.vehicle_categories.slice() : [];
         let vehicleSubCategories = Array.isArray(masterData.vehicle_sub_categories) ? masterData.vehicle_sub_categories.slice() : [];
         let partyTypes = Array.isArray(masterData.party_types) ? masterData.party_types.slice() : [];
@@ -5537,7 +5505,11 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
 
         resetForm();
         renderList();
-        setPage('contractCreatePage');
+        if (window.location.search.includes('action=add')) {
+            setPage('contractCreatePage');
+        } else {
+            setPage('contractListPage');
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {

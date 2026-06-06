@@ -163,6 +163,44 @@ class FuelRechargeController extends FleetBaseController
                         'payload' => $row,
                     ]
                 );
+
+                // Accounting Hook: Generate Due for Fuel Recharge
+                if (($row[$this->statusKey] ?? '') === 'Submitted') {
+                    $amount = (float) ($row['totalAmount'] ?? 0);
+                    if ($amount > 0) {
+                        // Find vehicle to get owner/vendor
+                        $vehicleId = $row['vehicleId'] ?? null;
+                        $partyType = 'Driver';
+                        $partyId = $row['driverId'] ?? null;
+                        
+                        if ($vehicleId) {
+                            $vehicle = \App\Models\Fleet\FleetVehicle::where('code', $vehicleId)->first();
+                            if ($vehicle && !empty($vehicle->payload['vendor'])) {
+                                $partyType = 'Vendor';
+                                $partyId = $vehicle->payload['vendor'];
+                            }
+                        }
+
+                        \App\Models\Fleet\FleetDue::updateOrCreate(
+                            ['code' => 'DUE-FUEL-' . $code],
+                            [
+                                'type' => 'Fuel Recharge',
+                                'party_type' => $partyType,
+                                'party_id' => $partyId,
+                                'source_type' => 'FuelRecharge',
+                                'source_id' => $code,
+                                'amount' => $amount,
+                                'status' => 'Pending',
+                                'due_date' => $row['date'] ?? null,
+                                'payload' => [
+                                    'vehicleId' => $vehicleId,
+                                    'fuelType' => $row['fuelType'] ?? null,
+                                    'qty' => $row['primaryQty'] ?? 0,
+                                ]
+                            ]
+                        );
+                    }
+                }
             }
         });
     }

@@ -2,7 +2,7 @@
     <div class="logo-card">
         <div class="logo-mark">
             @if(!empty($brand['logo_url']))
-                <img src="{{ $brand['logo_url'] }}" alt="{{ $brand['name'] ?? 'FleetMan Logo' }}" style="max-height: 32px;">
+                <img src="{{ $brand['logo_url'] }}" alt="{{ $brand['name'] ?? 'FleetMan Logo' }}" style="max-height: 96px; max-width: 100%; object-fit: contain;">
             @else
                 🚙 {{ $brand['name'] ?? 'FleetMan' }}
                 <small>{{ $brand['tagline'] ?? 'Fleet Management System' }}</small>
@@ -27,19 +27,30 @@
                     $hasChildren = count($children) > 0;
                     $isChildActive = false;
 
-                    foreach ($children as $child) {
-                        if ($activeMenu === ($child['key'] ?? null)) {
+                    foreach ($children as &$child) {
+                        $child['isActive'] = $activeMenu === ($child['key'] ?? null);
+                        if (isset($child['routeParams']['action']) && request()->query('action') === $child['routeParams']['action'] && $activeMenu === ($item['key'] ?? null)) {
+                            $child['isActive'] = true;
+                        } elseif (!request()->query('action') && str_ends_with($child['key'] ?? '', '-list') && $activeMenu === ($item['key'] ?? null)) {
+                            $child['isActive'] = true;
+                        }
+                        if ($child['isActive']) {
                             $isChildActive = true;
-                            break;
                         }
                     }
+                    unset($child);
 
                     $isActive = $activeMenu === $item['key'];
                     $isOpen = $isActive || $isChildActive;
-                    $href = ! empty($item['route']) && Route::has($item['route']) ? route($item['route']) : '#';
+                    $href = ! empty($item['route']) && Route::has($item['route']) ? route($item['route'], $item['routeParams'] ?? []) : '#';
                 @endphp
 
-                <div class="menu-block {{ $isOpen ? 'open' : '' }}" data-menu-block data-menu-key="{{ $item['key'] }}">
+                <div
+                    class="menu-block {{ $isOpen ? 'open' : '' }}"
+                    data-menu-block
+                    data-menu-key="{{ $item['key'] }}"
+                    data-route-active="{{ $isOpen ? '1' : '0' }}"
+                >
                     <a href="{{ $href }}"
                        class="menu-item {{ $isOpen ? 'active' : '' }} {{ $hasChildren ? 'has-children' : '' }}"
                        @if($hasChildren)
@@ -59,8 +70,8 @@
                         <div class="submenu" id="submenu-{{ $item['key'] }}">
                             @foreach($children as $child)
                                 @php
-                                    $childHref = ! empty($child['route']) && Route::has($child['route']) ? route($child['route']) : '#';
-                                    $childActive = $activeMenu === ($child['key'] ?? null);
+                                    $childHref = ! empty($child['route']) && Route::has($child['route']) ? route($child['route'], $child['routeParams'] ?? []) : '#';
+                                    $childActive = $child['isActive'] ?? false;
                                 @endphp
                                 <a href="{{ $childHref }}" class="submenu-item {{ $childActive ? 'active' : '' }}">
                                     <span>{{ $child['icon'] ?? '↳' }}</span>

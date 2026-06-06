@@ -6,28 +6,25 @@
 @section('content')
 <div class="page-section vendor-party-page">
     <div id="vendorAddPage">
-        <x-fleetman.topbar :items="[['label' => 'Add Vendor / Party']]">
+        <x-fleetman.topbar :items="[['label' => 'Add Vendor']]">
             <x-slot:actions>
-                <button type="button" class="btn light" data-page-target="vendorListPage">← Vendor / Party List</button>
+                <button type="button" class="btn light" data-page-target="vendorListPage">← Vendor List</button>
             </x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card
-            title="Add Vendor / Party"
+            title="Add Vendor"
             subtitle="Create vendors, suppliers, workshops, fuel stations, transport providers, and other external parties from one usable form."
         >
-            <x-slot:action>
-                <button type="button" class="btn secondary" id="loadPartySampleBtn">Use sample data</button>
-            </x-slot:action>
+
         </x-fleetman.title-card>
 
         <div class="layout vendor-party-form-layout">
             <div>
                 <x-fleetman.section-card
                     title="1. Vendor / Party Information"
-                    description="Keep the main information simple. Party type helps users understand whether this is a transport provider, fuel station, workshop, or other service partner."
                 >
-                    <div class="grid4">
+                    <div class="grid3">
                         <x-fleetman.input id="partyId" label="Vendor / Party ID" required readonly />
                         <x-fleetman.input id="partyName" label="Party Name" placeholder="Example: Speed Transport Services" required />
                         <x-fleetman.select id="partyType" label="Party Type" :options="$fleetman['options']['party_types']" placeholder="Select type" required />
@@ -53,7 +50,6 @@
 
                 <x-fleetman.section-card
                     title="2. Contact Person(s)"
-                    description="Add one or more contact persons. Keep the main contact first."
                 >
                     <x-slot:action>
                         <button type="button" class="btn light" id="addPartyContactBtn">＋ Add Contact Person</button>
@@ -63,7 +59,6 @@
 
                 <x-fleetman.section-card
                     title="3. Documents"
-                    description="Instead of uploading unnamed files only, write document name and reference so users can understand it later."
                 >
                     <x-slot:action>
                         <button type="button" class="btn light" id="addPartyDocumentBtn">＋ Add Document</button>
@@ -82,21 +77,17 @@
     </div>
 
     <div id="vendorListPage" class="hidden">
-        <x-fleetman.topbar :items="[['label' => 'Vendor / Party List']]">
+        <x-fleetman.topbar :items="[['label' => 'Vendor List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportPartiesBtn">⬇ Export CSV</button>
-                <button type="button" class="btn primary" id="newPartyBtn">＋ Add Vendor / Party</button>
+                <button type="button" class="btn primary" id="newPartyBtn">＋ Add Vendor</button>
             </x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card
-            title="Vendor / Party List"
-            subtitle="List page with sample data, search, filters, view, edit, delete, and CSV export."
-        >
-            <x-slot:action>
-                <div class="pillbar"><div class="pill active">All Parties</div><div class="pill">Active</div><div class="pill">Suppliers</div></div>
-            </x-slot:action>
-        </x-fleetman.title-card>
+            title="Vendor List"
+            subtitle="A simple list showing combined vendor and party information. Quick search and easy filtering."
+        />
 
         <div class="kpi">
             <x-fleetman.kpi-card id="partyKpiTotal" label="Total Parties" />

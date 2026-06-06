@@ -56,7 +56,7 @@
                     <label>Current Logo</label>
                     <div style="margin-top: 10px; padding: 20px; background: #f8f9fa; border-radius: 8px; display: inline-block;">
                         <?php if(!empty($brand['logo_url'])): ?>
-                            <img src="<?php echo e($brand['logo_url']); ?>" alt="Logo" style="max-height: 50px;">
+                            <img src="<?php echo e($brand['logo_url']); ?>" alt="Logo" style="max-height: 120px; max-width: 100%; object-fit: contain;">
                         <?php else: ?>
                             <div style="font-size: 24px; font-weight: bold;">🚙 <?php echo e($brand['name'] ?? 'FleetMan'); ?></div>
                         <?php endif; ?>

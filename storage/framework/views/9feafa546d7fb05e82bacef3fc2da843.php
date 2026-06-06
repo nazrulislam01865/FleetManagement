@@ -20,11 +20,7 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'DASHBOARD']])]); ?>
-         <?php $__env->slot('actions', null, []); ?> 
-            <a class="btn light" href="<?php echo e(route('fleet.vehicles')); ?>">🚗 Vehicles</a>
-            <a class="btn primary" href="<?php echo e(route('fleet.trips')); ?>">＋ Add Trip</a>
-         <?php $__env->endSlot(); ?>
-     <?php echo $__env->renderComponent(); ?>
+<?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b)): ?>
 <?php $attributes = $__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b; ?>
@@ -39,11 +35,11 @@
         <div>
             <span class="dashboard-eyebrow">Fleet control center</span>
             <h1>Welcome back, <?php echo e(auth()->user()->name ?? ($account['name'] ?? 'User')); ?></h1>
-            <p>Monitor trips, vehicles, drivers, fuel, clients, vendors, employees, and attendance from one place. All numbers come from the FleetMan MySQL tables.</p>
+            <p>Monitor trips, vehicles, drivers, fuel, clients, vendors, employees, and attendance from one place.</p>
             <div class="hero-actions">
-                <a class="btn primary" href="<?php echo e(route('fleet.driver-attendance')); ?>">📝 Attendance</a>
-                <a class="btn secondary" href="<?php echo e(route('fleet.fuel-recharge')); ?>">⛽ Fuel Recharge</a>
-                <a class="btn light" href="<?php echo e(route('fleet.clients')); ?>">🏢 Clients</a>
+                <a class="btn primary" href="<?php echo e(route('fleet.driver-attendance')); ?>">📝 Add Log</a>
+                <a class="btn secondary" href="<?php echo e(route('fleet.fuel-recharge')); ?>">⛽ Recharge Fuel</a>
+                <a class="btn light" href="<?php echo e(route('fleet.clients')); ?>">🏢 Add Party</a>
             </div>
         </div>
         <div class="dashboard-hero-card">
@@ -70,17 +66,17 @@
         <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
     </div>
 
-    <div class="dashboard-grid">
+    <div class="dashboard-grid dashboard-grid-wide">
         <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Financial & Fuel Overview','description' => 'Calculated from trip, payroll, attendance, and latest fuel price records.','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Financial & Fuel Overview','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Financial & Fuel Overview','description' => 'Calculated from trip, payroll, attendance, and latest fuel price records.','class' => 'dashboard-panel']); ?>
+<?php $component->withAttributes(['title' => 'Financial & Fuel Overview','class' => 'dashboard-panel']); ?>
             <div class="finance-grid">
                 <div class="finance-box"><small>Total Trip Cost</small><b>৳ <?php echo e(number_format($finance['trip_cost'] ?? 0)); ?></b></div>
                 <div class="finance-box"><small>Driver + Employee Salary</small><b>৳ <?php echo e(number_format($finance['payroll'] ?? 0)); ?></b></div>
@@ -103,14 +99,14 @@
 
         <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Operational Alerts','description' => 'Fast reminders for operations users.','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Operational Alerts','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Operational Alerts','description' => 'Fast reminders for operations users.','class' => 'dashboard-panel']); ?>
+<?php $component->withAttributes(['title' => 'Operational Alerts','class' => 'dashboard-panel']); ?>
             <div class="warning-list">
                 <?php $__currentLoopData = $warnings; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $warning): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                     <div class="warning-row">
@@ -134,14 +130,14 @@
     <div class="dashboard-grid dashboard-grid-wide">
         <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Trips','description' => 'Latest trip records saved in the database.','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Trips','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Recent Trips','description' => 'Latest trip records saved in the database.','class' => 'dashboard-panel']); ?>
+<?php $component->withAttributes(['title' => 'Recent Trips','class' => 'dashboard-panel']); ?>
             <div class="compact-list">
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['trips'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $trip): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.trips')); ?>" class="compact-row">
@@ -166,14 +162,14 @@
 
         <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Vehicles','description' => 'Latest vehicle records saved in the database.','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Vehicles','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Recent Vehicles','description' => 'Latest vehicle records saved in the database.','class' => 'dashboard-panel']); ?>
+<?php $component->withAttributes(['title' => 'Recent Vehicles','class' => 'dashboard-panel']); ?>
             <div class="compact-list">
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['vehicles'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $vehicle): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.vehicles')); ?>" class="compact-row">
@@ -200,14 +196,14 @@
     <div class="dashboard-grid dashboard-grid-wide">
         <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Drivers','description' => 'Driver master records from MySQL.','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Drivers','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Recent Drivers','description' => 'Driver master records from MySQL.','class' => 'dashboard-panel']); ?>
+<?php $component->withAttributes(['title' => 'Recent Drivers','class' => 'dashboard-panel']); ?>
             <div class="compact-list">
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['drivers'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $driver): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.drivers')); ?>" class="compact-row">
@@ -232,14 +228,14 @@
 
         <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Clients','description' => 'Client records from MySQL.','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Parties','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Recent Clients','description' => 'Client records from MySQL.','class' => 'dashboard-panel']); ?>
+<?php $component->withAttributes(['title' => 'Recent Parties','class' => 'dashboard-panel']); ?>
             <div class="compact-list">
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['clients'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $client): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.clients')); ?>" class="compact-row">
