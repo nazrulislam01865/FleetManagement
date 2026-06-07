@@ -605,7 +605,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         const uploadManager = window.FleetmanTemporaryUploads;
 
         function uid() {
-            return 'VHL' + String(Date.now()).slice(-8);
+            return 'VHL' + new Date().toISOString().slice(2, 10).replaceAll('-', '') + Math.floor(1000 + Math.random() * 9000);
         }
 
         function updateSubCategory(selectedValue) {
@@ -621,6 +621,69 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
         function setUsage(usage) {
             $$('input[name="usage"]').forEach((radio) => { radio.checked = radio.value === usage; });
+        }
+
+        function vehicleField(element) {
+            return element?.closest('.field') || element;
+        }
+
+        function clearVehicleFieldError(element, customContainer = null) {
+            const field = customContainer || vehicleField(element);
+            if (!field) return;
+            field.classList.remove('field-invalid');
+            field.querySelectorAll(':scope > .field-error').forEach((error) => error.remove());
+            element?.removeAttribute?.('aria-invalid');
+        }
+
+        function clearVehicleValidation() {
+            const page = $('#vehicleAddPage');
+            if (!page) return;
+            $$('.field-invalid', page).forEach((field) => field.classList.remove('field-invalid'));
+            $$('.field-error', page).forEach((error) => error.remove());
+            $$('[aria-invalid="true"]', page).forEach((element) => element.removeAttribute('aria-invalid'));
+        }
+
+        function markVehicleInvalid(element, message, customContainer = null) {
+            const field = customContainer || vehicleField(element);
+            if (!field) return;
+            clearVehicleFieldError(element, field);
+            field.classList.add('field-invalid');
+            element?.setAttribute?.('aria-invalid', 'true');
+            const error = document.createElement('small');
+            error.className = 'field-error';
+            error.textContent = message;
+            field.appendChild(error);
+        }
+
+        function focusFirstVehicleError() {
+            const first = $('#vehicleAddPage .field-invalid');
+            if (!first) return;
+            first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => first.querySelector('input,select,textarea')?.focus?.({ preventScroll: true }), 250);
+        }
+
+        function recalculateRentalTotal() {
+            const rentalType = value('#rentalType');
+            const vehicleAmount = Math.max(0, Number(value('#vehicleRentalAmount') || 0));
+            const driverAmount = rentalType === 'With Driver' ? Math.max(0, Number(value('#driverPaymentAmount') || 0)) : 0;
+            setValue('#totalRentalAmount', (vehicleAmount + driverAmount).toFixed(2));
+        }
+
+        function toggleRentalFields() {
+            const withDriver = value('#rentalType') === 'With Driver';
+            const wrapper = $('#driverPaymentFields');
+            wrapper?.classList.toggle('hidden', !withDriver);
+            ['#driverPaymentAmount', '#driverPaymentCycle'].forEach((selector) => {
+                const field = $(selector);
+                if (!field) return;
+                field.required = withDriver;
+                field.setAttribute('aria-required', withDriver ? 'true' : 'false');
+                if (!withDriver) {
+                    field.value = '';
+                    clearVehicleFieldError(field);
+                }
+            });
+            recalculateRentalTotal();
         }
 
         function normalizeFileData(row = {}) {
@@ -687,7 +750,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
             if (!type) {
                 if (force) input.value = '';
-                if (hint) hint.textContent = 'Select fuel type to load latest active rate.';
+                if (hint) hint.textContent = '';
                 return;
             }
 
@@ -714,25 +777,30 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const fuelOptions = [''].concat(fuelTypes);
             div.innerHTML = `
                 <div class="field">
-                    <label>Fuel Type</label>
-                    <select class="fuelType">${fuelOptions.map((type) => `<option value="${escapeHtml(type)}" ${row.type === type ? 'selected' : ''}>${escapeHtml(type || 'Select fuel type')}</option>`).join('')}</select>
+                    <label>Fuel Type <span class="req">*</span></label>
+                    <select class="fuelType" required>${fuelOptions.map((type) => `<option value="${escapeHtml(type)}" ${row.type === type ? 'selected' : ''}>${escapeHtml(type || 'Select fuel type')}</option>`).join('')}</select>
                 </div>
                 <div class="field">
-                    <label>Fuel Priority</label>
-                    <select class="fuelPriority">
+                    <label>Fuel Priority <span class="req">*</span></label>
+                    <select class="fuelPriority" required>
                         ${['Primary', 'Secondary', 'Tertiary'].map((priority) => `<option value="${priority}" ${row.priority === priority ? 'selected' : ''}>${priority}</option>`).join('')}
                     </select>
                 </div>
                 <div class="field">
-                    <label>Default Rate</label>
+                    <label>Default Rate <span class="req">*</span></label>
                     <input class="fuelRate" type="number" placeholder="Auto from latest active fuel price" value="${escapeHtml(row.rate || '')}" readonly>
-                    <small class="upload-meta fuelRateHint">Select fuel type to load latest active rate.</small>
+                    <small class="upload-meta fuelRateHint"></small>
                 </div>
                 <button type="button" class="mini-btn remove-row">Remove</button>`;
             wrapper.appendChild(div);
             if (wrapper.children.length === 1 && !row.priority) div.querySelector('.fuelPriority').value = 'Primary';
             if (row.type && !row.rate) updateFuelRate(div, true);
             if (row.type && row.rate) updateFuelRate(div, false);
+            refreshVehicleFuelOptions();
+        }
+
+        function refreshVehicleFuelOptions() {
+            documentSelects.refresh('#vehicleFuelRows', '.fuelType', fuelTypes, 'Select fuel type');
         }
 
         function refreshVehicleDocumentOptions() {
@@ -748,8 +816,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const fileData = normalizeFileData(row.file || row);
             div.innerHTML = `
                 <div class="field">
-                    <label>Document Name</label>
-                    <select class="docName">
+                    <label>Document Name <span class="req">*</span></label>
+                    <select class="docName" required>
                         ${defaultDocOptions.map((name) => `<option value="${escapeHtml(name)}" ${row.name === name ? 'selected' : ''}>${escapeHtml(name || 'Select document')}</option>`).join('')}
                     </select>
                 </div>
@@ -762,7 +830,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     <select class="docReminder">${docReminders.map((reminder) => `<option value="${escapeHtml(reminder)}" ${row.reminder === reminder ? 'selected' : ''}>${escapeHtml(reminder)}</option>`).join('')}</select>
                 </div>
                 <div class="field">
-                    <label>Upload Picture / File</label>
+                    <label>Upload Picture / File <span class="req">*</span></label>
                     <input class="docFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf">
                     <input class="docFileData" type="hidden" value="${escapeHtml(JSON.stringify(fileData || {}))}">
                     <div class="temp-upload-progress hidden docUploadProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
@@ -860,6 +928,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function resetForm(withId = true) {
+            clearVehicleValidation();
             $$('#vehicleAddPage input:not([type=radio]):not([type=file]):not([type=hidden]), #vehicleAddPage textarea').forEach((input) => { input.value = ''; });
             $$('#vehicleAddPage input[type=file]').forEach((input) => { input.value = ''; });
             $$('#vehicleAddPage input[type=hidden]').forEach((input) => { input.value = ''; });
@@ -868,10 +937,11 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             $('#vehicleFuelRows').innerHTML = '';
             $('#vehicleDocRows').innerHTML = '';
             if (withId) setValue('#vehicleId', uid());
-            setValue('#rent', 0);
+            setValue('#totalRentalAmount', '0.00');
             updateSubCategory('');
             addFuelRow({ priority: 'Primary' });
-            docTemplates.forEach((doc) => addDocRow({ name: doc, reminder: docReminders[0] || '' }));
+            addDocRow({ reminder: docReminders[0] || '' });
+            toggleRentalFields();
             renderVehicleImageInfo({});
         }
 
@@ -908,8 +978,14 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     category: value('#category'),
                     subCategory: value('#subCategory'),
                     usage: getUsage(),
+                    rentalType: value('#rentalType'),
                     driver: value('#driver'),
-                    rent: value('#rent'),
+                    driverPaymentAmount: value('#driverPaymentAmount'),
+                    driverPaymentCycle: value('#driverPaymentCycle'),
+                    vehicleRentalAmount: value('#vehicleRentalAmount'),
+                    vehiclePaymentCycle: value('#vehiclePaymentCycle'),
+                    totalRentalAmount: value('#totalRentalAmount'),
+                    rent: value('#totalRentalAmount'),
                     notes: value('#notes'),
                     image: parseFileDataInput('#vehicleImageData'),
                     fuels: $$('.fuel-row').map((row) => ({
@@ -919,6 +995,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     })).filter((fuel) => fuel.type || fuel.rate),
                     docs,
                     status: 'Active',
+                    vehicleValidationVersion: 1,
                 },
                 imageFile: selectedVehicleImageFile(),
                 documentFiles,
@@ -926,29 +1003,118 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function validateVehicle(vehicle) {
-            if (!vehicle.name || !vehicle.regNo || !vehicle.vendor || !vehicle.model || !vehicle.engineNo || !vehicle.category || !vehicle.usage) {
-                toast('Please fill all required vehicle information.');
-                return false;
+            clearVehicleValidation();
+            let valid = true;
+            const invalidate = (element, message, container = null) => {
+                markVehicleInvalid(element, message, container);
+                valid = false;
+            };
+
+            [
+                ['#vehicleId', 'Vehicle ID is required.'],
+                ['#vehicleName', 'Vehicle Name is required.'],
+                ['#regNo', 'Registration Number is required.'],
+                ['#vendor', 'Select a car-related vendor.'],
+                ['#model', 'Model is required.'],
+                ['#engineNo', 'Engine Number is required.'],
+                ['#category', 'Vehicle Category is required.'],
+                ['#rentalType', 'Rental Type is required.'],
+                ['#driver', 'Driver is required.'],
+                ['#vehicleRentalAmount', 'Vehicle Rental Amount is required.'],
+                ['#vehiclePaymentCycle', 'Vehicle Payment Cycle is required.'],
+            ].forEach(([selector, message]) => {
+                const element = $(selector);
+                if (!String(element?.value || '').trim()) invalidate(element, message);
+            });
+
+            if (!vehicle.usage) {
+                invalidate(null, 'Usage Type is required.', $('#vehicleAddPage .choice-grid'));
             }
+
+            const regInput = $('#regNo');
+            if (regInput?.value.trim() && !/^[A-Za-z]{3}-[A-Za-z]{2}-\d{2}-\d{4}$/.test(regInput.value.trim())) {
+                invalidate(regInput, 'Use the format ABC-AB-12-3456.');
+            }
+
+            const engineInput = $('#engineNo');
+            if (engineInput?.value.trim() && !/^[A-Za-z0-9]{17}$/.test(engineInput.value.trim())) {
+                invalidate(engineInput, 'Engine Number must contain exactly 17 letters or digits.');
+            }
+
+            if (vehicle.rentalType === 'With Driver') {
+                const amount = $('#driverPaymentAmount');
+                const cycle = $('#driverPaymentCycle');
+                if (!String(amount?.value || '').trim()) invalidate(amount, 'Driver Payment Amount is required.');
+                else if (Number(amount.value) < 0) invalidate(amount, 'Driver Payment Amount cannot be negative.');
+                if (!cycle?.value) invalidate(cycle, 'Driver Payment Cycle is required.');
+            }
+
+            const vehicleAmount = $('#vehicleRentalAmount');
+            if (vehicleAmount?.value !== '' && Number(vehicleAmount.value) < 0) {
+                invalidate(vehicleAmount, 'Vehicle Rental Amount cannot be negative.');
+            }
+
             const validFuels = (vehicle.fuels || []).filter((fuel) => fuel.type);
             if (!validFuels.length) {
-                toast('Please add at least one fuel type.');
-                return false;
+                invalidate(null, 'Add at least one fuel type.', $('#vehicleFuelRows'));
             }
             if (!validFuels.some((fuel) => fuel.priority === 'Primary')) {
-                toast('Please mark one fuel as Primary.');
-                return false;
+                invalidate(null, 'Mark one fuel as Primary.', $('#vehicleFuelRows'));
             }
-            if (validFuels.some((fuel) => !fuel.rate)) {
-                toast('Default rate is missing. Add an active fuel price first, then select the fuel type.');
-                return false;
+            const selectedFuelNames = new Map();
+            $$('#vehicleFuelRows .fuel-row').forEach((row) => {
+                const type = $('.fuelType', row);
+                const priority = $('.fuelPriority', row);
+                const rate = $('.fuelRate', row);
+                const normalized = String(type?.value || '').trim().toLowerCase();
+                if (!normalized) invalidate(type, 'Fuel Type is required.');
+                else if (selectedFuelNames.has(normalized)) {
+                    invalidate(type, 'This fuel type has already been selected.');
+                    invalidate(selectedFuelNames.get(normalized), 'This fuel type has already been selected.');
+                } else selectedFuelNames.set(normalized, type);
+                if (!priority?.value) invalidate(priority, 'Fuel Priority is required.');
+                if (!rate?.value || Number(rate.value) <= 0) invalidate(rate, 'Add an active fuel price, then select this fuel type.');
+            });
+
+            const selectedDocs = new Map();
+            $$('#vehicleDocRows .doc-row').forEach((row) => {
+                const name = $('.docName', row);
+                const expiry = $('.docExpiry', row);
+                const fileInput = $('.docFile', row);
+                const fileData = parseFileDataInput('.docFileData', row);
+                const pending = selectedDocFile(row);
+                const hasAny = Boolean(name?.value || expiry?.value || pending || fileData.tempToken || fileData.filePath || fileData.fileUrl || fileData.previewUrl);
+                if (!hasAny) return;
+                const normalized = String(name?.value || '').trim().toLowerCase();
+                if (!normalized) invalidate(name, 'Document Name is required.');
+                else if (selectedDocs.has(normalized)) {
+                    invalidate(name, 'This document has already been selected.');
+                    invalidate(selectedDocs.get(normalized), 'This document has already been selected.');
+                } else selectedDocs.set(normalized, name);
+                if (!pending && !fileData.tempToken && !fileData.filePath && !fileData.fileUrl && !fileData.previewUrl) {
+                    invalidate(fileInput, 'Upload a file for this document.');
+                }
+                const size = Number(pending?.size || fileData.sizeBytes || 0);
+                if (size > 4 * 1024 * 1024) invalidate(fileInput, 'The document must be 4 MB or smaller.');
+            });
+
+            const imageInput = $('#image');
+            const imageData = parseFileDataInput('#vehicleImageData');
+            const imageFile = selectedVehicleImageFile();
+            if (Number(imageFile?.size || imageData.sizeBytes || 0) > 100 * 1024) {
+                invalidate(imageInput, 'Vehicle image must be 100 KB or smaller.');
             }
+
             const existingRegistration = vehicles.find((item) => String(item.regNo || '').toLowerCase() === vehicle.regNo.toLowerCase() && item.id !== vehicle.id);
             if (existingRegistration) {
-                toast('Registration number must be unique. This registration already exists.');
-                return false;
+                invalidate(regInput, 'Registration Number must be unique.');
             }
-            return true;
+
+            if (!valid) {
+                toast('Please correct the highlighted vehicle fields.');
+                focusFirstVehicleError();
+            }
+            return valid;
         }
 
         function upsertVehicle(vehicle) {
@@ -1020,8 +1186,14 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#odo', sample.odo);
             setValue('#category', sample.category);
             updateSubCategory(sample.subCategory);
+            setValue('#rentalType', sample.rentalType || (sample.driverPaymentAmount ? 'With Driver' : 'Without Driver'));
             setValue('#driver', sample.driver);
-            setValue('#rent', sample.rent);
+            setValue('#driverPaymentAmount', sample.driverPaymentAmount ?? '');
+            setValue('#driverPaymentCycle', sample.driverPaymentCycle || 'Monthly');
+            setValue('#vehicleRentalAmount', sample.vehicleRentalAmount ?? sample.rent ?? 0);
+            setValue('#vehiclePaymentCycle', sample.vehiclePaymentCycle || 'Monthly');
+            toggleRentalFields();
+            recalculateRentalTotal();
             setValue('#notes', sample.notes || '');
             if (sample.image) {
                 setValue('#vehicleImageData', JSON.stringify(sample.image));
@@ -1050,8 +1222,14 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#odo', vehicle.odo);
             setValue('#category', vehicle.category);
             updateSubCategory(vehicle.subCategory);
+            setValue('#rentalType', vehicle.rentalType || (vehicle.driverPaymentAmount ? 'With Driver' : 'Without Driver'));
             setValue('#driver', vehicle.driver);
-            setValue('#rent', vehicle.rent);
+            setValue('#driverPaymentAmount', vehicle.driverPaymentAmount ?? '');
+            setValue('#driverPaymentCycle', vehicle.driverPaymentCycle || 'Monthly');
+            setValue('#vehicleRentalAmount', vehicle.vehicleRentalAmount ?? vehicle.rent ?? 0);
+            setValue('#vehiclePaymentCycle', vehicle.vehiclePaymentCycle || 'Monthly');
+            toggleRentalFields();
+            recalculateRentalTotal();
             setValue('#notes', vehicle.notes || '');
             if (vehicle.image) {
                 setValue('#vehicleImageData', JSON.stringify(vehicle.image));
@@ -1129,7 +1307,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     <td>${(vehicle.fuels || []).map((item) => `<span class="badge soft">${escapeHtml(item.priority)}: ${escapeHtml(item.type)} · ${escapeHtml(item.rate || '0')}</span>`).join('')}</td>
                     <td>${escapeHtml(vehicle.driver || 'Not assigned')}</td>
                     <td>${docs.length} document(s)<br><small>${docsWithFiles} uploaded file(s)${docsWithFiles ? ` · ${documentLinks(vehicle)}` : ''}</small></td>
-                    <td>${Number(vehicle.rent || 0).toLocaleString()} BDT</td>
+                    <td>${Number(vehicle.totalRentalAmount ?? vehicle.rent ?? 0).toLocaleString()} BDT<br><small>${escapeHtml(vehicle.rentalType || '-')}</small></td>
                     <td><span class="badge ${vehicle.status === 'Active' ? 'ok' : 'warn'}">${escapeHtml(vehicle.status || '-')}</span></td>
                     <td><button type="button" class="mini-btn view-vehicle" data-id="${escapeHtml(vehicle.id)}">View</button><button type="button" class="mini-btn edit-vehicle" data-id="${escapeHtml(vehicle.id)}">Edit</button><button type="button" class="mini-btn danger delete-vehicle" data-id="${escapeHtml(vehicle.id)}">Delete</button></td>
                 </tr>`;
@@ -1143,14 +1321,20 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
         function exportCsv() {
             downloadCsv('fleetman-vehicle-list.csv', [
-                ['Vehicle ID', 'Vehicle Name', 'Registration', 'Category', 'Fuels', 'Driver', 'Documents', 'Image', 'Status'],
+                ['Vehicle ID', 'Vehicle Name', 'Registration', 'Category', 'Fuels', 'Rental Type', 'Driver', 'Driver Payment', 'Driver Cycle', 'Vehicle Rental', 'Vehicle Cycle', 'Total Rental', 'Documents', 'Image', 'Status'],
                 ...vehicles.map((vehicle) => [
                     vehicle.id,
                     vehicle.name,
                     vehicle.regNo,
                     vehicle.category,
                     (vehicle.fuels || []).map((fuel) => fuel.priority + ' ' + fuel.type + ' @ ' + fuel.rate).join(' | '),
+                    vehicle.rentalType,
                     vehicle.driver,
+                    vehicle.driverPaymentAmount,
+                    vehicle.driverPaymentCycle,
+                    vehicle.vehicleRentalAmount,
+                    vehicle.vehiclePaymentCycle,
+                    vehicle.totalRentalAmount ?? vehicle.rent,
                     (vehicle.docs || []).map((doc) => [doc.name, doc.expiry, doc.file?.originalName || doc.file?.fileName || doc.file?.filePath || ''].filter(Boolean).join(' ')).join(' | '),
                     vehicle.image?.filePath || '',
                     vehicle.status,
@@ -1159,6 +1343,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         $('#category')?.addEventListener('change', () => updateSubCategory(''));
+        $('#rentalType')?.addEventListener('change', toggleRentalFields);
+        ['#driverPaymentAmount', '#vehicleRentalAmount'].forEach((selector) => $(selector)?.addEventListener('input', recalculateRentalTotal));
         $('#addFuelRowBtn')?.addEventListener('click', () => addFuelRow());
         $('#addDocRowBtn')?.addEventListener('click', () => addDocRow());
         $('#clearVehicleBtn')?.addEventListener('click', () => resetForm());
@@ -1170,7 +1356,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
         document.addEventListener('change', (event) => {
             const fuelSelect = event.target.closest('.fuelType');
-            if (fuelSelect) updateFuelRate(fuelSelect.closest('.fuel-row'), true);
+            if (fuelSelect) {
+                updateFuelRate(fuelSelect.closest('.fuel-row'), true);
+                refreshVehicleFuelOptions();
+            }
 
             const docName = event.target.closest('#vehicleDocRows .docName');
             if (docName) refreshVehicleDocumentOptions();
@@ -1212,6 +1401,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 const documentRow = row?.classList.contains('doc-row');
                 row?.remove();
                 if (documentRow) refreshVehicleDocumentOptions();
+                if (row?.classList.contains('fuel-row')) refreshVehicleFuelOptions();
             }
             const view = event.target.closest('.view-vehicle');
             if (view) viewVehicle(view.dataset.id);
@@ -1219,6 +1409,13 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (edit) editVehicle(edit.dataset.id);
             const del = event.target.closest('.delete-vehicle');
             if (del) deleteVehicle(del.dataset.id);
+        });
+
+        $('#vehicleAddPage')?.addEventListener('input', (event) => {
+            if (event.target.matches('input,select,textarea')) clearVehicleFieldError(event.target);
+        });
+        $('#vehicleAddPage')?.addEventListener('change', (event) => {
+            if (event.target.matches('input,select,textarea')) clearVehicleFieldError(event.target);
         });
 
         populateBase();
@@ -3061,6 +3258,53 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         const partyDocumentTemplates = options.party_document_templates || [];
         const documentSelects = window.FleetmanUniqueDocumentSelects;
         const uploadManager = window.FleetmanTemporaryUploads;
+        const partyPhonePattern = /^\d{11}$/;
+        const partyEmailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+        const partyDigitsPattern = /^\d+$/;
+
+        function partyField(element) {
+            return element?.closest('.field') || element;
+        }
+
+        function clearPartyFieldError(element, customContainer = null) {
+            const field = customContainer || partyField(element);
+            if (!field) return;
+            field.classList.remove('field-invalid');
+            field.querySelectorAll(':scope > .field-error').forEach((error) => error.remove());
+            element?.removeAttribute?.('aria-invalid');
+        }
+
+        function clearPartyValidation() {
+            const page = $('#vendorAddPage');
+            if (!page) return;
+            $$('.field-invalid', page).forEach((field) => field.classList.remove('field-invalid'));
+            $$('.field-error', page).forEach((error) => error.remove());
+            $$('[aria-invalid="true"]', page).forEach((element) => element.removeAttribute('aria-invalid'));
+        }
+
+        function markPartyInvalid(element, message, customContainer = null) {
+            if (!element && !customContainer) return;
+            const field = customContainer || partyField(element);
+            if (!field) return;
+            clearPartyFieldError(element, field);
+            field.classList.add('field-invalid');
+            element?.setAttribute?.('aria-invalid', 'true');
+            const error = document.createElement('small');
+            error.className = 'field-error';
+            error.textContent = message;
+            field.appendChild(error);
+        }
+
+        function focusFirstPartyError() {
+            const first = $('#vendorAddPage .field-invalid');
+            if (!first) return;
+            first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => first.querySelector('input,select,textarea')?.focus?.({ preventScroll: true }), 250);
+        }
+
+        function hasPartyUploadedFile(file = {}) {
+            return Boolean(file.tempToken || file.filePath || file.fileUrl || file.previewUrl);
+        }
 
         function genId() {
             return 'VND' + new Date().toISOString().slice(2, 10).replaceAll('-', '') + Math.floor(100 + Math.random() * 900);
@@ -3102,8 +3346,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     toast('Only JPG, JPEG, PNG, WEBP or PDF documents are allowed.');
                     return false;
                 }
-                if (file.size > 5 * 1024 * 1024) {
-                    toast('Each document file must be 5 MB or smaller.');
+                if (file.size > 4 * 1024 * 1024) {
+                    toast('Each document file must be 4 MB or smaller.');
                     return false;
                 }
             }
@@ -3164,10 +3408,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             div.className = 'repeat-row contact-row';
             const meta = row.email || row.whatsapp || '';
             div.innerHTML = `
-                <div class="field"><label>Name <span class="req">*</span></label><input class="partyContactName" placeholder="Example: Md. Karim" value="${escapeHtml(row.name || '')}"></div>
+                <div class="field"><label>Name <span class="req">*</span></label><input class="partyContactName" required aria-required="true" placeholder="Example: Md. Karim" value="${escapeHtml(row.name || '')}"></div>
                 <div class="field"><label>Role</label><input class="partyContactRole" placeholder="Example: Manager" value="${escapeHtml(row.role || '')}"></div>
-                <div class="field"><label>Phone Number <span class="req">*</span></label><input class="partyContactPhone" placeholder="01XXXXXXXXX" value="${escapeHtml(row.phone || '')}"></div>
-                <div class="field"><label>Email / WhatsApp</label><input class="partyContactMeta" placeholder="Email or WhatsApp" value="${escapeHtml(meta)}"></div>
+                <div class="field"><label>Phone Number <span class="req">*</span></label><input class="partyContactPhone" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" required aria-required="true" placeholder="01XXXXXXXXX" value="${escapeHtml(row.phone || '')}"></div>
+                <div class="field"><label>Email / WhatsApp</label><input class="partyContactMeta" placeholder="Valid email or 11-digit WhatsApp number" value="${escapeHtml(meta)}"></div>
                 <button type="button" class="mini-btn danger remove-row">Remove</button>`;
             wrapper.appendChild(div);
         }
@@ -3224,10 +3468,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const docOptions = [''].concat(partyDocumentTemplates);
             const fileData = normalizeDocumentFile(row);
             div.innerHTML = `
-                <div class="field"><label>Document Name</label><select class="partyDocName">${docOptions.map((doc) => `<option value="${escapeHtml(doc)}" ${row.name === doc ? 'selected' : ''}>${escapeHtml(doc || 'Select document')}</option>`).join('')}</select></div>
+                <div class="field"><label>Document Name <span class="req">*</span></label><select class="partyDocName" required aria-required="true">${docOptions.map((doc) => `<option value="${escapeHtml(doc)}" ${row.name === doc ? 'selected' : ''}>${escapeHtml(doc || 'Select vendor document')}</option>`).join('')}</select></div>
                 <div class="field"><label>Reference No.</label><input class="partyDocNumber" placeholder="Optional" value="${escapeHtml(row.number || '')}"></div>
                 <div class="field"><label>Expiry Date</label><input class="partyDocExpiry" type="date" value="${escapeHtml(row.expiry || '')}"></div>
-                <div class="field"><label>Upload Picture / File</label><input class="partyDocFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf"><input class="partyDocFileData" type="hidden" value="${escapeHtml(JSON.stringify(fileData || {}))}"><div class="temp-upload-progress hidden partyDocUploadProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta partyDocUploadInfo"></div></div>
+                <div class="field"><label>Upload Picture / File <span class="req">*</span></label><input class="partyDocFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"><input class="partyDocFileData" type="hidden" value="${escapeHtml(JSON.stringify(fileData || {}))}"><div class="temp-upload-progress hidden partyDocUploadProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta partyDocUploadInfo"></div><div class="hint">Allowed: JPG, JPEG, PNG, WEBP or PDF. Maximum size: 4 MB.</div></div>
                 <button type="button" class="mini-btn danger remove-row">Remove</button>`;
             wrapper.appendChild(div);
             renderDocumentFileInfo(div, fileData);
@@ -3235,6 +3479,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function resetForm() {
+            clearPartyValidation();
             $$('#vendorAddPage input, #vendorAddPage select, #vendorAddPage textarea').forEach((element) => {
                 if (element.type === 'checkbox' || element.type === 'radio') element.checked = false;
                 else element.value = '';
@@ -3288,7 +3533,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     partyName: value('#partyName').trim(),
                     partyType: value('#partyType'),
                     vendorContractorType: value('#vendorContractorType'),
-                    vendorTypeVersion: 1,
+                    vendorValidationVersion: 2,
                     fuelStationCapabilityVersion: 1,
                     fuelTypes: isFuelStationParty() ? selectedPartyFuelTypes() : [],
                     status: statusOverride || value('#partyStatus'),
@@ -3308,19 +3553,108 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function validate(party) {
-            if (!party.partyName || !party.partyType || !party.vendorContractorType || !party.phone || !party.address || !party.status) {
-                toast('Please fill required vendor / party information.');
-                return false;
+            clearPartyValidation();
+            let valid = true;
+            const invalidate = (element, message, container = null) => {
+                markPartyInvalid(element, message, container);
+                valid = false;
+            };
+
+            [
+                ['#partyId', 'Vendor / Party ID is required.'],
+                ['#partyName', 'Party Name is required.'],
+                ['#partyType', 'Party Type is required.'],
+                ['#vendorContractorType', 'Vendor / Contractor Type is required.'],
+                ['#partyStatus', 'Status is required.'],
+                ['#partyPhone', 'Phone Number is required.'],
+                ['#partyAddress', 'Address is required.'],
+            ].forEach(([selector, message]) => {
+                const element = $(selector);
+                if (!String(element?.value || '').trim()) invalidate(element, message);
+            });
+
+            const phone = $('#partyPhone');
+            if (phone?.value && !partyPhonePattern.test(phone.value.trim())) {
+                invalidate(phone, 'Phone Number must be exactly 11 digits.');
             }
+
+            const email = $('#partyEmail');
+            if (email?.value.trim() && !partyEmailPattern.test(email.value.trim())) {
+                invalidate(email, 'Enter a valid email address.');
+            }
+
+            const whatsapp = $('#partyWhatsapp');
+            if (whatsapp?.value.trim() && !partyPhonePattern.test(whatsapp.value.trim())) {
+                invalidate(whatsapp, 'WhatsApp Number must be exactly 11 digits.');
+            }
+
+            const tradeLicense = $('#tradeLicense');
+            if (tradeLicense?.value.trim() && !partyDigitsPattern.test(tradeLicense.value.trim())) {
+                invalidate(tradeLicense, 'Trade License No. must contain digits only.');
+            }
+
             if (isFuelStationParty(party.partyType, party.partyName) && !(party.fuelTypes || []).length) {
-                toast('Select at least one fuel type sold by this fuel station.');
-                return false;
+                invalidate(null, 'Select at least one fuel type sold by this fuel station.', $('#partyFuelTypesField'));
             }
-            if (!party.contacts.length || !party.contacts[0].name || !party.contacts[0].phone) {
-                toast('Please add at least one contact person with name and phone.');
-                return false;
+
+            const contactRows = $$('#partyContacts .contact-row');
+            if (!contactRows.length) {
+                invalidate(null, 'Add at least one contact person.', $('#partyContacts'));
             }
-            return true;
+            contactRows.forEach((row) => {
+                const name = $('.partyContactName', row);
+                const phoneInput = $('.partyContactPhone', row);
+                const meta = $('.partyContactMeta', row);
+                if (!name?.value.trim()) invalidate(name, 'Contact Person Name is required.');
+                if (!partyPhonePattern.test(phoneInput?.value.trim() || '')) {
+                    invalidate(phoneInput, 'Phone Number must be exactly 11 digits.');
+                }
+                const metaValue = meta?.value.trim() || '';
+                if (metaValue) {
+                    if (metaValue.includes('@') && !partyEmailPattern.test(metaValue)) {
+                        invalidate(meta, 'Enter a valid contact-person email address.');
+                    } else if (!metaValue.includes('@') && !partyPhonePattern.test(metaValue)) {
+                        invalidate(meta, 'WhatsApp Number must be exactly 11 digits.');
+                    }
+                }
+            });
+
+            const documentRows = $$('#partyDocuments .document-row');
+            if (!documentRows.length) {
+                invalidate(null, 'Add at least one vendor document.', $('#partyDocuments'));
+            }
+            const selectedNames = new Map();
+            documentRows.forEach((row) => {
+                const name = $('.partyDocName', row);
+                const fileInput = $('.partyDocFile', row);
+                const file = fileDataFromRow(row);
+                const pending = selectedFileFromRow(row);
+                const normalizedName = String(name?.value || '').trim().toLowerCase();
+
+                if (!normalizedName) {
+                    invalidate(name, 'Document Name is required.');
+                } else if (selectedNames.has(normalizedName)) {
+                    invalidate(name, 'This document name has already been selected.');
+                    invalidate(selectedNames.get(normalizedName), 'This document name has already been selected.');
+                } else {
+                    selectedNames.set(normalizedName, name);
+                }
+
+                if (!hasPartyUploadedFile(file) && !pending) {
+                    invalidate(fileInput, 'Upload Picture / File is required.');
+                }
+
+                const fileSize = Number(pending?.size || file?.sizeBytes || 0);
+                if (fileSize > 4 * 1024 * 1024) {
+                    invalidate(fileInput, 'The document must be 4 MB or smaller.');
+                }
+            });
+
+            if (!valid) {
+                toast('Please correct the highlighted vendor fields.');
+                focusFirstPartyError();
+            }
+            return valid;
         }
 
         function upsert(party) {
@@ -3339,17 +3673,12 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
         async function saveParty(statusOverride) {
             await uploadManager.waitForInputs($$('#partyDocuments .partyDocFile'));
-            if (documentSelects.hasDuplicates('#partyDocuments', '.partyDocName')) {
-                toast('Each vendor / party document type can be selected only once.');
-                return;
-            }
             const form = collect(statusOverride);
             const party = form.party;
 
             if (statusOverride === 'Draft') {
                 if (!party.partyName) party.partyName = 'Draft Vendor / Party';
                 if (!party.partyType) party.partyType = 'Other';
-                if (!party.vendorContractorType) party.vendorContractorType = 'Non-Car Related';
             } else if (!validate(party)) {
                 return;
             }
@@ -3465,7 +3794,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const cls = party.status === 'Active' ? 'ok' : party.status === 'Blacklisted' ? 'danger' : party.status === 'Draft' ? 'soft' : 'warn';
             return `<tr>
                 <td><div class="party-cell"><div class="party-icon">🤝</div><div><b>${escapeHtml(party.partyName)}</b><br><small>${escapeHtml(party.partyId)}</small></div></div></td>
-                <td><span class="badge soft">${escapeHtml(party.partyType || '-')}</span><br><small>${escapeHtml(party.vendorContractorType || 'Not classified')}</small>${(party.fuelTypes || []).length ? `<br><small>${escapeHtml((party.fuelTypes || []).join(', '))}</small>` : ''}</td>
+                <td><span class="badge soft">${escapeHtml(party.partyType || '-')}</span><br><small>${escapeHtml(party.vendorContractorType || '-')}</small>${(party.fuelTypes || []).length ? `<br><small>${escapeHtml((party.fuelTypes || []).join(', '))}</small>` : ''}</td>
                 <td>${escapeHtml(party.phone || '-')}<br><small>${escapeHtml(party.email || '')}</small></td>
                 <td><b>${escapeHtml(main.name || '-')}</b><br><small>${escapeHtml(main.phone || '')}${(party.contacts || []).length > 1 ? ` · +${(party.contacts || []).length - 1} more` : ''}</small></td>
                 <td>${escapeHtml(party.paymentTerms || '-')}</td>
@@ -3525,7 +3854,21 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         ['#partySearch', '#partyFilterType', '#partyFilterStatus', '#partyFilterTerms'].forEach((selector) => $(selector)?.addEventListener('input', renderList));
         $('#partyType')?.addEventListener('change', toggleFuelStationFields);
         $('#partyName')?.addEventListener('input', toggleFuelStationFields);
+        document.addEventListener('input', (event) => {
+            const digitInput = event.target.closest('#partyPhone, #partyWhatsapp, #tradeLicense, #partyContacts .partyContactPhone');
+            if (digitInput) {
+                const maxLength = digitInput.matches('#partyPhone, #partyWhatsapp, #partyContacts .partyContactPhone') ? 11 : null;
+                const digits = String(digitInput.value || '').replace(/\D/g, '');
+                digitInput.value = maxLength ? digits.slice(0, maxLength) : digits;
+            }
+            if (event.target.closest('#vendorAddPage input, #vendorAddPage select, #vendorAddPage textarea')) {
+                clearPartyFieldError(event.target);
+            }
+        });
         document.addEventListener('change', (event) => {
+            if (event.target.closest('#vendorAddPage input, #vendorAddPage select, #vendorAddPage textarea')) {
+                clearPartyFieldError(event.target);
+            }
             const documentName = event.target.closest('#partyDocuments .partyDocName');
             if (documentName) refreshPartyDocumentOptions();
 
@@ -3538,7 +3881,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     info: $('.partyDocUploadInfo', row),
                     progress: $('.partyDocUploadProgress', row),
                     extensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-                    maxBytes: 5 * 1024 * 1024,
+                    maxBytes: 4 * 1024 * 1024,
                     showPreview: true,
                 });
             }
@@ -3571,7 +3914,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
     function initTrips() {
         let trips = Array.isArray(records.trips) ? records.trips : (samples.trips || []);
         const purposeOptions = options.trip_purposes || [];
-        const paymentMethods = ['Cash', 'Bank Transfer', 'Card', 'bKash', 'Nagad', 'Rocket', 'Cheque', 'Other'];
+        const paymentMethods = Array.isArray(options.payment_types)
+            ? options.payment_types.map((method) => String(method || '').trim()).filter(Boolean)
+            : [];
         const vehicles = (tripMasters.vehicles || []).map((item) => ({
             id: String(item.id || ''),
             name: String(item.name || ''),
@@ -3585,6 +3930,13 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             name: String(item.name || ''),
             label: String(item.label || [item.id, item.name].filter(Boolean).join(' - ')),
             phone: String(item.phone || item.contact || ''),
+        })).filter((item) => item.label || item.id || item.name);
+        const clients = (tripMasters.clients || []).map((item) => ({
+            id: String(item.id || ''),
+            name: String(item.name || ''),
+            label: String(item.label || [item.id, item.name].filter(Boolean).join(' - ')),
+            phone: String(item.phone || ''),
+            email: String(item.email || ''),
         })).filter((item) => item.label || item.id || item.name);
 
         function genId() {
@@ -3608,6 +3960,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             return item?.label || [item?.id, item?.name].filter(Boolean).join(' - ');
         }
 
+        function clientValue(item) {
+            return item?.label || [item?.id, item?.name].filter(Boolean).join(' - ');
+        }
+
         function findVehicle(input) {
             const needle = String(input || '').trim().toLowerCase();
             if (!needle) return null;
@@ -3622,6 +3978,33 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             return drivers.find((item) => [driverValue(item), item.id, item.name, item.phone]
                 .filter(Boolean)
                 .some((candidate) => String(candidate).trim().toLowerCase() === needle)) || null;
+        }
+
+        function findClient(input) {
+            const needle = String(input || '').trim().toLowerCase();
+            if (!needle) return null;
+            return clients.find((item) => [clientValue(item), item.id, item.name, item.phone, item.email]
+                .filter(Boolean)
+                .some((candidate) => String(candidate).trim().toLowerCase() === needle)) || null;
+        }
+
+        function isClientVisit(purpose = value('#tripPurpose')) {
+            return String(purpose || '').trim().toLowerCase() === 'client visit';
+        }
+
+        function toggleClientVisitField(purpose = value('#tripPurpose')) {
+            const field = $('#tripClientVisitField');
+            const input = $('#tripClient');
+            const show = isClientVisit(purpose);
+            field?.classList.toggle('hidden', !show);
+            if (input) {
+                input.required = show;
+                input.setAttribute('aria-required', show ? 'true' : 'false');
+                if (!show) {
+                    input.value = '';
+                    clearFieldError(input);
+                }
+            }
         }
 
         function legacyTotal(trip) {
@@ -3664,6 +4047,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         function fillSuggestions() {
             const vehicleList = $('#tripVehicleList');
             const driverList = $('#tripDriverList');
+            const clientList = $('#tripClientList');
             if (vehicleList) {
                 vehicleList.innerHTML = vehicles.map((item) => {
                     const detail = [item.regNo, item.model, item.type].filter(Boolean).join(' • ');
@@ -3673,16 +4057,26 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (driverList) {
                 driverList.innerHTML = drivers.map((item) => `<option value="${escapeHtml(driverValue(item))}">${escapeHtml(item.phone)}</option>`).join('');
             }
+            if (clientList) {
+                clientList.innerHTML = clients.map((item) => `<option value="${escapeHtml(clientValue(item))}">${escapeHtml([item.phone, item.email].filter(Boolean).join(' • '))}</option>`).join('');
+            }
         }
 
         function renderPurposeChoices(active) {
             const box = $('#tripPurposeChoices');
             if (!box) return;
             box.innerHTML = purposeOptions.map((option) => `<button type="button" class="choice-btn ${active === option ? 'active' : ''}" data-trip-purpose="${escapeHtml(option)}">${escapeHtml(option)}</button>`).join('');
+            toggleClientVisitField(active);
         }
 
         function paymentOptions(selected = '') {
-            return '<option value="">Select payment method</option>' + paymentMethods.map((method) => `<option value="${escapeHtml(method)}" ${method === selected ? 'selected' : ''}>${escapeHtml(method)}</option>`).join('');
+            const selectedMethod = String(selected || '').trim();
+            const methods = paymentMethods.slice();
+            if (selectedMethod && !methods.some((method) => method.toLowerCase() === selectedMethod.toLowerCase())) {
+                methods.push(selectedMethod);
+            }
+
+            return '<option value="">Select payment method</option>' + methods.map((method) => `<option value="${escapeHtml(method)}" ${method === selectedMethod ? 'selected' : ''}>${escapeHtml(method)}</option>`).join('');
         }
 
         function paymentRowHtml(payment = {}) {
@@ -3800,6 +4194,17 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 errors.push(driverInput);
             }
 
+            const clientInput = $('#tripClient');
+            if (isClientVisit()) {
+                if (!clientInput?.value.trim()) {
+                    markInvalid(clientInput, 'Client is required for a Client Visit trip.');
+                    errors.push(clientInput);
+                } else if (!findClient(clientInput.value)) {
+                    markInvalid(clientInput, 'Select a client from the suggestion list.');
+                    errors.push(clientInput);
+                }
+            }
+
             const totalInput = $('#tripTotalCost');
             const total = toNum(totalInput?.value);
             if (totalInput?.value.trim() && total <= 0) {
@@ -3860,9 +4265,11 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         function collect() {
             const vehicle = findVehicle(value('#tripVehicle'));
             const driver = findDriver(value('#tripDriver'));
+            const client = isClientVisit() ? findClient(value('#tripClient')) : null;
             const payments = collectPayments();
             const summary = recalculatePayment();
             return {
+                tripValidationVersion: 2,
                 tripId: value('#tripId').trim(),
                 startDate: value('#tripStartDate'),
                 vehicle: vehicle ? vehicleValue(vehicle) : value('#tripVehicle').trim(),
@@ -3870,6 +4277,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 driver: driver ? driverValue(driver) : value('#tripDriver').trim(),
                 driverId: driver?.id || '',
                 purpose: value('#tripPurpose').trim(),
+                client: client ? clientValue(client) : '',
+                clientId: client?.id || '',
                 fromLocation: value('#tripFromLocation').trim(),
                 toLocation: value('#tripToLocation').trim(),
                 odoStart: value('#tripOdoStart'),
@@ -3891,6 +4300,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#tripPaidAmount', '0.00');
             setValue('#tripBalanceDue', '0.00');
             renderPurposeChoices('');
+            toggleClientVisitField('');
             renderPayments([]);
         }
 
@@ -3928,6 +4338,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#tripVehicle', trip.vehicle || '');
             setValue('#tripDriver', trip.driver || '');
             setValue('#tripPurpose', trip.purpose || '');
+            setValue('#tripClient', trip.client || '');
             setValue('#tripFromLocation', trip.fromLocation || '');
             setValue('#tripToLocation', trip.toLocation || '');
             setValue('#tripOdoStart', trip.odoStart ?? '');
@@ -3935,18 +4346,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#tripTotalCost', legacyTotal(trip).toFixed(2));
             setValue('#tripDetails', trip.details || '');
             renderPurposeChoices(trip.purpose || '');
+            toggleClientVisitField(trip.purpose || '');
             renderPayments(tripPayments(trip));
             recalculatePayment();
-        }
-
-        function loadSample() {
-            const sample = (samples.trips || [])[0] || trips[0];
-            if (!sample) {
-                toast('No existing trip data is available.');
-                return;
-            }
-            loadTripIntoForm(sample);
-            toast('Existing trip data loaded.');
         }
 
         function editTrip(id) {
@@ -3995,7 +4397,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const state = paymentState(trip);
             const stateClass = state === 'Paid' ? 'paid' : state === 'Partially Paid' ? 'partial' : 'unpaid';
             return `<tr>
-                <td><div class="trip-cell"><div class="trip-icon">🧭</div><div><b>${escapeHtml(trip.tripId)}</b><br><small>${escapeHtml(trip.purpose || 'Trip')}</small></div></div></td>
+                <td><div class="trip-cell"><div class="trip-icon">🧭</div><div><b>${escapeHtml(trip.tripId)}</b><br><small>${escapeHtml([trip.purpose || 'Trip', trip.client || ''].filter(Boolean).join(' · '))}</small></div></div></td>
                 <td>${escapeHtml(trip.startDate || '-')}</td>
                 <td><b>${escapeHtml(trip.vehicle || '-')}</b><br><small>${escapeHtml(trip.driver || '-')}</small></td>
                 <td>${escapeHtml(trip.fromLocation || '-')} → ${escapeHtml(trip.toLocation || '-')}</td>
@@ -4008,7 +4410,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         function renderList() {
             const query = value('#tripSearch').toLowerCase();
             const vehicleQuery = value('#tripVehicleSearch').toLowerCase();
-            const list = trips.filter((trip) => (!query || [trip.tripId, trip.vehicle, trip.driver, trip.fromLocation, trip.toLocation, trip.purpose]
+            const list = trips.filter((trip) => (!query || [trip.tripId, trip.vehicle, trip.driver, trip.client, trip.fromLocation, trip.toLocation, trip.purpose]
                 .join(' ').toLowerCase().includes(query))
                 && (!vehicleQuery || String(trip.vehicle || '').toLowerCase().includes(vehicleQuery)));
             $('#tripTbody').innerHTML = list.length
@@ -4027,7 +4429,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function exportTrips() {
-            const rows = [['Trip ID', 'Start Date', 'Vehicle', 'Driver', 'Purpose', 'From Location', 'To Location', 'Odo Start', 'Odo End', 'Total Cost', 'Paid Amount', 'Remaining Payment', 'Payments', 'Details']];
+            const rows = [['Trip ID', 'Start Date', 'Vehicle', 'Driver', 'Purpose', 'Client', 'From Location', 'To Location', 'Odo Start', 'Odo End', 'Total Cost', 'Paid Amount', 'Remaining Payment', 'Payments', 'Details']];
             trips.forEach((trip) => {
                 const payments = tripPayments(trip).map((payment) => `${payment.method}: ${roundMoney(payment.amount).toFixed(2)}${payment.reference ? ` (${payment.reference})` : ''}`).join(' | ');
                 rows.push([
@@ -4036,6 +4438,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     trip.vehicle,
                     trip.driver,
                     trip.purpose,
+                    trip.client,
                     trip.fromLocation,
                     trip.toLocation,
                     trip.odoStart,
@@ -4055,17 +4458,31 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         $('#addTripPaymentBtn')?.addEventListener('click', () => addPayment());
         $('#resetTripBtn')?.addEventListener('click', resetForm);
         $('#saveTripBtn')?.addEventListener('click', saveTrip);
-        $('#loadTripSampleBtn')?.addEventListener('click', loadSample);
         $('#exportTripsBtn')?.addEventListener('click', exportTrips);
         $('#applyTripFiltersBtn')?.addEventListener('click', renderList);
         $('#clearTripFiltersBtn')?.addEventListener('click', clearFilters);
         ['#tripSearch', '#tripVehicleSearch'].forEach((selector) => $(selector)?.addEventListener('input', renderList));
 
-        ['#tripVehicle', '#tripDriver'].forEach((selector) => {
+        ['#tripVehicle', '#tripDriver', '#tripClient'].forEach((selector) => {
             $(selector)?.addEventListener('change', (event) => {
-                const match = selector === '#tripVehicle' ? findVehicle(event.target.value) : findDriver(event.target.value);
-                if (match) event.target.value = selector === '#tripVehicle' ? vehicleValue(match) : driverValue(match);
+                const match = selector === '#tripVehicle'
+                    ? findVehicle(event.target.value)
+                    : selector === '#tripDriver'
+                        ? findDriver(event.target.value)
+                        : findClient(event.target.value);
+                if (match) {
+                    event.target.value = selector === '#tripVehicle'
+                        ? vehicleValue(match)
+                        : selector === '#tripDriver'
+                            ? driverValue(match)
+                            : clientValue(match);
+                }
             });
+        });
+
+        $('#tripPurpose')?.addEventListener('input', (event) => {
+            renderPurposeChoices(event.target.value.trim());
+            toggleClientVisitField(event.target.value);
         });
 
         $('#tripAddPage')?.addEventListener('input', (event) => {
@@ -4082,6 +4499,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (purpose) {
                 setValue('#tripPurpose', purpose.dataset.tripPurpose);
                 renderPurposeChoices(purpose.dataset.tripPurpose);
+                toggleClientVisitField(purpose.dataset.tripPurpose);
             }
             const removePayment = event.target.closest('.remove-trip-payment');
             if (removePayment) {
@@ -5973,7 +6391,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
     const data = window.FLEETMAN || {};
     const resources = data.resources || {};
-    const masterData = data.masterData || { vehicle_categories: [], vehicle_sub_categories: [], party_types: [], document_names: [], licence_types: [], driver_contact_types: [], client_types: [], contact_methods: [], fuel_types: [], fuel_units: [] };
+    const masterData = data.masterData || { vehicle_categories: [], vehicle_sub_categories: [], party_types: [], document_names: [], licence_types: [], driver_contact_types: [], client_types: [], contact_methods: [], fuel_types: [], fuel_units: [], payment_types: [] };
     const $ = (selector, root = document) => root.querySelector(selector);
     const value = (selector) => $(selector)?.value || '';
     const setValue = (selector, nextValue) => { const element = $(selector); if (element) element.value = nextValue ?? ''; };
@@ -6023,6 +6441,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         let contactMethods = Array.isArray(masterData.contact_methods) ? masterData.contact_methods.slice() : [];
         let fuelTypes = Array.isArray(masterData.fuel_types) ? masterData.fuel_types.slice() : [];
         let fuelUnits = Array.isArray(masterData.fuel_units) ? masterData.fuel_units.slice() : [];
+        let paymentTypes = Array.isArray(masterData.payment_types) ? masterData.payment_types.slice() : [];
 
         function populateVehicleCategorySelect(selectedValue = '') {
             const select = $('#vehicleSubCategoryParent');
@@ -6164,6 +6583,16 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setText('#saveFuelUnitMasterBtn', 'Save Fuel Unit');
         }
 
+        function resetPaymentTypeForm() {
+            setValue('#paymentTypeEditingCode', '');
+            setValue('#paymentTypeMasterName', '');
+            setValue('#paymentTypeMasterCode', '');
+            setValue('#paymentTypeMasterSort', '0');
+            setValue('#paymentTypeMasterStatus', 'Active');
+            setValue('#paymentTypeMasterDescription', '');
+            setText('#savePaymentTypeMasterBtn', 'Save Payment Type');
+        }
+
         function resetClientTypeForm() {
             setValue('#clientTypeEditingCode', '');
             setValue('#clientTypeMasterName', '');
@@ -6299,6 +6728,12 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const name = value('#fuelUnitMasterName').trim();
             if (!name) { toast('Fuel Unit Name is required.'); return null; }
             return { code: codeFrom(value('#fuelUnitMasterCode') || name), name, sortOrder: Number(value('#fuelUnitMasterSort') || 0), status: value('#fuelUnitMasterStatus') || 'Active', description: value('#fuelUnitMasterDescription').trim() };
+        }
+
+        function collectPaymentType() {
+            const name = value('#paymentTypeMasterName').trim();
+            if (!name) { toast('Payment Type Name is required.'); return null; }
+            return { code: codeFrom(value('#paymentTypeMasterCode') || name), name, sortOrder: Number(value('#paymentTypeMasterSort') || 0), status: value('#paymentTypeMasterStatus') || 'Active', description: value('#paymentTypeMasterDescription').trim() };
         }
 
         function collectClientType() {
@@ -6473,6 +6908,14 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-unit="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-unit="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No fuel unit added yet.</td></tr>';
         }
 
+        function renderPaymentTypes() {
+            setText('#masterPaymentTypeCount', paymentTypes.filter((row) => row.status !== 'Inactive').length);
+            const tbody = $('#paymentTypeMasterTbody');
+            if (!tbody) return;
+            const rows = sortRows(paymentTypes);
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-payment-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-payment-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No payment type added yet.</td></tr>';
+        }
+
         function renderClientTypes() {
             setText('#masterClientTypeCount', clientTypes.filter((row) => row.status !== 'Inactive').length);
             const tbody = $('#clientTypeMasterTbody');
@@ -6535,6 +6978,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             renderDriverContactTypes();
             renderFuelTypes();
             renderFuelUnits();
+            renderPaymentTypes();
         }
 
         function editVehicleCategory(code) {
@@ -6629,6 +7073,19 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#fuelUnitMasterDescription', row.description || '');
             setText('#saveFuelUnitMasterBtn', 'Update Fuel Unit');
             $('#fuelUnitMasterName')?.focus();
+        }
+
+        function editPaymentType(code) {
+            const row = paymentTypes.find((item) => item.code === code);
+            if (!row) return;
+            setValue('#paymentTypeEditingCode', row.code);
+            setValue('#paymentTypeMasterName', row.name);
+            setValue('#paymentTypeMasterCode', row.code);
+            setValue('#paymentTypeMasterSort', row.sortOrder || 0);
+            setValue('#paymentTypeMasterStatus', row.status || 'Active');
+            setValue('#paymentTypeMasterDescription', row.description || '');
+            setText('#savePaymentTypeMasterBtn', 'Update Payment Type');
+            $('#paymentTypeMasterName')?.focus();
         }
 
         function editClientType(code) {
@@ -6751,6 +7208,17 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             toast('Fuel unit saved to database.');
         });
 
+        $('#paymentTypeMasterForm')?.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const row = collectPaymentType();
+            if (!row) return;
+            paymentTypes = upsertRow(paymentTypes, row, value('#paymentTypeEditingCode'));
+            resetPaymentTypeForm();
+            renderAll();
+            saveStore();
+            toast('Payment type saved to database.');
+        });
+
         $('#clientTypeMasterForm')?.addEventListener('submit', (event) => {
             event.preventDefault();
             const row = collectClientType();
@@ -6799,6 +7267,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         $('#cancelFuelTypeEditBtn')?.addEventListener('click', resetFuelTypeForm);
         $('#resetFuelUnitMasterBtn')?.addEventListener('click', resetFuelUnitForm);
         $('#cancelFuelUnitEditBtn')?.addEventListener('click', resetFuelUnitForm);
+        $('#resetPaymentTypeMasterBtn')?.addEventListener('click', resetPaymentTypeForm);
+        $('#cancelPaymentTypeEditBtn')?.addEventListener('click', resetPaymentTypeForm);
 
         $('#resetClientTypeMasterBtn')?.addEventListener('click', resetClientTypeForm);
         $('#cancelClientTypeEditBtn')?.addEventListener('click', resetClientTypeForm);
@@ -6827,6 +7297,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         });
         $('#driverContactTypeMasterName')?.addEventListener('input', () => {
             if (!value('#driverContactTypeMasterCode') || !value('#driverContactTypeEditingCode')) setValue('#driverContactTypeMasterCode', codeFrom(value('#driverContactTypeMasterName')));
+        });
+        $('#paymentTypeMasterName')?.addEventListener('input', () => {
+            if (!value('#paymentTypeMasterCode') || !value('#paymentTypeEditingCode')) setValue('#paymentTypeMasterCode', codeFrom(value('#paymentTypeMasterName')));
         });
 
         document.addEventListener('click', (event) => {
@@ -6931,6 +7404,17 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             }
 
 
+            const editPaymentTypeBtn = event.target.closest('[data-master-edit-payment-type]');
+            if (editPaymentTypeBtn) editPaymentType(editPaymentTypeBtn.dataset.masterEditPaymentType);
+
+            const deletePaymentTypeBtn = event.target.closest('[data-master-delete-payment-type]');
+            if (deletePaymentTypeBtn && confirm('Delete this payment type from master data? Existing trip records will keep their saved payment method.')) {
+                paymentTypes = paymentTypes.filter((row) => row.code !== deletePaymentTypeBtn.dataset.masterDeletePaymentType);
+                renderAll();
+                saveStore();
+                toast('Payment type deleted from database.');
+            }
+
             const editDriverContactTypeBtn = event.target.closest('[data-master-edit-driver-contact-type]');
             if (editDriverContactTypeBtn) editDriverContactType(editDriverContactTypeBtn.dataset.masterEditDriverContactType);
 
@@ -6947,6 +7431,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         resetVehicleSubCategoryForm();
         resetFuelTypeForm();
         resetFuelUnitForm();
+        resetPaymentTypeForm();
         resetClientTypeForm();
         resetContactMethodForm();
         resetDriverContactTypeForm();

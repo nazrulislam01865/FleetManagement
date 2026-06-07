@@ -29,12 +29,12 @@
                     </div>
                     <div class="grid3">
                         <div class="field"><label for="vehicleId">Vehicle ID <span class="req">*</span></label><input id="vehicleId" readonly></div>
-                        <div class="field"><label for="vehicleName">Vehicle Name <span class="req">*</span></label><input id="vehicleName" placeholder="Example: Dhaka Pickup 01"></div>
-                        <div class="field"><label for="regNo">Registration Number <span class="req">*</span></label><input id="regNo" placeholder="Example: DHAKA-METRO-TA-11-2345"></div>
-                        <x-fleetman.select id="vendor" label="Vendor / Owner" :options="$fleetman['options']['vendors']" placeholder="Select vendor" required />
-                        <div class="field"><label for="model">Model <span class="req">*</span></label><input id="model" placeholder="Example: Toyota Hiace 2021"></div>
+                        <div class="field"><label for="vehicleName">Vehicle Name <span class="req">*</span></label><input id="vehicleName" placeholder="Example: Dhaka Pickup 01" required></div>
+                        <div class="field"><label for="regNo">Registration Number <span class="req">*</span></label><input id="regNo" maxlength="14" pattern="[A-Za-z]{3}-[A-Za-z]{2}-[0-9]{2}-[0-9]{4}" placeholder="Example: DHA-AB-12-3456" required><div class="hint">Format: ABC-AB-12-3456</div></div>
+                        <x-fleetman.select id="vendor" label="Vendor / Owner" :options="$fleetman['options']['vehicle_vendors']" placeholder="Select car-related vendor" required />
+                        <div class="field"><label for="model">Model <span class="req">*</span></label><input id="model" placeholder="Example: Toyota Hiace 2021" required></div>
                         <div class="field"><label for="color">Color</label><input id="color" placeholder="Example: White"></div>
-                        <div class="field"><label for="engineNo">Engine Number <span class="req">*</span></label><input id="engineNo" placeholder="Example: ENG-78219"></div>
+                        <div class="field"><label for="engineNo">Engine Number <span class="req">*</span></label><input id="engineNo" maxlength="17" pattern="[A-Za-z0-9]{17}" placeholder="Exactly 17 letters or digits" required><div class="hint">Exactly 17 alphanumeric characters.</div></div>
                         <div class="field"><label for="mileage">Regular Mileage Target</label><input id="mileage" type="number" placeholder="Example: 8.5"></div>
                         <div class="field"><label for="odo">Current Odometer</label><input id="odo" type="number" placeholder="Example: 45230"></div>
                     </div>
@@ -63,8 +63,17 @@
                         </div>
                     </div>
                     <div class="grid" style="margin-top:16px">
-                        <x-fleetman.select id="driver" label="Driver" :options="$fleetman['options']['drivers']" placeholder="None" />
-                        <div class="field"><label for="rent">Monthly Rent / Cost <span class="req">*</span></label><input id="rent" type="number" value="0"></div>
+                        <x-fleetman.select id="rentalType" label="Rental Type" :options="['With Driver', 'Without Driver']" placeholder="Select rental type" required />
+                        <x-fleetman.select id="driver" label="Driver" :options="$fleetman['options']['drivers']" placeholder="Select driver" required />
+                    </div>
+                    <div id="driverPaymentFields" class="grid" style="margin-top:16px">
+                        <x-fleetman.input id="driverPaymentAmount" label="Driver Payment Amount" type="number" min="0" step="0.01" placeholder="0.00" required />
+                        <x-fleetman.select id="driverPaymentCycle" label="Driver Payment Cycle" :options="$fleetman['options']['rental_payment_cycles']" placeholder="Select payment cycle" required />
+                    </div>
+                    <div class="grid3" style="margin-top:16px">
+                        <x-fleetman.input id="vehicleRentalAmount" label="Vehicle Rental Amount" type="number" min="0" step="0.01" placeholder="0.00" required />
+                        <x-fleetman.select id="vehiclePaymentCycle" label="Vehicle Payment Cycle" :options="$fleetman['options']['rental_payment_cycles']" placeholder="Select payment cycle" required />
+                        <x-fleetman.input id="totalRentalAmount" label="Total Rental Amount" type="number" min="0" step="0.01" value="0.00" readonly />
                     </div>
                 </div>
 
@@ -120,11 +129,7 @@
         <x-fleetman.title-card
             title="Vehicle List"
             subtitle="All created vehicles will appear here. Search, filter, view documents and check fuel setup quickly."
-        >
-            <x-slot:action>
-                <button type="button" class="btn secondary" id="exportVehiclesBtn">Export CSV</button>
-            </x-slot:action>
-        </x-fleetman.title-card>
+        />
 
         <div class="kpi">
             <div class="card"><strong id="vehicleKpiTotal">0</strong><span>Total vehicles</span></div>

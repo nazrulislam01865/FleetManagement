@@ -28,7 +28,7 @@
                         <x-fleetman.input id="partyId" label="Vendor / Party ID" required readonly />
                         <x-fleetman.input id="partyName" label="Party Name" placeholder="Example: Speed Transport Services" required />
                         <x-fleetman.select id="partyType" label="Party Type" :options="$fleetman['options']['party_types']" placeholder="Select type" required />
-                        <x-fleetman.select id="vendorContractorType" label="Vendor / Contractor Type" :options="$fleetman['options']['vendor_contractor_types']" placeholder="Select vendor / contractor type" required hint="Only active Car Related vendors appear on the Driver page." />
+                        <x-fleetman.select id="vendorContractorType" label="Vendor / Contractor Type" :options="$fleetman['options']['vendor_contractor_types']" placeholder="Select vendor type" required />
                         <x-fleetman.select id="partyStatus" label="Status" :options="$fleetman['options']['party_statuses']" required />
                     </div>
                     <div id="partyFuelTypesField" class="fuel-station-config hidden" style="margin-top:16px">
@@ -55,12 +55,12 @@
                         </div>
                     </div>
                     <div class="grid3" style="margin-top:16px">
-                        <x-fleetman.input id="partyPhone" label="Phone Number" placeholder="01XXXXXXXXX" required />
-                        <x-fleetman.input id="partyEmail" label="Email" placeholder="vendor@example.com" />
-                        <x-fleetman.input id="partyWhatsapp" label="WhatsApp Number" placeholder="01XXXXXXXXX" />
+                        <x-fleetman.input id="partyPhone" label="Phone Number" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="01XXXXXXXXX" hint="Enter exactly 11 digits." required />
+                        <x-fleetman.input id="partyEmail" label="Email" type="email" placeholder="vendor@example.com" />
+                        <x-fleetman.input id="partyWhatsapp" label="WhatsApp Number" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="01XXXXXXXXX" hint="Enter exactly 11 digits when provided." />
                     </div>
                     <div class="grid3" style="margin-top:16px">
-                        <x-fleetman.input id="tradeLicense" label="Trade License No." placeholder="Optional" />
+                        <x-fleetman.input id="tradeLicense" label="Trade License No." inputmode="numeric" pattern="[0-9]+" placeholder="Optional" hint="Digits only." />
                         <x-fleetman.input id="tinBin" label="TIN / BIN" placeholder="Optional" />
                         <x-fleetman.select id="paymentTerms" label="Payment Terms" :options="$fleetman['options']['payment_terms']" />
                     </div>

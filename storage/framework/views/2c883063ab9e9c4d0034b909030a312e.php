@@ -125,14 +125,14 @@
 <?php endif; ?>
                         <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4b244ece64768724078120db372595a2 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'vendorContractorType','label' => 'Vendor / Contractor Type','options' => $fleetman['options']['vendor_contractor_types'],'placeholder' => 'Select vendor / contractor type','required' => true,'hint' => 'Only active Car Related vendors appear on the Driver page.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'vendorContractorType','label' => 'Vendor / Contractor Type','options' => $fleetman['options']['vendor_contractor_types'],'placeholder' => 'Select vendor type','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.select'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'vendorContractorType','label' => 'Vendor / Contractor Type','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($fleetman['options']['vendor_contractor_types']),'placeholder' => 'Select vendor / contractor type','required' => true,'hint' => 'Only active Car Related vendors appear on the Driver page.']); ?>
+<?php $component->withAttributes(['id' => 'vendorContractorType','label' => 'Vendor / Contractor Type','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($fleetman['options']['vendor_contractor_types']),'placeholder' => 'Select vendor type','required' => true]); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal4b244ece64768724078120db372595a2)): ?>
@@ -190,14 +190,14 @@
                     <div class="grid3" style="margin-top:16px">
                         <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'partyPhone','label' => 'Phone Number','placeholder' => '01XXXXXXXXX','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'partyPhone','label' => 'Phone Number','type' => 'tel','inputmode' => 'numeric','maxlength' => '11','pattern' => '[0-9]{11}','placeholder' => '01XXXXXXXXX','hint' => 'Enter exactly 11 digits.','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.input'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'partyPhone','label' => 'Phone Number','placeholder' => '01XXXXXXXXX','required' => true]); ?>
+<?php $component->withAttributes(['id' => 'partyPhone','label' => 'Phone Number','type' => 'tel','inputmode' => 'numeric','maxlength' => '11','pattern' => '[0-9]{11}','placeholder' => '01XXXXXXXXX','hint' => 'Enter exactly 11 digits.','required' => true]); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
@@ -210,14 +210,14 @@
 <?php endif; ?>
                         <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'partyEmail','label' => 'Email','placeholder' => 'vendor@example.com']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'partyEmail','label' => 'Email','type' => 'email','placeholder' => 'vendor@example.com']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.input'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'partyEmail','label' => 'Email','placeholder' => 'vendor@example.com']); ?>
+<?php $component->withAttributes(['id' => 'partyEmail','label' => 'Email','type' => 'email','placeholder' => 'vendor@example.com']); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
@@ -230,14 +230,14 @@
 <?php endif; ?>
                         <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'partyWhatsapp','label' => 'WhatsApp Number','placeholder' => '01XXXXXXXXX']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'partyWhatsapp','label' => 'WhatsApp Number','type' => 'tel','inputmode' => 'numeric','maxlength' => '11','pattern' => '[0-9]{11}','placeholder' => '01XXXXXXXXX','hint' => 'Enter exactly 11 digits when provided.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.input'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'partyWhatsapp','label' => 'WhatsApp Number','placeholder' => '01XXXXXXXXX']); ?>
+<?php $component->withAttributes(['id' => 'partyWhatsapp','label' => 'WhatsApp Number','type' => 'tel','inputmode' => 'numeric','maxlength' => '11','pattern' => '[0-9]{11}','placeholder' => '01XXXXXXXXX','hint' => 'Enter exactly 11 digits when provided.']); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
@@ -252,14 +252,14 @@
                     <div class="grid3" style="margin-top:16px">
                         <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'tradeLicense','label' => 'Trade License No.','placeholder' => 'Optional']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'tradeLicense','label' => 'Trade License No.','inputmode' => 'numeric','pattern' => '[0-9]+','placeholder' => 'Optional','hint' => 'Digits only.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.input'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'tradeLicense','label' => 'Trade License No.','placeholder' => 'Optional']); ?>
+<?php $component->withAttributes(['id' => 'tradeLicense','label' => 'Trade License No.','inputmode' => 'numeric','pattern' => '[0-9]+','placeholder' => 'Optional','hint' => 'Digits only.']); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>

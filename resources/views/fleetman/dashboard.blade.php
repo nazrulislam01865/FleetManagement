@@ -20,9 +20,9 @@
             <h1>Welcome back, {{ auth()->user()->name ?? ($account['name'] ?? 'User') }}</h1>
             <p>Monitor trips, vehicles, drivers, fuel, clients, vendors, employees, and attendance from one place.</p>
             <div class="hero-actions">
-                <a class="btn primary" href="{{ route('fleet.driver-attendance') }}">📝 Add Log</a>
-                <a class="btn secondary" href="{{ route('fleet.fuel-recharge') }}">⛽ Recharge Fuel</a>
-                <a class="btn light" href="{{ route('fleet.clients') }}">🏢 Add Party</a>
+                <a class="btn primary" href="{{ route('fleet.driver-attendance', ['action' => 'add']) }}">📝 Add Log</a>
+                <a class="btn secondary" href="{{ route('fleet.fuel-recharge', ['action' => 'add']) }}">⛽ Add Fuel</a>
+                <a class="btn light" href="{{ route('fleet.trips', ['action' => 'add']) }}">🧭 Add Trip</a>
             </div>
         </div>
         <div class="dashboard-hero-card">

@@ -8,15 +8,20 @@ use App\Models\Fleet\FleetDocumentName;
 use App\Models\Fleet\FleetDriverContactType;
 use App\Models\Fleet\FleetLicenceType;
 use App\Models\Fleet\FleetPartyType;
+use App\Models\Fleet\FleetPaymentType;
+use App\Models\Fleet\FleetVendorContractorType;
 use App\Models\Fleet\FleetVehicleCategory;
 use App\Models\Fleet\FleetVehicleSubCategory;
 use App\Models\Fleet\FleetFuelType;
 use App\Models\Fleet\FleetFuelUnit;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class MasterDataController extends FleetBaseController
@@ -126,6 +131,112 @@ class MasterDataController extends FleetBaseController
         ]));
     }
 
+    public function paymentTypes(Request $request): View
+    {
+        $editingPaymentType = null;
+        $editingId = $request->integer('edit');
+
+        if ($editingId > 0) {
+            $editingPaymentType = FleetPaymentType::query()->find($editingId);
+        }
+
+        return view('fleetman.master-data.payment-types', $this->masterViewData('master-data-payment-types', [
+            'page' => 'master-data',
+            'masterSection' => 'payment_types',
+            'masterTitle' => 'Payment Type Master',
+            'masterSubtitle' => 'Manage payment methods used in the Add Trip payment-method dropdown.',
+            'paymentTypeRows' => FleetPaymentType::query()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
+            'editingPaymentType' => $editingPaymentType,
+        ]));
+    }
+
+    public function vendorContractorTypes(Request $request): View
+    {
+        $editingVendorContractorType = null;
+        $editingId = $request->integer('edit');
+
+        if ($editingId > 0) {
+            $editingVendorContractorType = FleetVendorContractorType::query()->find($editingId);
+        }
+
+        return view('fleetman.master-data.vendor-contractor-types', $this->masterViewData('master-data-vendor-contractor-types', [
+            'page' => 'master-data',
+            'masterSection' => 'vendor_contractor_types',
+            'masterTitle' => 'Vendor / Contractor Type Master',
+            'masterSubtitle' => 'Manage vendor and contractor types used to filter vehicle and driver-related selections.',
+            'vendorContractorTypeRows' => FleetVendorContractorType::query()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(),
+            'editingVendorContractorType' => $editingVendorContractorType,
+        ]));
+    }
+
+    public function storeVendorContractorType(Request $request): RedirectResponse
+    {
+        $validated = $this->validateVendorContractorType($request);
+
+        FleetVendorContractorType::query()->create($validated);
+
+        return redirect()
+            ->route('fleet.master-data.vendor-contractor-types')
+            ->with('success', 'Vendor / contractor type created successfully.');
+    }
+
+    public function updateVendorContractorType(Request $request, FleetVendorContractorType $vendorContractorType): RedirectResponse
+    {
+        $validated = $this->validateVendorContractorType($request, $vendorContractorType);
+
+        $vendorContractorType->update($validated);
+
+        return redirect()
+            ->route('fleet.master-data.vendor-contractor-types')
+            ->with('success', 'Vendor / contractor type updated successfully.');
+    }
+
+    public function destroyVendorContractorType(FleetVendorContractorType $vendorContractorType): RedirectResponse
+    {
+        $vendorContractorType->delete();
+
+        return redirect()
+            ->route('fleet.master-data.vendor-contractor-types')
+            ->with('success', 'Vendor / contractor type deleted successfully.');
+    }
+
+    public function storePaymentType(Request $request): RedirectResponse
+    {
+        $validated = $this->validatePaymentType($request);
+
+        FleetPaymentType::query()->create($validated);
+
+        return redirect()
+            ->route('fleet.master-data.payment-types')
+            ->with('success', 'Payment type created successfully.');
+    }
+
+    public function updatePaymentType(Request $request, FleetPaymentType $paymentType): RedirectResponse
+    {
+        $validated = $this->validatePaymentType($request, $paymentType);
+
+        $paymentType->update($validated);
+
+        return redirect()
+            ->route('fleet.master-data.payment-types')
+            ->with('success', 'Payment type updated successfully.');
+    }
+
+    public function destroyPaymentType(FleetPaymentType $paymentType): RedirectResponse
+    {
+        $paymentType->delete();
+
+        return redirect()
+            ->route('fleet.master-data.payment-types')
+            ->with('success', 'Payment type deleted successfully.');
+    }
+
     public function sync(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -194,6 +305,8 @@ class MasterDataController extends FleetBaseController
             'contact_methods' => $this->masterRows(FleetContactMethod::class),
             'fuel_types' => $this->masterRows(FleetFuelType::class),
             'fuel_units' => $this->masterRows(FleetFuelUnit::class),
+            'payment_types' => $this->masterRows(FleetPaymentType::class),
+            'vendor_contractor_types' => Schema::hasTable('fleet_vendor_contractor_types') ? $this->masterRows(FleetVendorContractorType::class) : [],
         ];
     }
 
@@ -281,7 +394,7 @@ class MasterDataController extends FleetBaseController
 
     private function syncDocumentNames(array $rows): void
     {
-        $allowedTypes = ['All Modules', 'Vehicles', 'Drivers', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'];
+        $allowedTypes = ['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'];
         $cleanRows = collect($rows)
             ->map(function (array $row) use ($allowedTypes): ?array {
                 $clean = $this->cleanMasterRow($row);
@@ -401,6 +514,80 @@ class MasterDataController extends FleetBaseController
             'description' => $description,
             'sortOrder' => $sortOrder,
             'status' => $status,
+        ];
+    }
+
+    private function validateVendorContractorType(Request $request, ?FleetVendorContractorType $vendorContractorType = null): array
+    {
+        $normalizedCode = $this->codeFrom((string) ($request->input('code') ?: $request->input('name', '')));
+        $request->merge(['code' => $normalizedCode]);
+
+        $uniqueCode = Rule::unique('fleet_vendor_contractor_types', 'code');
+        if ($vendorContractorType !== null) {
+            $uniqueCode->ignore($vendorContractorType->id);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'code' => [
+                'required',
+                'string',
+                'max:120',
+                'regex:/^[A-Z0-9_]+$/',
+                $uniqueCode,
+            ],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'status' => ['required', Rule::in(['Active', 'Inactive'])],
+            'is_car_related' => ['nullable', 'boolean'],
+            'description' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'code.unique' => 'This vendor / contractor type code is already in use.',
+            'code.regex' => 'The code may contain only letters, numbers, and underscores.',
+        ]);
+
+        return [
+            'name' => trim($validated['name']),
+            'code' => $validated['code'],
+            'sort_order' => max(0, (int) ($validated['sort_order'] ?? 0)),
+            'is_active' => $validated['status'] === 'Active',
+            'is_car_related' => (bool) ($validated['is_car_related'] ?? false),
+            'description' => trim((string) ($validated['description'] ?? '')) ?: null,
+        ];
+    }
+
+    private function validatePaymentType(Request $request, ?FleetPaymentType $paymentType = null): array
+    {
+        $normalizedCode = $this->codeFrom((string) ($request->input('code') ?: $request->input('name', '')));
+        $request->merge(['code' => $normalizedCode]);
+
+        $uniqueCode = Rule::unique('fleet_payment_types', 'code');
+        if ($paymentType !== null) {
+            $uniqueCode->ignore($paymentType->id);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'code' => [
+                'required',
+                'string',
+                'max:120',
+                'regex:/^[A-Z0-9_]+$/',
+                $uniqueCode,
+            ],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'status' => ['required', Rule::in(['Active', 'Inactive'])],
+            'description' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'code.unique' => 'This payment type code is already in use.',
+            'code.regex' => 'The code may contain only letters, numbers, and underscores.',
+        ]);
+
+        return [
+            'name' => trim($validated['name']),
+            'code' => $validated['code'],
+            'sort_order' => max(0, (int) ($validated['sort_order'] ?? 0)),
+            'is_active' => $validated['status'] === 'Active',
+            'description' => trim((string) ($validated['description'] ?? '')) ?: null,
         ];
     }
 

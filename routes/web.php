@@ -171,6 +171,30 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/master-data/fuel-units', [MasterDataController::class, 'fuelUnits'])
         ->middleware(EnsureFleetPermission::class.':master_data.view')
         ->name('master-data.fuel-units');
+    Route::get('/master-data/vendor-contractor-types', [MasterDataController::class, 'vendorContractorTypes'])
+        ->middleware(EnsureFleetPermission::class.':master_data.view')
+        ->name('master-data.vendor-contractor-types');
+    Route::post('/master-data/vendor-contractor-types', [MasterDataController::class, 'storeVendorContractorType'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.vendor-contractor-types.store');
+    Route::put('/master-data/vendor-contractor-types/{vendorContractorType}', [MasterDataController::class, 'updateVendorContractorType'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.vendor-contractor-types.update');
+    Route::delete('/master-data/vendor-contractor-types/{vendorContractorType}', [MasterDataController::class, 'destroyVendorContractorType'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.vendor-contractor-types.destroy');
+    Route::get('/master-data/payment-types', [MasterDataController::class, 'paymentTypes'])
+        ->middleware(EnsureFleetPermission::class.':master_data.view')
+        ->name('master-data.payment-types');
+    Route::post('/master-data/payment-types', [MasterDataController::class, 'storePaymentType'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.payment-types.store');
+    Route::put('/master-data/payment-types/{paymentType}', [MasterDataController::class, 'updatePaymentType'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.payment-types.update');
+    Route::delete('/master-data/payment-types/{paymentType}', [MasterDataController::class, 'destroyPaymentType'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.payment-types.destroy');
     Route::post('/master-data/sync', [MasterDataController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':master_data.manage')
         ->name('master-data.sync');

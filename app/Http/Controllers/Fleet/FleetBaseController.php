@@ -15,11 +15,13 @@ use App\Models\Fleet\FleetFuelPrice;
 use App\Models\Fleet\FleetFuelRecharge;
 use App\Models\Fleet\FleetLookup;
 use App\Models\Fleet\FleetPartyType;
+use App\Models\Fleet\FleetPaymentType;
 use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
 use App\Models\Fleet\FleetVehicleCategory;
 use App\Models\Fleet\FleetVehicleSubCategory;
 use App\Models\Fleet\FleetVendorParty;
+use App\Models\Fleet\FleetVendorContractorType;
 use App\Support\FleetRbac;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -259,6 +261,7 @@ abstract class FleetBaseController extends Controller
     {
         return [
             'vendors' => $this->uniqueValues($this->payloadColumn(FleetVendorParty::class, 'partyName')),
+            'vehicle_vendors' => $this->driverVendorValues(),
             'driver_vendors' => $this->driverVendorValues(),
             'drivers' => $this->uniqueValues(array_merge($this->values('driver_select'), $this->payloadColumn(FleetDriver::class, 'fullName'))),
             'vehicle_categories' => $this->vehicleCategoryOptions(),
@@ -271,9 +274,10 @@ abstract class FleetBaseController extends Controller
             'document_reminders' => $this->values('document_reminder'),
             'party_types' => $this->partyTypeValues(),
             'party_statuses' => $this->values('party_status'),
-            'vendor_contractor_types' => config('fleetman.options.vendor_contractor_types', ['Car Related', 'Non-Car Related']),
+            'vendor_contractor_types' => $this->vendorContractorTypeValues(),
             'payment_terms' => $this->values('payment_term'),
-            'party_document_templates' => $this->documentNameValues('Vendors & Parties', 'party_document_template'),
+            'payment_types' => $this->paymentTypeValues(),
+            'party_document_templates' => $this->documentNameValues(['Vendors', 'Vendors & Parties'], 'party_document_template'),
             'trip_statuses' => $this->values('trip_status'),
             'trip_around' => $this->values('trip_around'),
             'trip_periods' => $this->values('trip_period'),
@@ -281,6 +285,7 @@ abstract class FleetBaseController extends Controller
             'driver_license_types' => $this->driverLicenseTypeValues(),
             'driver_contact_types' => $this->driverContactTypeValues(),
             'driver_salary_tenures' => $this->values('driver_salary_tenure'),
+            'rental_payment_cycles' => config('fleetman.options.rental_payment_cycles', ['Daily', 'Weekly', 'Monthly', 'Contract']),
             'driver_statuses' => $this->values('driver_status'),
             'driver_duty_types' => $this->choiceValues('driver_duty_type'),
             'driver_document_templates' => $this->documentNameValues('Drivers', 'driver_document_template'),
@@ -308,6 +313,21 @@ abstract class FleetBaseController extends Controller
             ->all();
     }
 
+
+    protected function paymentTypeValues(): array
+    {
+        if (! Schema::hasTable('fleet_payment_types')) {
+            return config('fleetman.options.payment_types', []);
+        }
+
+        return FleetPaymentType::query()
+            ->active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('name')
+            ->values()
+            ->all();
+    }
 
     protected function partyTypeValues(): array
     {
@@ -343,17 +363,53 @@ abstract class FleetBaseController extends Controller
             : config('fleetman.options.driver_contact_types', ['Personal', 'Home', 'Relative']);
     }
 
+    protected function vendorContractorTypeValues(): array
+    {
+        if (! Schema::hasTable('fleet_vendor_contractor_types')) {
+            return config('fleetman.options.vendor_contractor_types', ['Car Related', 'Non-Car Related']);
+        }
+
+        $values = FleetVendorContractorType::query()
+            ->active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('name')
+            ->values()
+            ->all();
+
+        return count($values) > 0
+            ? $values
+            : config('fleetman.options.vendor_contractor_types', ['Car Related', 'Non-Car Related']);
+    }
+
     protected function driverVendorValues(): array
     {
         if (! Schema::hasTable('fleet_vendor_parties')) {
             return [];
         }
 
+        $carRelatedTypes = Schema::hasTable('fleet_vendor_contractor_types')
+            ? FleetVendorContractorType::query()
+                ->active()
+                ->where('is_car_related', true)
+                ->pluck('name')
+                ->map(fn (string $name): string => strtolower(trim($name)))
+                ->filter()
+                ->values()
+                ->all()
+            : ['car related'];
+
         return FleetVendorParty::query()
             ->where('status', 'Active')
             ->get()
             ->map(fn (FleetVendorParty $party) => $party->payload ?? [])
-            ->filter(fn (array $party): bool => strcasecmp(trim((string) ($party['vendorContractorType'] ?? '')), 'Car Related') === 0)
+            ->filter(function (array $party) use ($carRelatedTypes): bool {
+                $partyType = strtolower(trim((string) ($party['partyType'] ?? '')));
+                $vendorType = strtolower(trim((string) ($party['vendorContractorType'] ?? '')));
+
+                return in_array($vendorType, $carRelatedTypes, true)
+                    || in_array($partyType, ['transport vendor', 'driver supply vendor'], true);
+            })
             ->map(fn (array $party): string => trim((string) ($party['partyName'] ?? '')))
             ->filter()
             ->unique(fn (string $name): string => strtolower($name))
@@ -467,15 +523,16 @@ abstract class FleetBaseController extends Controller
             ->all();
     }
 
-    protected function documentNameValues(string $module, string $fallbackGroup): array
+    protected function documentNameValues(string|array $module, string $fallbackGroup): array
     {
         if (Schema::hasTable('fleet_document_names')) {
             $query = FleetDocumentName::query()->active();
 
             if (Schema::hasColumn('fleet_document_names', 'document_type')) {
-                $query->where(function ($documentQuery) use ($module) {
+                $modules = array_values(array_filter(array_map('strval', (array) $module)));
+                $query->where(function ($documentQuery) use ($modules) {
                     $documentQuery
-                        ->where('document_type', $module)
+                        ->whereIn('document_type', $modules)
                         ->orWhere('document_type', 'All Modules');
                 });
             }
@@ -1046,9 +1103,40 @@ abstract class FleetBaseController extends Controller
                 ->all()
             : [];
 
+        $clients = Schema::hasTable('fleet_clients')
+            ? FleetClient::query()
+                ->orderBy('name')
+                ->orderBy('code')
+                ->get()
+                ->map(function (FleetClient $client): array {
+                    $payload = $client->payload ?? [];
+                    $id = (string) ($payload['clientId'] ?? $client->code);
+                    $name = (string) ($payload['clientName'] ?? $client->name ?? $client->code);
+                    $phone = (string) ($payload['phone'] ?? '');
+                    $email = (string) ($payload['email'] ?? '');
+                    $status = (string) ($payload['status'] ?? $client->status ?? '');
+                    $note = collect([$phone, $email, $status ? 'Status: '.$status : null])
+                        ->filter(fn ($value) => filled($value))
+                        ->join(' • ');
+
+                    return [
+                        'id' => $id,
+                        'name' => $name,
+                        'label' => trim($id.' - '.$name, ' -'),
+                        'phone' => $phone,
+                        'email' => $email,
+                        'status' => $status,
+                        'note' => $note !== '' ? $note : 'From client table',
+                    ];
+                })
+                ->values()
+                ->all()
+            : [];
+
         return [
             'vehicles' => $vehicles,
             'drivers' => $drivers,
+            'clients' => $clients,
             'vehicle_types' => collect($vehicles)->pluck('type')->filter()->unique()->values()->all(),
             'driver_areas' => collect($drivers)->pluck('area')->filter()->unique()->values()->all(),
         ];

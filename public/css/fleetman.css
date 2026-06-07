@@ -462,3 +462,7 @@ td.contract-sticky-1,td.contract-sticky-2,td.contract-sticky-3{background:#fff;z
 .temp-upload-preview{display:block;max-width:180px;max-height:130px;object-fit:contain;border:1px solid #dce5f0;border-radius:10px;background:#fff;padding:5px}
 .upload-error,.upload-error-text{color:#b42318!important;font-weight:700}
 .upload-meta{display:block}
+
+/* Laravel-backed Payment Type master */
+.master-actions form{margin:0}
+a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;line-height:38px}

@@ -15,11 +15,7 @@
         <x-fleetman.title-card
             title="Add Trip"
             subtitle="Create a trip using saved vehicles and drivers, record the total cost, and collect payment using one or more methods."
-        >
-            <x-slot:action>
-                <button type="button" class="btn secondary" id="loadTripSampleBtn">Use existing trip data</button>
-            </x-slot:action>
-        </x-fleetman.title-card>
+        />
 
         <div class="layout">
             <div>
@@ -37,7 +33,6 @@
                             </div>
                             <input id="tripVehicle" list="tripVehicleList" placeholder="Type vehicle ID, name, or registration" autocomplete="off" required>
                             <datalist id="tripVehicleList"></datalist>
-                            <div class="hint">Choose an exact suggestion from the saved vehicle list.</div>
                         </div>
 
                         <div class="field searchable" id="tripDriverField">
@@ -47,7 +42,6 @@
                             </div>
                             <input id="tripDriver" list="tripDriverList" placeholder="Type driver ID, name, or phone" autocomplete="off" required>
                             <datalist id="tripDriverList"></datalist>
-                            <div class="hint">Choose an exact suggestion from the saved driver list.</div>
                         </div>
                     </div>
 
@@ -57,6 +51,15 @@
                             <label class="section-label">Quick Purpose</label>
                             <div id="tripPurposeChoices" class="choice-grid auto-grid"></div>
                         </div>
+                    </div>
+
+                    <div id="tripClientVisitField" class="field searchable hidden" style="margin-top:16px">
+                        <div class="search-label">
+                            <label for="tripClient">Client <span class="req">*</span></label>
+                            <span class="search-tag">Searchable</span>
+                        </div>
+                        <input id="tripClient" list="tripClientList" placeholder="Type client ID, name, phone, or email" autocomplete="off">
+                        <datalist id="tripClientList"></datalist>
                     </div>
                 </x-fleetman.section-card>
 
@@ -81,7 +84,6 @@
                     <div class="trip-payment-head">
                         <div>
                             <h3>Payment Methods</h3>
-                            <p>Add each payment separately when the client pays using multiple methods.</p>
                         </div>
                         <button type="button" class="btn secondary" id="addTripPaymentBtn">+ Add Payment</button>
                     </div>
@@ -121,7 +123,7 @@
 
         <div class="card">
             <div class="filters trip-list-filters">
-                <input id="tripSearch" placeholder="Search by trip ID, vehicle, driver, route, or purpose">
+                <input id="tripSearch" placeholder="Search by trip ID, vehicle, driver, client, route, or purpose">
                 <input id="tripVehicleSearch" placeholder="Filter by vehicle">
                 <div class="trip-filter-actions"><button type="button" class="btn secondary" id="applyTripFiltersBtn">Apply</button><button type="button" class="btn light" id="clearTripFiltersBtn">Clear</button></div>
             </div>

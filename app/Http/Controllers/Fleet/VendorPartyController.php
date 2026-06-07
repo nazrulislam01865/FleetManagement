@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -41,7 +42,7 @@ class VendorPartyController extends FleetBaseController
             ]);
         }
 
-        $this->validateVendorContractorTypes($rows);
+        $this->validateVendorRows($rows, $request);
         $this->validateFuelStationRows($rows);
         $this->validateUniqueDocumentNames($rows);
 
@@ -65,7 +66,7 @@ class VendorPartyController extends FleetBaseController
                             $userId,
                             'fleet/vendor-party-documents/'.$partyId.'/'.now()->format('Y/m'),
                             ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-                            5120
+                            4096
                         );
                         $storedPaths[] = $party['documents'][$documentIndex]['file']['filePath'];
                     }
@@ -85,7 +86,7 @@ class VendorPartyController extends FleetBaseController
 
                     $validator = Validator::make(
                         ['document' => $file],
-                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120']]
+                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096']]
                     );
 
                     if ($validator->fails()) {
@@ -129,29 +130,94 @@ class VendorPartyController extends FleetBaseController
         ]);
     }
 
-    private function validateVendorContractorTypes(array $rows): void
+    private function validateVendorRows(array $rows, Request $request): void
     {
         $errors = [];
-        $allowed = config('fleetman.options.vendor_contractor_types', ['Car Related', 'Non-Car Related']);
+        $partyTypes = $this->partyTypeValues();
+        $statuses = $this->values('party_status');
+        $paymentTerms = $this->values('payment_term');
+        $vendorContractorTypes = $this->vendorContractorTypeValues();
+        $documentNames = $this->documentNameValues(['Vendors', 'Vendors & Parties'], 'party_document_template');
 
         foreach ($rows as $index => $row) {
-            if (! is_array($row) || (int) ($row['vendorTypeVersion'] ?? 0) < 1) {
+            if (! is_array($row)) {
+                $errors["rows.{$index}"] = 'Each vendor / party row must be a valid object.';
                 continue;
             }
 
-            if (strcasecmp(trim((string) ($row['status'] ?? '')), 'Draft') === 0) {
+            // Existing rows created before these rules remain readable. The
+            // version is added whenever the updated form creates or edits a row.
+            if ((int) ($row['vendorValidationVersion'] ?? 0) < 1 || strcasecmp((string) ($row['status'] ?? ''), 'Draft') === 0) {
                 continue;
             }
 
-            $type = trim((string) ($row['vendorContractorType'] ?? ''));
-            if (! in_array($type, $allowed, true)) {
-                $errors["rows.{$index}.vendorContractorType"] = 'Select a valid Vendor / Contractor Type.';
+            $version = (int) ($row['vendorValidationVersion'] ?? 0);
+            $validator = Validator::make($row, [
+                'partyId' => ['required', 'string', 'max:100'],
+                'partyName' => ['required', 'string', 'max:255'],
+                'partyType' => ['required', Rule::in($partyTypes)],
+                'vendorContractorType' => [$version >= 2 ? 'required' : 'nullable', Rule::in($vendorContractorTypes)],
+                'status' => ['required', Rule::in($statuses)],
+                'phone' => ['required', 'regex:/^\d{11}$/'],
+                'email' => ['nullable', 'email:rfc', 'max:255'],
+                'whatsapp' => ['nullable', 'regex:/^\d{11}$/'],
+                'tradeLicense' => ['nullable', 'regex:/^\d+$/', 'max:100'],
+                'tinBin' => ['nullable', 'string', 'max:100'],
+                'paymentTerms' => ['nullable', Rule::in($paymentTerms)],
+                'address' => ['required', 'string', 'max:1500'],
+                'about' => ['nullable', 'string', 'max:2000'],
+                'contacts' => ['required', 'array', 'min:1'],
+                'contacts.*.name' => ['required', 'string', 'max:255'],
+                'contacts.*.role' => ['nullable', 'string', 'max:255'],
+                'contacts.*.phone' => ['required', 'regex:/^\d{11}$/'],
+                'contacts.*.email' => ['nullable', 'email:rfc', 'max:255'],
+                'contacts.*.whatsapp' => ['nullable', 'regex:/^\d{11}$/'],
+                'documents' => ['required', 'array', 'min:1'],
+                'documents.*.name' => ['required', Rule::in($documentNames)],
+                'documents.*.number' => ['nullable', 'string', 'max:255'],
+                'documents.*.expiry' => ['nullable', 'date'],
+            ], [
+                'phone.regex' => 'Phone Number must be exactly 11 digits.',
+                'whatsapp.regex' => 'WhatsApp Number must be exactly 11 digits.',
+                'email.email' => 'Enter a valid vendor email address.',
+                'tradeLicense.regex' => 'Trade License No. must contain digits only.',
+                'vendorContractorType.required' => 'Vendor / Contractor Type is required.',
+                'vendorContractorType.in' => 'Select a valid Vendor / Contractor Type.',
+                'contacts.*.phone.regex' => 'Each contact phone number must be exactly 11 digits.',
+                'contacts.*.email.email' => 'Enter a valid contact-person email address.',
+                'contacts.*.whatsapp.regex' => 'Each contact-person WhatsApp number must be exactly 11 digits.',
+            ]);
+
+            foreach ($validator->errors()->messages() as $key => $messages) {
+                $errors["rows.{$index}.{$key}"] = $messages;
+            }
+
+            foreach ((array) ($row['documents'] ?? []) as $documentIndex => $document) {
+                if (! is_array($document)) {
+                    continue;
+                }
+
+                $file = is_array($document['file'] ?? null) ? $document['file'] : [];
+                $directFile = $request->file("document_files.{$index}.{$documentIndex}");
+                if (! $this->hasStoredVendorFile($file) && ! $directFile instanceof UploadedFile) {
+                    $errors["rows.{$index}.documents.{$documentIndex}.file"] = 'Upload File is required for each vendor document.';
+                } elseif ((int) ($file['sizeBytes'] ?? 0) > 4 * 1024 * 1024) {
+                    $errors["rows.{$index}.documents.{$documentIndex}.file"] = 'Each vendor document must not exceed 4 MB.';
+                }
             }
         }
 
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
+    }
+
+    private function hasStoredVendorFile(array $file): bool
+    {
+        return filled($file['tempToken'] ?? null)
+            || filled($file['filePath'] ?? null)
+            || filled($file['fileUrl'] ?? null)
+            || filled($file['previewUrl'] ?? null);
     }
 
     private function validateFuelStationRows(array $rows): void
@@ -199,7 +265,7 @@ class VendorPartyController extends FleetBaseController
     public function uploadDocument(Request $request, FleetTemporaryUploadService $uploads): JsonResponse
     {
         $validated = $request->validate([
-            'document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096'],
             'party_id' => ['nullable', 'string', 'max:80'],
             'document_name' => ['nullable', 'string', 'max:160'],
         ]);

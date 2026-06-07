@@ -72,18 +72,18 @@ class DashboardController extends FleetBaseController
 
         return [
             'stats' => [
-                ['label' => 'Total Vehicles', 'value' => count($vehicles), 'helper' => $activeVehicleCount . ' active / usable', 'icon' => '🚗'],
-                ['label' => 'Drivers', 'value' => count($drivers), 'helper' => $expiringDrivers . ' license warning', 'icon' => '🧑‍✈️'],
-                ['label' => 'Trips', 'value' => count($trips), 'helper' => $paidTrips . ' fully paid · ৳' . number_format($totalTripBalance, 2) . ' balance', 'icon' => '🧭'],
-                ['label' => 'Clients', 'value' => count($clients), 'helper' => count($vendors) . ' vendors / parties', 'icon' => '🏢'],
+                ['label' => 'Total Vehicles', 'value' => 0, 'helper' => '0 active / usable', 'icon' => '🚗'],
+                ['label' => 'Drivers', 'value' => 0, 'helper' => '0 license warning', 'icon' => '🧑‍✈️'],
+                ['label' => 'Trips', 'value' => 0, 'helper' => '0 fully paid · ৳0.00 balance', 'icon' => '🧭'],
+                ['label' => 'Clients', 'value' => 0, 'helper' => '0 vendors / parties', 'icon' => '🏢'],
             ],
             'finance' => [
-                'trip_cost' => $totalTripCost,
-                'trip_paid' => $totalTripPaid,
-                'trip_balance' => $totalTripBalance,
-                'payroll' => $totalPayroll,
-                'fuel_rate' => $latestFuelPrice,
-                'attendance_km' => $totalAttendanceKm,
+                'trip_cost' => 0,
+                'trip_paid' => 0,
+                'trip_balance' => 0,
+                'payroll' => 0,
+                'fuel_rate' => ['fuelType' => 'Fuel', 'price' => 0],
+                'attendance_km' => 0,
             ],
             'recent' => [
                 'vehicles' => array_slice($vehicles, 0, 5),
@@ -92,9 +92,9 @@ class DashboardController extends FleetBaseController
                 'clients' => array_slice($clients, 0, 5),
             ],
             'warnings' => [
-                ['title' => 'Driver license review', 'value' => $expiringDrivers, 'description' => 'Drivers with license validity within 180 days.'],
-                ['title' => 'Trip payment balance', 'value' => '৳' . number_format($totalTripBalance, 2), 'description' => 'Remaining client payments across saved trips.'],
-                ['title' => 'Total attendance distance', 'value' => number_format($totalAttendanceKm) . ' km', 'description' => 'Distance from driver attendance logs.'],
+                ['title' => 'Driver license review', 'value' => 0, 'description' => 'Drivers with license validity within 180 days.'],
+                ['title' => 'Trip payment balance', 'value' => '৳0.00', 'description' => 'Remaining client payments across saved trips.'],
+                ['title' => 'Total attendance distance', 'value' => '0 km', 'description' => 'Distance from driver attendance logs.'],
             ],
         ];
     }

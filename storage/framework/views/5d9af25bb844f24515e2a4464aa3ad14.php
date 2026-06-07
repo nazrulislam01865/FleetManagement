@@ -97,14 +97,14 @@
 <?php endif; ?>
             <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4b244ece64768724078120db372595a2 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'documentNameMasterType','label' => 'Document Type / Used For','options' => ['All Modules', 'Vehicles', 'Drivers', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'],'placeholder' => 'Select who will use this document','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'documentNameMasterType','label' => 'Document Type / Used For','options' => ['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'],'placeholder' => 'Select who will use this document','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.select'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'documentNameMasterType','label' => 'Document Type / Used For','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['All Modules', 'Vehicles', 'Drivers', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts']),'placeholder' => 'Select who will use this document','required' => true]); ?>
+<?php $component->withAttributes(['id' => 'documentNameMasterType','label' => 'Document Type / Used For','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts']),'placeholder' => 'Select who will use this document','required' => true]); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal4b244ece64768724078120db372595a2)): ?>
