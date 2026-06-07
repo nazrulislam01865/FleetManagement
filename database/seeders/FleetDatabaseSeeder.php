@@ -6,6 +6,7 @@ use App\Models\Fleet\FleetClient;
 use App\Models\Fleet\FleetContract;
 use App\Models\Fleet\FleetDocumentName;
 use App\Models\Fleet\FleetDriver;
+use App\Models\Fleet\FleetDriverContactType;
 use App\Models\Fleet\FleetDriverAttendance;
 use App\Models\Fleet\FleetEmployee;
 use App\Models\Fleet\FleetFuelPrice;
@@ -39,11 +40,12 @@ class FleetDatabaseSeeder extends Seeder
         $this->seedMasterTable(FleetFuelUnit::class, $options['fuel_units'] ?? []);
         $this->seedSimple('fuel_status', $options['fuel_statuses'] ?? []);
         $this->seedSimple('document_template', $options['document_templates'] ?? []);
-        $this->seedMasterTable(FleetDocumentName::class, array_values(array_unique(array_merge(
-            $options['document_templates'] ?? [],
-            $options['party_document_templates'] ?? [],
-            $options['driver_document_templates'] ?? []
-        ))));
+        $this->seedDocumentNames([
+            'Vehicles' => $options['document_templates'] ?? [],
+            'Vendors & Parties' => $options['party_document_templates'] ?? [],
+            'Drivers' => $options['driver_document_templates'] ?? [],
+            'Employees' => $options['employee_document_templates'] ?? [],
+        ]);
         $this->seedSimple('document_reminder', $options['document_reminders'] ?? []);
         $this->seedMasterTable(FleetPartyType::class, $options['party_types'] ?? []);
         $this->seedSimple('party_status', $options['party_statuses'] ?? []);
@@ -54,6 +56,7 @@ class FleetDatabaseSeeder extends Seeder
         $this->seedSimple('trip_period', $options['trip_periods'] ?? []);
         $this->seedSimple('trip_purpose', $options['trip_purposes'] ?? []);
         $this->seedSimple('driver_license_type', $options['driver_license_types'] ?? []);
+        $this->seedMasterTable(FleetDriverContactType::class, $options['driver_contact_types'] ?? []);
         $this->seedSimple('driver_salary_tenure', $options['driver_salary_tenures'] ?? []);
         $this->seedSimple('driver_status', $options['driver_statuses'] ?? []);
         $this->seedSimple('driver_document_template', $options['driver_document_templates'] ?? []);
@@ -64,6 +67,7 @@ class FleetDatabaseSeeder extends Seeder
         $this->seedSimple('employee_status', $options['employee_statuses'] ?? []);
         $this->seedSimple('employee_salary_tenure', $options['employee_salary_tenures'] ?? []);
         $this->seedSimple('employee_designation', $options['employee_designations'] ?? []);
+        $this->seedSimple('employee_document_template', $options['employee_document_templates'] ?? []);
 
         $this->seedVehicleCategoryMasters($options['vehicle_categories'] ?? []);
 
@@ -159,6 +163,33 @@ class FleetDatabaseSeeder extends Seeder
                     'is_active' => true,
                 ]
             );
+        }
+    }
+
+
+    private function seedDocumentNames(array $groups): void
+    {
+        $sort = 1;
+
+        foreach ($groups as $documentType => $values) {
+            foreach (array_values($values) as $value) {
+                $name = trim((string) $value);
+
+                if ($name === '') {
+                    continue;
+                }
+
+                FleetDocumentName::updateOrCreate(
+                    ['code' => str($name)->upper()->replaceMatches('/[^A-Z0-9]+/', '_')->trim('_')->toString()],
+                    [
+                        'name' => $name,
+                        'document_type' => $documentType,
+                        'description' => null,
+                        'sort_order' => $sort++,
+                        'is_active' => true,
+                    ]
+                );
+            }
         }
     }
 

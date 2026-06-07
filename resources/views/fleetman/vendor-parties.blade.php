@@ -28,7 +28,31 @@
                         <x-fleetman.input id="partyId" label="Vendor / Party ID" required readonly />
                         <x-fleetman.input id="partyName" label="Party Name" placeholder="Example: Speed Transport Services" required />
                         <x-fleetman.select id="partyType" label="Party Type" :options="$fleetman['options']['party_types']" placeholder="Select type" required />
+                        <x-fleetman.select id="vendorContractorType" label="Vendor / Contractor Type" :options="$fleetman['options']['vendor_contractor_types']" placeholder="Select vendor / contractor type" required hint="Only active Car Related vendors appear on the Driver page." />
                         <x-fleetman.select id="partyStatus" label="Status" :options="$fleetman['options']['party_statuses']" required />
+                    </div>
+                    <div id="partyFuelTypesField" class="fuel-station-config hidden" style="margin-top:16px">
+                        <div class="field">
+                            <label>Fuel Types Sold <span class="req">*</span></label>
+                            @php
+                                $vendorFuelTypes = collect($fleetman['options']['fuel_types'] ?? [])
+                                    ->reject(fn ($fuelType) => in_array(
+                                        strtolower(trim((string) $fuelType)),
+                                        ['lpg', 'electric', 'hybrid charge', 'electric charge'],
+                                        true
+                                    ))
+                                    ->values();
+                            @endphp
+                            <div class="fuel-type-check-grid" id="partyFuelTypes">
+                                @foreach ($vendorFuelTypes as $fuelType)
+                                    <label class="fuel-type-check">
+                                        <input type="checkbox" name="partyFuelTypes" value="{{ $fuelType }}">
+                                        <span>{{ $fuelType }}</span>
+                                    </label>
+                                @endforeach
+                            </div>
+                            <small class="upload-meta">Required for fuel stations. Add Fuel will use this list to show only compatible stations.</small>
+                        </div>
                     </div>
                     <div class="grid3" style="margin-top:16px">
                         <x-fleetman.input id="partyPhone" label="Phone Number" placeholder="01XXXXXXXXX" required />
@@ -80,7 +104,7 @@
         <x-fleetman.topbar :items="[['label' => 'Vendor List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportPartiesBtn">⬇ Export CSV</button>
-                <button type="button" class="btn primary" id="newPartyBtn">＋ Add Vendor</button>
+                
             </x-slot:actions>
         </x-fleetman.topbar>
 

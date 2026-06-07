@@ -11,6 +11,6 @@
     @if($label !== null && $label !== '')
         <label for="{{ $id }}">{{ $label }} @if($required)<span class="req">*</span>@endif</label>
     @endif
-    <textarea id="{{ $id }}" name="{{ $name ?? $id }}" @if($placeholder) placeholder="{{ $placeholder }}" @endif {{ $attributes }}></textarea>
+    <textarea id="{{ $id }}" name="{{ $name ?? $id }}" @if($placeholder) placeholder="{{ $placeholder }}" @endif @if($required) required aria-required="true" @endif {{ $attributes }}></textarea>
     @if($hint)<div class="hint">{{ $hint }}</div>@endif
 </div>

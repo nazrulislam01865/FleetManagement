@@ -43,8 +43,9 @@
 
         <form id="documentNameMasterForm" class="master-form" autocomplete="off">
             <input type="hidden" id="documentNameEditingCode">
-            <x-fleetman.input id="documentNameMasterName" label="Document Name" placeholder="Example: Trade License Copy" required />
-            <x-fleetman.input id="documentNameMasterCode" label="Code" placeholder="Example: TRADE_LICENSE_COPY" hint="Used internally to keep the dropdown value stable." />
+            <x-fleetman.input id="documentNameMasterName" label="Document Name" placeholder="Example: Driving License Copy" required />
+            <x-fleetman.select id="documentNameMasterType" label="Document Type / Used For" :options="['All Modules', 'Vehicles', 'Drivers', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts']" placeholder="Select who will use this document" required />
+            <x-fleetman.input id="documentNameMasterCode" label="Code" placeholder="Example: DRIVING_LICENSE_COPY" hint="Used internally to keep the dropdown value stable." />
             <x-fleetman.input id="documentNameMasterSort" label="Sort Order" type="number" value="0" min="0" />
             <x-fleetman.select id="documentNameMasterStatus" label="Status" :options="['Active', 'Inactive']" value="Active" />
             <div class="master-form-full">
@@ -64,6 +65,7 @@
                 <thead>
                     <tr>
                         <th>Document Name</th>
+                        <th>Used For</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>

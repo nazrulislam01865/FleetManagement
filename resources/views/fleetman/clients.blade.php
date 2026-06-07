@@ -16,18 +16,18 @@
                     <div class="grid3">
                         <x-fleetman.input id="clientId" label="Client ID" required readonly />
                         <x-fleetman.input id="clientName" label="Client Name" required placeholder="Example: ABC Logistics Ltd." />
-                        <x-fleetman.input id="clientEmail" label="Email" placeholder="company@example.com" />
-                        <x-fleetman.input id="clientPhone" label="Phone Number" required placeholder="01XXXXXXXXX" />
-                        <x-fleetman.input id="clientWhatsapp" label="WhatsApp Number" placeholder="01XXXXXXXXX" />
-                        <x-fleetman.input id="clientReference" label="Reference" placeholder="Who referred this client?" />
+                        <x-fleetman.input id="clientEmail" label="Email" type="email" required placeholder="company@example.com" autocomplete="email" />
+                        <x-fleetman.input id="clientPhone" label="Phone Number" type="tel" required placeholder="01XXXXXXXXX" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" autocomplete="tel" />
+                        <x-fleetman.input id="clientWhatsapp" label="WhatsApp Number" type="tel" required placeholder="01XXXXXXXXX" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" />
+                        <x-fleetman.input id="clientReference" label="Reference" required placeholder="Who referred this client?" />
                     </div>
                     <div class="grid3" style="margin-top:16px">
-                        <x-fleetman.select id="clientType" label="Client Type" :options="$fleetman['options']['client_types']" value="Corporate" />
-                        <x-fleetman.select id="clientStatus" label="Status" :options="$fleetman['options']['client_statuses']" value="Active" />
-                        <x-fleetman.select id="clientContactMethod" label="Preferred Contact Method" :options="$fleetman['options']['client_contact_methods']" value="Phone" />
+                        <x-fleetman.select id="clientType" label="Client Type" :options="$fleetman['options']['client_types']" value="Corporate" required />
+                        <x-fleetman.select id="clientStatus" label="Status" :options="$fleetman['options']['client_statuses']" value="Active" required />
+                        <x-fleetman.select id="clientContactMethod" label="Preferred Contact Method" :options="$fleetman['options']['client_contact_methods']" placeholder="Select Preferred Contact Method" required />
                     </div>
                     <div style="margin-top:16px"><x-fleetman.textarea id="clientAddress" label="Permanent Address" required placeholder="House / Road / Area / City" /></div>
-                    <div style="margin-top:16px"><x-fleetman.textarea id="clientAbout" label="About / Notes" placeholder="Short note about this client, operation area, service requirement, billing note, etc." /></div>
+                    <div style="margin-top:16px"><x-fleetman.textarea id="clientAbout" label="About / Notes" required placeholder="Short note about this client, operation area, service requirement, billing note, etc." /></div>
                 </x-fleetman.section-card>
                 <x-fleetman.section-card title="2. Contact Person(s)">
                     <x-slot:action><button type="button" class="btn light" id="addClientContactBtn">＋ Add Contact Person</button></x-slot:action>
@@ -40,10 +40,10 @@
 
     <div id="clientListPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Client List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportClientsBtn">⬇ Export CSV</button><button type="button" class="btn primary" id="newClientBtn">＋ Add Client</button></x-slot:actions>
+            <x-slot:actions><button type="button" class="btn light" id="exportClientsBtn">⬇ Export CSV</button></x-slot:actions>
         </x-fleetman.topbar>
         <x-fleetman.title-card title="Client List" subtitle="Simple list page with sample data, search, filters, and quick actions. Designed for easy day-to-day office use."></x-fleetman.title-card>
-        <div class="kpi"><x-fleetman.kpi-card id="clientKpiTotal" label="Total Clients" /><x-fleetman.kpi-card id="clientKpiActive" label="Active Clients" /><x-fleetman.kpi-card id="clientKpiContacts" label="Total Contact Persons" /><x-fleetman.kpi-card id="clientKpiEmail" label="Clients with Email" /></div>
+        <div class="kpi"><x-fleetman.kpi-card id="clientKpiTotal" label="Total Clients" /><x-fleetman.kpi-card id="clientKpiActive" label="Active Clients" /><x-fleetman.kpi-card id="clientKpiEmail" label="Clients with Email" /></div>
         <div class="card">
             <div class="filters">
                 <input id="clientSearch" placeholder="Search by client name, phone, email, contact person, or client ID">

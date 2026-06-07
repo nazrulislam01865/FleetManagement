@@ -522,7 +522,9 @@ class ReportController extends FleetBaseController
         $secondaryName = (string) ($row['secondaryFuelName'] ?? $row['secondaryFuel'] ?? '');
         $primaryQty = (float) ($row['primaryQty'] ?? $row['diesel'] ?? $row['octane'] ?? 0);
         $secondaryQty = (float) ($row['secondaryQty'] ?? 0);
+        $primaryRate = (float) ($row['primaryRate'] ?? 0);
         $secondaryRate = (float) ($row['secondaryRate'] ?? 0);
+        $primaryAmount = (float) ($row['primaryAmount'] ?? ($primaryQty * $primaryRate));
         $secondaryAmount = (float) ($row['secondaryAmount'] ?? ($secondaryQty * $secondaryRate));
 
         $diesel = (float) ($row['diesel'] ?? 0);
@@ -537,8 +539,13 @@ class ReportController extends FleetBaseController
             $octane = $primaryQty;
         }
 
-        if ($gas <= 0 && ($secondaryQty > 0 || str($secondaryName)->lower()->contains(['cng', 'lpg']))) {
-            $gas = $secondaryAmount;
+        if ($gas <= 0) {
+            if (str($primaryName)->lower()->contains(['cng', 'lpg', 'gas'])) {
+                $gas += $primaryAmount;
+            }
+            if (str($secondaryName)->lower()->contains(['cng', 'lpg', 'gas'])) {
+                $gas += $secondaryAmount;
+            }
         }
 
         $date = $row['date'] ?? $row['submitDate'] ?? $row['submittedDate'] ?? null;
@@ -561,8 +568,10 @@ class ReportController extends FleetBaseController
             $startKm = max(0, $endKm - $totalKm);
         }
 
-        $fuelLitres = max($diesel + $octane, 1);
-        $mileage = (float) ($row['mileage'] ?? round($totalKm / $fuelLitres, 2));
+        $fuelLitres = (float) ($row['liquidFuelLitres'] ?? ($diesel + $octane));
+        $mileage = array_key_exists('mileage', $row)
+            ? (float) $row['mileage']
+            : ($fuelLitres > 0 ? round($totalKm / $fuelLitres, 2) : 0);
 
         $fuelType = $row['fuelType'] ?? $this->fuelTypeLabel($diesel, $gas, $octane, $primaryName, $secondaryName);
 

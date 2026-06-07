@@ -43,9 +43,15 @@ class DashboardController extends FleetBaseController
             return in_array($row['status'] ?? 'Active', ['Active', 'Needs document review'], true);
         })->count();
 
-        $runningTrips = collect($trips)->where('status', 'Running')->count();
-        $completedTrips = collect($trips)->where('status', 'Completed')->count();
         $totalTripCost = collect($trips)->sum(fn (array $row) => (float) ($row['totalCost'] ?? 0));
+        $totalTripPaid = collect($trips)->sum(fn (array $row) => (float) ($row['paidAmount'] ?? 0));
+        $totalTripBalance = collect($trips)->sum(fn (array $row) => max(0, (float) ($row['balanceDue'] ?? ((float) ($row['totalCost'] ?? 0) - (float) ($row['paidAmount'] ?? 0)))));
+        $paidTrips = collect($trips)->filter(function (array $row): bool {
+            $total = (float) ($row['totalCost'] ?? 0);
+            $balance = max(0, (float) ($row['balanceDue'] ?? ($total - (float) ($row['paidAmount'] ?? 0))));
+
+            return $total > 0 && $balance <= 0.009;
+        })->count();
         $totalPayroll = collect($drivers)->sum(fn (array $row) => (float) ($row['salary'] ?? 0))
             + collect($employees)->sum(fn (array $row) => (float) ($row['salary'] ?? 0));
         $latestFuelPrice = collect($fuelPrices)->sortByDesc('effectiveDate')->first();
@@ -68,11 +74,13 @@ class DashboardController extends FleetBaseController
             'stats' => [
                 ['label' => 'Total Vehicles', 'value' => count($vehicles), 'helper' => $activeVehicleCount . ' active / usable', 'icon' => '🚗'],
                 ['label' => 'Drivers', 'value' => count($drivers), 'helper' => $expiringDrivers . ' license warning', 'icon' => '🧑‍✈️'],
-                ['label' => 'Trips', 'value' => count($trips), 'helper' => $runningTrips . ' running, ' . $completedTrips . ' completed', 'icon' => '🧭'],
+                ['label' => 'Trips', 'value' => count($trips), 'helper' => $paidTrips . ' fully paid · ৳' . number_format($totalTripBalance, 2) . ' balance', 'icon' => '🧭'],
                 ['label' => 'Clients', 'value' => count($clients), 'helper' => count($vendors) . ' vendors / parties', 'icon' => '🏢'],
             ],
             'finance' => [
                 'trip_cost' => $totalTripCost,
+                'trip_paid' => $totalTripPaid,
+                'trip_balance' => $totalTripBalance,
                 'payroll' => $totalPayroll,
                 'fuel_rate' => $latestFuelPrice,
                 'attendance_km' => $totalAttendanceKm,
@@ -85,7 +93,7 @@ class DashboardController extends FleetBaseController
             ],
             'warnings' => [
                 ['title' => 'Driver license review', 'value' => $expiringDrivers, 'description' => 'Drivers with license validity within 180 days.'],
-                ['title' => 'Running trips', 'value' => $runningTrips, 'description' => 'Trips currently marked as running.'],
+                ['title' => 'Trip payment balance', 'value' => '৳' . number_format($totalTripBalance, 2), 'description' => 'Remaining client payments across saved trips.'],
                 ['title' => 'Total attendance distance', 'value' => number_format($totalAttendanceKm) . ' km', 'description' => 'Distance from driver attendance logs.'],
             ],
         ];

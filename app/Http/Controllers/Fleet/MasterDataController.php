@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Fleet;
 use App\Models\Fleet\FleetClientType;
 use App\Models\Fleet\FleetContactMethod;
 use App\Models\Fleet\FleetDocumentName;
+use App\Models\Fleet\FleetDriverContactType;
 use App\Models\Fleet\FleetLicenceType;
 use App\Models\Fleet\FleetPartyType;
 use App\Models\Fleet\FleetVehicleCategory;
@@ -75,6 +76,16 @@ class MasterDataController extends FleetBaseController
         ]));
     }
 
+    public function driverContactTypes(): View
+    {
+        return view('fleetman.master-data.driver-contact-types', $this->masterViewData('master-data-driver-contact-types', [
+            'page' => 'master-data',
+            'masterSection' => 'driver_contact_types',
+            'masterTitle' => 'Driver Contact Type Master',
+            'masterSubtitle' => 'Manage the contact-number types available on the Driver page.',
+        ]));
+    }
+
     public function clientTypes(): View
     {
         return view('fleetman.master-data.client-types', $this->masterViewData('master-data-client-types', [
@@ -128,6 +139,8 @@ class MasterDataController extends FleetBaseController
             'document_names.*' => ['array'],
             'licence_types' => ['present', 'array'],
             'licence_types.*' => ['array'],
+            'driver_contact_types' => ['present', 'array'],
+            'driver_contact_types.*' => ['array'],
             'client_types' => ['present', 'array'],
             'client_types.*' => ['array'],
             'contact_methods' => ['present', 'array'],
@@ -142,8 +155,9 @@ class MasterDataController extends FleetBaseController
             $this->syncMasterTable(FleetVehicleCategory::class, $validated['vehicle_categories']);
             $this->syncVehicleSubCategories($validated['vehicle_sub_categories']);
             $this->syncMasterTable(FleetPartyType::class, $validated['party_types']);
-            $this->syncMasterTable(FleetDocumentName::class, $validated['document_names']);
+            $this->syncDocumentNames($validated['document_names']);
             $this->syncMasterTable(FleetLicenceType::class, $validated['licence_types']);
+            $this->syncMasterTable(FleetDriverContactType::class, $validated['driver_contact_types']);
             $this->syncMasterTable(FleetClientType::class, $validated['client_types']);
             $this->syncMasterTable(FleetContactMethod::class, $validated['contact_methods']);
             $this->syncMasterTable(FleetFuelType::class, $validated['fuel_types']);
@@ -175,6 +189,7 @@ class MasterDataController extends FleetBaseController
             'party_types' => $this->masterRows(FleetPartyType::class),
             'document_names' => $this->masterRows(FleetDocumentName::class),
             'licence_types' => $this->masterRows(FleetLicenceType::class),
+            'driver_contact_types' => $this->masterRows(FleetDriverContactType::class),
             'client_types' => $this->masterRows(FleetClientType::class),
             'contact_methods' => $this->masterRows(FleetContactMethod::class),
             'fuel_types' => $this->masterRows(FleetFuelType::class),
@@ -194,6 +209,7 @@ class MasterDataController extends FleetBaseController
                 'name' => $row->name,
                 'label' => $row->name,
                 'description' => $row->description ?? '',
+                'documentType' => $row->getAttribute('document_type') ?: null,
                 'sortOrder' => (int) $row->sort_order,
                 'status' => $row->is_active ? 'Active' : 'Inactive',
                 'createdAt' => optional($row->created_at)->toDateTimeString(),
@@ -255,6 +271,49 @@ class MasterDataController extends FleetBaseController
                 ['code' => $row['code']],
                 [
                     'name' => $row['name'],
+                    'description' => $row['description'],
+                    'sort_order' => $row['sortOrder'],
+                    'is_active' => $row['status'] === 'Active',
+                ]
+            );
+        }
+    }
+
+    private function syncDocumentNames(array $rows): void
+    {
+        $allowedTypes = ['All Modules', 'Vehicles', 'Drivers', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'];
+        $cleanRows = collect($rows)
+            ->map(function (array $row) use ($allowedTypes): ?array {
+                $clean = $this->cleanMasterRow($row);
+                if ($clean === null) {
+                    return null;
+                }
+
+                $documentType = trim((string) ($row['documentType'] ?? $row['document_type'] ?? 'All Modules'));
+                $clean['documentType'] = in_array($documentType, $allowedTypes, true) ? $documentType : 'All Modules';
+
+                return $clean;
+            })
+            ->filter(fn (?array $row) => $row !== null)
+            ->unique('code')
+            ->values();
+
+        $codes = $cleanRows->pluck('code')->all();
+        FleetDocumentName::query()
+            ->when(count($codes) > 0, fn ($query) => $query->whereNotIn('code', $codes))
+            ->delete();
+
+        if (count($codes) === 0) {
+            FleetDocumentName::query()->delete();
+            return;
+        }
+
+        foreach ($cleanRows as $row) {
+            FleetDocumentName::updateOrCreate(
+                ['code' => $row['code']],
+                [
+                    'name' => $row['name'],
+                    'document_type' => $row['documentType'],
                     'description' => $row['description'],
                     'sort_order' => $row['sortOrder'],
                     'is_active' => $row['status'] === 'Active',

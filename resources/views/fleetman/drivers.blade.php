@@ -22,34 +22,34 @@
                         <x-fleetman.input id="driverFullName" label="Full Name" required placeholder="Example: Md. Karim Hossain" />
                         <x-fleetman.input id="driverFatherName" label="Father's Name" required placeholder="Example: Md. Abdul Mannan" />
                         <x-fleetman.input id="driverMotherName" label="Mother's Name" required placeholder="Example: Mst. Amena Begum" />
-                        <x-fleetman.input id="driverWhatsapp" label="WhatsApp Number" placeholder="Example: 01712000000" />
-                        <x-fleetman.input id="driverEmail" label="Email" type="email" placeholder="Example: driver@email.com" />
-                        <x-fleetman.input id="driverDob" label="Date of Birth" type="date" />
-                        <x-fleetman.input id="driverAge" label="Age" type="number" placeholder="Auto or manual" />
-                        <x-fleetman.input id="driverNid" label="NID" required placeholder="Example: 19891234567890123" />
-                        <x-fleetman.input id="driverReference" label="Reference" placeholder="Example: Vendor / Staff reference" />
+                        <x-fleetman.input id="driverWhatsapp" label="WhatsApp Number" type="tel" placeholder="01XXXXXXXXX" required inputmode="numeric" maxlength="11" pattern="[0-9]{11}" />
+                        <x-fleetman.input id="driverEmail" label="Email" type="email" placeholder="Example: driver@email.com" required />
+                        <x-fleetman.input id="driverDob" label="Date of Birth" type="date" required />
+                        <x-fleetman.input id="driverAge" label="Age" type="number" placeholder="Calculated automatically" required readonly min="0" max="120" />
+                        <x-fleetman.input id="driverNid" label="NID" required placeholder="Maximum 17 digits" inputmode="numeric" maxlength="17" pattern="[0-9]{1,17}" />
+                        <x-fleetman.input id="driverReference" label="Reference" required placeholder="Example: Vendor / Staff reference" />
                     </div>
                 </x-fleetman.section-card>
 
-                <x-fleetman.section-card title="2. Contact Numbers">
+                <x-fleetman.section-card title="2. Contact Numbers" id="driverContactsSection">
                     <div id="driverContacts"></div>
                     <button type="button" class="btn secondary" id="addDriverContactBtn" style="margin-top:10px">＋ Add Contact Number</button>
                 </x-fleetman.section-card>
 
                 <x-fleetman.section-card title="3. License & Work Setup">
                     <div class="grid3">
-                        <x-fleetman.input id="driverLicenseNo" label="Driving License No." required placeholder="Example: DL-DHK-443219" />
+                        <x-fleetman.input id="driverLicenseNo" label="Driving License No." required placeholder="14 or 15 alphanumeric characters" minlength="14" maxlength="15" pattern="[A-Za-z0-9]{14,15}" />
                         <x-fleetman.select id="driverLicenseType" label="License Type" required :options="$fleetman['options']['driver_license_types']" placeholder="Select license type" />
                         <x-fleetman.input id="driverLicenseValidity" label="License Validity Date" type="date" required />
-                        <x-fleetman.input id="driverSalary" label="Salary" type="number" required placeholder="Example: 25000" />
+                        <x-fleetman.input id="driverSalary" label="Salary" type="number" required placeholder="Example: 25000" min="0" step="0.01" />
                         <x-fleetman.select id="driverSalaryTenure" label="Salary Tenure" required :options="$fleetman['options']['driver_salary_tenures']" />
-                        <x-fleetman.input id="driverOtRate" label="Overtime Rate" type="number" value="50" />
-                        <x-fleetman.input id="driverWorkingHour" label="Regular Working Hour" type="number" value="270" required />
-                        <x-fleetman.select id="driverVendor" label="Vendor / Contractor" :options="array_merge(['Own Payroll'], $fleetman['options']['vendors'])" placeholder="None" />
-                        <x-fleetman.select id="driverStatus" label="Driver Status" :options="$fleetman['options']['driver_statuses']" />
+                        <x-fleetman.input id="driverOtRate" label="Overtime Rate/Hourly" type="number" value="50" required min="0" step="0.01" />
+                        <x-fleetman.input id="driverWorkingHour" label="Regular Working Hour" type="number" value="270" required min="1" step="0.01" />
+                        <x-fleetman.select id="driverVendor" label="Vendor / Contractor" :options="array_merge(['Own Payroll'], $fleetman['options']['driver_vendors'] ?? [])" placeholder="Select car-related vendor / contractor" required hint="Only active parties marked Car Related are shown." />
+                        <x-fleetman.select id="driverStatus" label="Driver Status" :options="$fleetman['options']['driver_statuses']" required />
                     </div>
-                    <div class="field" style="margin-top:16px">
-                        <label>Preferred Duty Type</label>
+                    <div class="field" id="driverDutyField" style="margin-top:16px">
+                        <label>Preferred Duty Type <span class="req">*</span></label>
                         <div class="choice-grid">
                             @foreach($fleetman['options']['driver_duty_types'] as $duty)
                                 <label class="choice"><input type="radio" name="driverDuty" value="{{ $duty['value'] }}"><span>{{ $duty['title'] }}</span><small>{{ $duty['description'] }}</small></label>
@@ -63,12 +63,12 @@
                         <x-fleetman.textarea id="driverPresentAddress" label="Present Address" required placeholder="House, road, area, district" />
                         <x-fleetman.textarea id="driverPermanentAddress" label="Permanent Address" required placeholder="Village/house, post office, thana, district" />
                     </div>
-                    <div style="margin-top:16px"><x-fleetman.textarea id="driverAbout" label="About / Remarks" placeholder="Any important note about the driver" /></div>
+                    <div style="margin-top:16px"><x-fleetman.textarea id="driverAbout" label="About / Remarks" required placeholder="Any important note about the driver" /></div>
                 </x-fleetman.section-card>
 
-                <x-fleetman.section-card title="5. Photo & Documents">
+                <x-fleetman.section-card title="5. Photo & Documents" id="driverDocumentsSection">
                     <x-slot:action><button type="button" class="btn secondary" id="addDriverDocumentBtn">+ Add Document</button></x-slot:action>
-                    <div class="photo-box" style="margin-bottom:14px"><div class="photo-avatar">🧑‍✈️</div><div class="field" style="flex:1"><label for="driverPhoto">Driver Photo</label><input id="driverPhoto" type="file" accept="image/*"><div class="hint">Allowed: png, jpg, jpeg, webp. Prototype stores file name only.</div></div></div>
+                    <div class="photo-box driver-photo-box" style="margin-bottom:14px"><div class="field" style="flex:1"><label for="driverPhoto">Driver Photo <span class="req">*</span></label><input id="driverPhoto" type="file" accept="image/jpeg,image/png,image/webp" required aria-required="true"><input id="driverPhotoData" type="hidden"><div class="temp-upload-progress hidden" id="driverPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta" id="driverPhotoInfo"></div><div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. The image preview appears below after upload.</div></div></div>
                     <div id="driverDocuments"></div>
                 </x-fleetman.section-card>
             </div>
@@ -78,11 +78,11 @@
 
     <div id="driverListPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Driver List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportDriversBtn">⬇ Export CSV</button><button type="button" class="btn primary" id="newDriverBtn">＋ Add Driver</button></x-slot:actions>
+            <x-slot:actions><button type="button" class="btn light" id="exportDriversBtn">⬇ Export CSV</button></x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card title="Driver List" subtitle="All saved drivers appear here. Search, filter, view, edit or export."></x-fleetman.title-card>
-        <div class="kpi"><x-fleetman.kpi-card id="driverKpiTotal" label="Total drivers" /><x-fleetman.kpi-card id="driverKpiActive" label="Active" /><x-fleetman.kpi-card id="driverKpiExpired" label="Expired soon" /><x-fleetman.kpi-card id="driverKpiDocs" label="Total documents" /></div>
+        <div class="kpi"><x-fleetman.kpi-card id="driverKpiTotal" label="Total drivers" /><x-fleetman.kpi-card id="driverKpiActive" label="Active" /><x-fleetman.kpi-card id="driverKpiExpired" label="Licences Expiring soon" /><x-fleetman.kpi-card id="driverKpiDocs" label="Total documents Uploaded" /></div>
         <div class="card">
             <div class="filters">
                 <input id="driverSearch" placeholder="Search by name, mobile, NID, license">

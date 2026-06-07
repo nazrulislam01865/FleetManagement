@@ -81,7 +81,8 @@
                     <a href="{{ route('fleet.trips') }}" class="compact-row">
                         <div class="compact-icon">🧭</div>
                         <div><b>{{ $trip['tripId'] ?? '-' }} · {{ $trip['purpose'] ?? 'Trip' }}</b><span>{{ $trip['vehicle'] ?? '-' }} / {{ $trip['driver'] ?? '-' }}</span></div>
-                        <span class="badge {{ ($trip['status'] ?? '') === 'Running' ? 'warn' : (($trip['status'] ?? '') === 'Completed' ? 'ok' : 'soft') }}">{{ $trip['status'] ?? '-' }}</span>
+                        @php($tripBalance = (float) ($trip['balanceDue'] ?? max(0, (float) ($trip['totalCost'] ?? 0) - (float) ($trip['paidAmount'] ?? 0))))
+                        <span class="badge {{ $tripBalance <= 0.009 ? 'ok' : 'warn' }}">{{ $tripBalance <= 0.009 ? 'Paid' : ('Balance ৳' . number_format($tripBalance, 2)) }}</span>
                     </a>
                 @empty
                     <div class="empty compact-empty">No trips found.</div>

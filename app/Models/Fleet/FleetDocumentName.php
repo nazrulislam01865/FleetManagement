@@ -9,7 +9,7 @@ class FleetDocumentName extends Model
     protected $table = 'fleet_document_names';
 
     protected $fillable = [
-        'code', 'name', 'description', 'sort_order', 'is_active',
+        'code', 'name', 'document_type', 'description', 'sort_order', 'is_active',
     ];
 
     protected function casts(): array

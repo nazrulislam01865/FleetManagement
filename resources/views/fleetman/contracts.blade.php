@@ -28,13 +28,12 @@
                 <div>
                     <h2>Basic Contract Information</h2>
                 </div>
-                <span class="badge soft">Simple step-by-step layout</span>
             </div>
 
             <div class="contract-grid">
                 <div class="field contract-col-4">
                     <label for="contractId">Contract ID <span class="req">*</span></label>
-                    <input id="contractId" readonly>
+                    <input id="contractId" readonly required aria-required="true">
                 </div>
                 <div class="field contract-col-4">
                     <label>Contract With <span class="req">*</span></label>
@@ -45,12 +44,12 @@
                 </div>
                 <div class="field contract-col-4">
                     <label for="contractParty">Contract Party <span class="req">*</span></label>
-                    <select id="contractParty"></select>
+                    <select id="contractParty" required aria-required="true"></select>
                     <input type="hidden" id="contractPartyId">
                 </div>
                 <div class="field contract-col-3">
                     <label for="contractAmount">Contract Amount <span class="req">*</span></label>
-                    <input id="contractAmount" type="number" step="0.01" placeholder="0">
+                    <input id="contractAmount" type="number" min="0.01" step="0.01" placeholder="0" required aria-required="true">
                 </div>
                 <div class="field contract-col-3">
                     <label>Status <span class="req">*</span></label>
@@ -62,15 +61,15 @@
                 </div>
                 <div class="field contract-col-3">
                     <label for="contractStart">Contract Start <span class="req">*</span></label>
-                    <input id="contractStart" type="date">
+                    <input id="contractStart" type="date" required aria-required="true">
                 </div>
                 <div class="field contract-col-3">
                     <label for="contractEnd">Contract End <span class="req">*</span></label>
-                    <input id="contractEnd" type="date">
+                    <input id="contractEnd" type="date" required aria-required="true">
                 </div>
                 <div class="field contract-col-12">
                     <label for="contractDetails">Details <span class="req">*</span></label>
-                    <textarea id="contractDetails" placeholder="Write the main purpose, scope, route/service details, and any important terms."></textarea>
+                    <textarea id="contractDetails" maxlength="5000" required aria-required="true" placeholder="Write the main purpose, scope, route/service details, and any important terms."></textarea>
                 </div>
             </div>
         </section>
@@ -107,7 +106,7 @@
         <x-fleetman.topbar :items="[['label' => 'Contract List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportContractsBtn">⬇ Export CSV</button>
-                <button class="btn primary" type="button" id="newContractBtn">+ Create Another Contract</button>
+                
             </x-slot:actions>
         </x-fleetman.topbar>
 

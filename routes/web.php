@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\BrandAssetController;
 use App\Http\Controllers\Fleet\ClientController;
 use App\Http\Controllers\Fleet\ContractController;
@@ -10,6 +11,8 @@ use App\Http\Controllers\Fleet\DriverController;
 use App\Http\Controllers\Fleet\EmployeeController;
 use App\Http\Controllers\Fleet\FuelPriceController;
 use App\Http\Controllers\Fleet\FuelRechargeController;
+use App\Http\Controllers\Fleet\FleetFileController;
+use App\Http\Controllers\Fleet\TemporaryUploadController;
 use App\Http\Controllers\Fleet\MasterDataController;
 use App\Http\Controllers\Fleet\ReportController;
 use App\Http\Controllers\Fleet\RoleMatrixController;
@@ -23,13 +26,34 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/brand/logo', [BrandAssetController::class, 'logo'])->name('brand.logo');
 
-Route::get('/login', [LoginController::class, 'show'])->name('login');
-Route::post('/login', [LoginController::class, 'login'])->name('login.store');
-Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
+Route::middleware('guest')->group(function () {
+    Route::get('/login', [LoginController::class, 'show'])->name('login');
+    Route::post('/login', [LoginController::class, 'login'])->name('login.store');
+
+    Route::get('/forgot-password', [PasswordResetController::class, 'showForgotPasswordForm'])
+        ->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])
+        ->middleware('throttle:6,1')
+        ->name('password.email');
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'showResetPasswordForm'])
+        ->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])
+        ->middleware('throttle:6,1')
+        ->name('password.update');
+});
+
+Route::post('/logout', [LoginController::class, 'logout'])
+    ->middleware('auth')
+    ->name('logout');
 
 Route::redirect('/', '/fleet/dashboard');
 
 Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
+    Route::post('/uploads/temp', [TemporaryUploadController::class, 'store'])->name('uploads.store');
+    Route::get('/uploads/temp/{token}', [TemporaryUploadController::class, 'preview'])->name('uploads.preview');
+    Route::delete('/uploads/temp/{token}', [TemporaryUploadController::class, 'destroy'])->name('uploads.destroy');
+    Route::get('/files/{path}', [FleetFileController::class, 'show'])->where('path', '.*')->name('files.show');
+
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':dashboard.view')
         ->name('dashboard');
@@ -132,6 +156,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/master-data/licence-types', [MasterDataController::class, 'licenceTypes'])
         ->middleware(EnsureFleetPermission::class.':master_data.view')
         ->name('master-data.licence-types');
+    Route::get('/master-data/driver-contact-types', [MasterDataController::class, 'driverContactTypes'])
+        ->middleware(EnsureFleetPermission::class.':master_data.view')
+        ->name('master-data.driver-contact-types');
     Route::get('/master-data/client-types', [MasterDataController::class, 'clientTypes'])
         ->middleware(EnsureFleetPermission::class.':master_data.view')
         ->name('master-data.client-types');

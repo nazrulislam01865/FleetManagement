@@ -20,6 +20,7 @@
         type="{{ $type }}"
         @if($placeholder) placeholder="{{ $placeholder }}" @endif
         @if($readonly) readonly @endif
+        @if($required) required aria-required="true" @endif
         @if($value !== null) value="{{ $value }}" @endif
         {{ $attributes }}
     >

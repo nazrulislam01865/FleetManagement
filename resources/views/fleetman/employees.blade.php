@@ -24,8 +24,8 @@
                         <x-fleetman.input id="employeeMotherName" label="Mother's Name" required />
                     </div>
                     <div class="grid3" style="margin-top:16px">
-                        <x-fleetman.input id="employeeNid" label="NID" required placeholder="National ID number" />
-                        <x-fleetman.input id="employeeEmail" label="Email" placeholder="employee@example.com" />
+                        <x-fleetman.input id="employeeNid" label="NID" required placeholder="National ID number" inputmode="numeric" maxlength="17" pattern="[0-9]{1,17}" />
+                        <x-fleetman.input id="employeeEmail" label="Email" type="email" placeholder="employee@example.com" />
                         <x-fleetman.input id="employeeReference" label="Reference" placeholder="Who referred this employee?" />
                         <x-fleetman.input id="employeeSocialMedia" label="Social Media IDs" placeholder="Optional" />
                     </div>
@@ -41,7 +41,7 @@
                     <div class="grid3">
                         <div class="field">
                             <label for="employeeDesignation">Designation <span class="req">*</span></label>
-                            <input id="employeeDesignation" list="employeeDesignationList" placeholder="Example: Office Assistant">
+                            <input id="employeeDesignation" list="employeeDesignationList" placeholder="Example: Office Assistant" required aria-required="true">
                             <datalist id="employeeDesignationList">
                                 @foreach($fleetman['options']['employee_designations'] ?? [] as $designation)
                                     <option value="{{ $designation }}"></option>
@@ -50,12 +50,12 @@
                         </div>
                         <x-fleetman.input id="employeeJoiningDate" label="Joining Date" type="date" required />
                         <x-fleetman.select id="employeeStatus" label="Status" required :options="$fleetman['options']['employee_statuses'] ?? []" value="Active" />
-                        <x-fleetman.input id="employeeAge" label="Age" type="number" placeholder="Optional" />
+                        <x-fleetman.input id="employeeAge" label="Age" type="number" min="0" max="120" placeholder="Optional" />
                     </div>
                     <div class="grid3" style="margin-top:16px">
                         <x-fleetman.input id="employeeSalary" label="Salary" type="number" required placeholder="Example: 18000" />
                         <x-fleetman.select id="employeeSalaryTenure" label="Salary Tenure" required :options="$fleetman['options']['employee_salary_tenures'] ?? []" value="Monthly" />
-                        <x-fleetman.input id="employeeOvertimeRate" label="Overtime Rate" type="number" placeholder="Optional" />
+                        <x-fleetman.input id="employeeOvertimeRate" label="Overtime Rate/Hourly" type="number" min="0" step="0.01" placeholder="Optional" />
                         <div></div>
                     </div>
                 </x-fleetman.section-card>
@@ -67,12 +67,13 @@
                 </x-fleetman.section-card>
 
                 <x-fleetman.section-card title="5. Employee Photo">
-                    <div class="photo-box employee-photo-box">
-                        <div class="photo-avatar" id="employeePhotoPreview">👤</div>
-                        <div class="field" style="flex:1">
-                            <label for="employeePhoto">Employee Image</label>
-                            <input id="employeePhoto" type="file" accept="image/jpg,image/jpeg,image/png,image/webp">
-                        </div>
+                    <div class="field employee-photo-box">
+                        <label for="employeePhoto">Employee Photo <span class="req">*</span></label>
+                        <input id="employeePhoto" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                        <input id="employeePhotoData" type="hidden">
+                        <div class="temp-upload-progress hidden" id="employeePhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
+                        <div class="upload-meta" id="employeePhotoInfo"></div>
+                        <div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. The preview appears below after selection.</div>
                     </div>
                 </x-fleetman.section-card>
 
@@ -94,7 +95,7 @@
 
     <div id="employeeListPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Employee List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportEmployeesBtn">⬇ Export CSV</button><button type="button" class="btn primary" id="newEmployeeBtn">＋ Add Employee</button></x-slot:actions>
+            <x-slot:actions><button type="button" class="btn light" id="exportEmployeesBtn">⬇ Export CSV</button></x-slot:actions>
         </x-fleetman.topbar>
         <x-fleetman.title-card title="Employee List" subtitle="A simple employee list with sample data, quick search, filters, and common actions. Designed for everyday office use.">
         </x-fleetman.title-card>

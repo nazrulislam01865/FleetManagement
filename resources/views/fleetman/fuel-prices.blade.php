@@ -28,20 +28,20 @@
                         </div>
                     </div>
                     <div class="grid3">
-                        <div class="field"><label for="fuelPriceId">Fuel Price ID <span class="req">*</span></label><input id="fuelPriceId" readonly></div>
+                        <div class="field"><label for="fuelPriceId">Fuel Price ID <span class="req">*</span></label><input id="fuelPriceId" readonly required aria-required="true"></div>
                         <x-fleetman.select id="fuelType" label="Fuel Type" :options="$fleetman['options']['fuel_types']" placeholder="Select fuel type" required />
-                        <div class="field"><label for="fuelName">Name <span class="req">*</span></label><input id="fuelName" placeholder="Example: Diesel - Standard Rate"></div>
+                        <div class="field"><label for="fuelName">Name <span class="req">*</span></label><input id="fuelName" maxlength="160" required aria-required="true" placeholder="Example: Diesel - Standard Rate"></div>
                         <x-fleetman.select id="fuelStatus" label="Status" :options="$fleetman['options']['fuel_statuses']" required />
                     </div>
                     <div class="grid3" style="margin-top:16px">
-                        <div class="field"><label for="fuelPrice">Price per Unit <span class="req">*</span></label><input id="fuelPrice" type="number" step="0.01" placeholder="Example: 122"></div>
+                        <div class="field"><label for="fuelPrice">Price per Unit <span class="req">*</span></label><input id="fuelPrice" type="number" min="0.01" step="0.01" required aria-required="true" placeholder="Example: 122"></div>
                         <x-fleetman.select id="fuelUnit" label="Unit" :options="$fleetman['options']['fuel_units']" placeholder="Select unit type" required />
-                        <div class="field"><label for="effectiveDate">Effective Date <span class="req">*</span></label><input id="effectiveDate" type="date"></div>
-                        <div class="field"><label for="fuelReference">Reference</label><input id="fuelReference" placeholder="Circular / memo / market note"></div>
+                        <div class="field"><label for="effectiveDate">Effective Date <span class="req">*</span></label><input id="effectiveDate" type="date" required aria-required="true"></div>
+                        <div class="field"><label for="fuelReference">Reference <span class="req">*</span></label><input id="fuelReference" maxlength="160" required aria-required="true" placeholder="Circular / memo / market note"></div>
                     </div>
                     <div class="field" style="margin-top:16px">
-                        <label for="fuelRemarks">Remarks</label>
-                        <textarea id="fuelRemarks" placeholder="Optional note about source, approval, or special rule."></textarea>
+                        <label for="fuelRemarks">Remarks <span class="req">*</span></label>
+                        <textarea id="fuelRemarks" maxlength="1000" required aria-required="true" placeholder="Note about source, approval, or special rule."></textarea>
                     </div>
                 </div>
             </div>
@@ -59,7 +59,7 @@
         <x-fleetman.topbar :items="[['label' => 'Price List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportFuelPricesBtn">⬇ Export CSV</button>
-                <button type="button" class="btn primary" id="newFuelPriceBtn">＋ Add Price</button>
+                
             </x-slot:actions>
         </x-fleetman.topbar>
 

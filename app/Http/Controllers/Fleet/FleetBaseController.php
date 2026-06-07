@@ -7,6 +7,7 @@ use App\Support\FleetBrand;
 use App\Models\Fleet\FleetClient;
 use App\Models\Fleet\FleetContract;
 use App\Models\Fleet\FleetDriver;
+use App\Models\Fleet\FleetDriverContactType;
 use App\Models\Fleet\FleetDocumentName;
 use App\Models\Fleet\FleetDriverAttendance;
 use App\Models\Fleet\FleetEmployee;
@@ -26,6 +27,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 abstract class FleetBaseController extends Controller
@@ -54,6 +56,7 @@ abstract class FleetBaseController extends Controller
         ]);
 
         $rows = $validated['rows'];
+        $this->validateUniqueDocumentNames($rows, $this->resource === 'vehicles' ? 'docs' : 'documents');
         $modelClass = $this->modelClass;
         $idKey = $this->idKey;
         $nameKey = $this->nameKey;
@@ -88,6 +91,37 @@ abstract class FleetBaseController extends Controller
             'ok' => true,
             'rows' => $this->recordsFor($modelClass),
         ]);
+    }
+
+    protected function validateUniqueDocumentNames(array $rows, string $documentKey = 'documents'): void
+    {
+        foreach ($rows as $rowIndex => $row) {
+            $documents = $row[$documentKey] ?? [];
+            if (! is_array($documents)) {
+                continue;
+            }
+
+            $seen = [];
+            foreach ($documents as $documentIndex => $document) {
+                if (! is_array($document)) {
+                    continue;
+                }
+
+                $name = trim((string) ($document['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+
+                $key = strtolower($name);
+                if (isset($seen[$key])) {
+                    throw ValidationException::withMessages([
+                        "rows.$rowIndex.$documentKey.$documentIndex.name" => "The document type '$name' has already been selected for this record.",
+                    ]);
+                }
+
+                $seen[$key] = true;
+            }
+        }
     }
 
     protected function shared(string $activeMenu, array $pageData = []): array
@@ -212,6 +246,12 @@ abstract class FleetBaseController extends Controller
             'driver_attendance' => ['sync' => route('fleet.driver-attendance.sync')],
             'employees' => ['sync' => route('fleet.employees.sync')],
             'master_data' => Route::has('fleet.master-data.sync') ? ['sync' => route('fleet.master-data.sync')] : [],
+            'uploads' => [
+                'store' => route('fleet.uploads.store'),
+                'preview_template' => route('fleet.uploads.preview', ['token' => '__TOKEN__']),
+                'destroy_template' => route('fleet.uploads.destroy', ['token' => '__TOKEN__']),
+                'file_template' => route('fleet.files.show', ['path' => '__PATH__']),
+            ],
         ];
     }
 
@@ -219,6 +259,7 @@ abstract class FleetBaseController extends Controller
     {
         return [
             'vendors' => $this->uniqueValues($this->payloadColumn(FleetVendorParty::class, 'partyName')),
+            'driver_vendors' => $this->driverVendorValues(),
             'drivers' => $this->uniqueValues(array_merge($this->values('driver_select'), $this->payloadColumn(FleetDriver::class, 'fullName'))),
             'vehicle_categories' => $this->vehicleCategoryOptions(),
             'usage_types' => $this->choiceValues('usage_type'),
@@ -230,6 +271,7 @@ abstract class FleetBaseController extends Controller
             'document_reminders' => $this->values('document_reminder'),
             'party_types' => $this->partyTypeValues(),
             'party_statuses' => $this->values('party_status'),
+            'vendor_contractor_types' => config('fleetman.options.vendor_contractor_types', ['Car Related', 'Non-Car Related']),
             'payment_terms' => $this->values('payment_term'),
             'party_document_templates' => $this->documentNameValues('Vendors & Parties', 'party_document_template'),
             'trip_statuses' => $this->values('trip_status'),
@@ -237,6 +279,7 @@ abstract class FleetBaseController extends Controller
             'trip_periods' => $this->values('trip_period'),
             'trip_purposes' => $this->values('trip_purpose'),
             'driver_license_types' => $this->driverLicenseTypeValues(),
+            'driver_contact_types' => $this->driverContactTypeValues(),
             'driver_salary_tenures' => $this->values('driver_salary_tenure'),
             'driver_statuses' => $this->values('driver_status'),
             'driver_duty_types' => $this->choiceValues('driver_duty_type'),
@@ -277,6 +320,43 @@ abstract class FleetBaseController extends Controller
             ->orderBy('sort_order')
             ->orderBy('name')
             ->pluck('name')
+            ->values()
+            ->all();
+    }
+
+    protected function driverContactTypeValues(): array
+    {
+        if (! Schema::hasTable('fleet_driver_contact_types')) {
+            return config('fleetman.options.driver_contact_types', ['Personal', 'Home', 'Relative']);
+        }
+
+        $values = FleetDriverContactType::query()
+            ->active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('name')
+            ->values()
+            ->all();
+
+        return count($values) > 0
+            ? $values
+            : config('fleetman.options.driver_contact_types', ['Personal', 'Home', 'Relative']);
+    }
+
+    protected function driverVendorValues(): array
+    {
+        if (! Schema::hasTable('fleet_vendor_parties')) {
+            return [];
+        }
+
+        return FleetVendorParty::query()
+            ->where('status', 'Active')
+            ->get()
+            ->map(fn (FleetVendorParty $party) => $party->payload ?? [])
+            ->filter(fn (array $party): bool => strcasecmp(trim((string) ($party['vendorContractorType'] ?? '')), 'Car Related') === 0)
+            ->map(fn (array $party): string => trim((string) ($party['partyName'] ?? '')))
+            ->filter()
+            ->unique(fn (string $name): string => strtolower($name))
             ->values()
             ->all();
     }
@@ -390,8 +470,17 @@ abstract class FleetBaseController extends Controller
     protected function documentNameValues(string $module, string $fallbackGroup): array
     {
         if (Schema::hasTable('fleet_document_names')) {
-            $masterDocuments = FleetDocumentName::query()
-                ->active()
+            $query = FleetDocumentName::query()->active();
+
+            if (Schema::hasColumn('fleet_document_names', 'document_type')) {
+                $query->where(function ($documentQuery) use ($module) {
+                    $documentQuery
+                        ->where('document_type', $module)
+                        ->orWhere('document_type', 'All Modules');
+                });
+            }
+
+            $masterDocuments = $query
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->pluck('name')
@@ -870,6 +959,24 @@ abstract class FleetBaseController extends Controller
     protected function normalizedFuelName(string $name): string
     {
         $normalized = strtolower(preg_replace('/[^a-z0-9]+/i', '', $name) ?: '');
+
+        if ($normalized === '') {
+            return '';
+        }
+
+        if (str_contains($normalized, 'cng') || str_contains($normalized, 'compressednaturalgas') || $normalized === 'gas' || str_contains($normalized, 'naturalgas')) {
+            return 'cng';
+        }
+        if (str_contains($normalized, 'lpg') || str_contains($normalized, 'liquefiedpetroleumgas')) {
+            return 'lpg';
+        }
+        if (str_contains($normalized, 'diesel')) {
+            return 'diesel';
+        }
+        if (str_contains($normalized, 'octane') || str_contains($normalized, 'octen') || str_contains($normalized, 'petrol') || str_contains($normalized, 'gasoline')) {
+            return 'octane';
+        }
+
         return str_replace(['petroloctane', 'octanepetrol'], 'octane', $normalized);
     }
 
@@ -1121,31 +1228,98 @@ abstract class FleetBaseController extends Controller
             return [];
         }
 
+        $knownFuelTypes = collect($this->fuelTypeValues())
+            ->filter(fn ($fuelType) => filled($fuelType))
+            ->values();
+
         return FleetVendorParty::query()
             ->orderBy('name')
             ->orderBy('code')
             ->get()
-            ->map(function (FleetVendorParty $party): ?string {
+            ->map(function (FleetVendorParty $party) use ($knownFuelTypes): ?array {
                 $payload = $party->payload ?? [];
-                $name = (string) ($payload['partyName'] ?? $payload['name'] ?? $party->name ?? '');
+                $name = trim((string) ($payload['partyName'] ?? $payload['name'] ?? $party->name ?? ''));
                 $type = strtolower((string) ($payload['partyType'] ?? $payload['type'] ?? ''));
                 $business = strtolower((string) ($payload['businessType'] ?? $payload['category'] ?? ''));
-                $combined = strtolower($name.' '.$type.' '.$business);
+                $status = strtolower((string) ($payload['status'] ?? $party->status ?? ''));
+                $about = strtolower((string) ($payload['about'] ?? $payload['description'] ?? ''));
+                $combined = strtolower($name.' '.$type.' '.$business.' '.$about);
 
-                if ($name === '') {
+                if ($name === '' || in_array($status, ['inactive', 'blacklisted', 'draft'], true)) {
                     return null;
                 }
 
-                if (str_contains($combined, 'fuel') || str_contains($combined, 'station') || str_contains($combined, 'petrol') || str_contains($combined, 'cng') || str_contains($combined, 'lpg')) {
-                    return $name;
+                $isFuelStation = str_contains($combined, 'fuel')
+                    || str_contains($combined, 'station')
+                    || str_contains($combined, 'petrol')
+                    || str_contains($combined, 'octane')
+                    || str_contains($combined, 'octen')
+                    || str_contains($combined, 'diesel')
+                    || str_contains($combined, 'cng')
+                    || str_contains($combined, 'lpg')
+                    || str_contains($combined, 'gas');
+
+                if (! $isFuelStation) {
+                    return null;
                 }
 
-                return null;
+                $configuredFuelTypes = collect(
+                    $payload['fuelTypes']
+                    ?? $payload['supportedFuelTypes']
+                    ?? $payload['fuelsSold']
+                    ?? []
+                )
+                    ->map(function ($fuel): string {
+                        if (is_array($fuel)) {
+                            return trim((string) ($fuel['type'] ?? $fuel['name'] ?? ''));
+                        }
+
+                        return trim((string) $fuel);
+                    })
+                    ->filter()
+                    ->values();
+
+                // Backward compatibility for old station records: infer only
+                // when the station name/details explicitly mention a fuel.
+                if ($configuredFuelTypes->isEmpty()) {
+                    $configuredFuelTypes = $knownFuelTypes
+                        ->filter(fn (string $fuelType): bool => $this->fuelTextMentionsType($combined, $fuelType))
+                        ->values();
+                }
+
+                return [
+                    'id' => (string) ($payload['partyId'] ?? $party->code),
+                    'name' => $name,
+                    'fuelTypes' => $configuredFuelTypes->unique()->values()->all(),
+                    'status' => (string) ($payload['status'] ?? $party->status ?? ''),
+                    'configured' => $configuredFuelTypes->isNotEmpty(),
+                ];
             })
             ->filter()
-            ->unique()
+            ->unique('name')
             ->values()
             ->all();
+    }
+
+    protected function fuelTextMentionsType(string $text, string $fuelType): bool
+    {
+        $fuel = $this->normalizedFuelName($fuelType);
+        $normalizedText = strtolower(preg_replace('/[^a-z0-9]+/i', '', $text) ?: '');
+
+        return match (true) {
+            $fuel === 'diesel' => str_contains($normalizedText, 'diesel'),
+            $fuel === 'octane' => str_contains($normalizedText, 'octane')
+                || str_contains($normalizedText, 'octen')
+                || str_contains($normalizedText, 'petrol')
+                || str_contains($normalizedText, 'gasoline'),
+            $fuel === 'cng' => str_contains($normalizedText, 'cng')
+                || str_contains($normalizedText, 'compressednaturalgas'),
+            $fuel === 'lpg' => str_contains($normalizedText, 'lpg')
+                || str_contains($normalizedText, 'liquefiedpetroleumgas'),
+            str_contains($fuel, 'electric') => str_contains($normalizedText, 'electric')
+                || str_contains($normalizedText, 'evcharging'),
+            default => $fuel !== '' && str_contains($normalizedText, $fuel),
+        };
     }
 
     protected function latestFuelRechargeOdoByVehicle(): array

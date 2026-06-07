@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetVehicle;
+use App\Services\FleetTemporaryUploadService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,25 +26,66 @@ class VehicleController extends FleetBaseController
     protected string $modelClass = FleetVehicle::class;
 
     /**
-     * Saves vehicle rows. Vehicle images and document files are uploaded only
-     * when Save Vehicle is clicked, and are stored under the vehicle ID.
+     * Selected files are uploaded to private temporary storage immediately.
+     * They become permanent only when Save Vehicle succeeds.
      */
     public function sync(Request $request): JsonResponse
     {
-        if (! is_string($request->input('rows')) && ! $request->hasFile('vehicle_image_files') && ! $request->hasFile('vehicle_document_files')) {
-            return parent::sync($request);
-        }
+        $uploads = app(FleetTemporaryUploadService::class);
+        $rowsInput = $request->input('rows', []);
+        $rows = is_string($rowsInput) ? json_decode($rowsInput, true) : $rowsInput;
 
-        $rows = json_decode((string) $request->input('rows', '[]'), true);
         if (! is_array($rows)) {
             throw ValidationException::withMessages([
                 'rows' => 'The vehicle rows payload is invalid.',
             ]);
         }
 
+        $this->validateUniqueDocumentNames($rows, 'docs');
         $storedPaths = [];
+        $userId = (int) $request->user()->id;
 
         try {
+            foreach ($rows as $vehicleIndex => &$vehicle) {
+                if (! is_array($vehicle)) {
+                    continue;
+                }
+
+                $vehicleId = $this->safeVehicleId((string) ($vehicle['id'] ?? 'new-vehicle'));
+                $image = $vehicle['image'] ?? [];
+                if (is_array($image) && filled($image['tempToken'] ?? null)) {
+                    $vehicle['image'] = $uploads->claim(
+                        $image,
+                        $userId,
+                        'fleet/vehicles/'.$vehicleId.'/images',
+                        ['jpg', 'jpeg', 'png', 'webp'],
+                        100,
+                        true
+                    );
+                    $storedPaths[] = $vehicle['image']['filePath'];
+                }
+
+                foreach (($vehicle['docs'] ?? []) as $documentIndex => $document) {
+                    if (! is_array($document)) {
+                        continue;
+                    }
+                    $file = $document['file'] ?? [];
+                    if (is_array($file) && filled($file['tempToken'] ?? null)) {
+                        $vehicle['docs'][$documentIndex]['file'] = $uploads->claim(
+                            $file,
+                            $userId,
+                            'fleet/vehicles/'.$vehicleId.'/documents',
+                            ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+                            4096
+                        );
+                        $storedPaths[] = $vehicle['docs'][$documentIndex]['file']['filePath'];
+                    }
+                }
+            }
+            unset($vehicle);
+
+            // Backward-compatible support for older browser code that sends
+            // files inside the final save request.
             foreach ($request->file('vehicle_image_files', []) as $vehicleIndex => $file) {
                 if (! $file instanceof UploadedFile) {
                     continue;
@@ -51,20 +93,22 @@ class VehicleController extends FleetBaseController
 
                 $validator = Validator::make(
                     ['image' => $file],
-                    ['image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120']]
+                    ['image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:100']],
+                    ['image.max' => 'The vehicle image must not exceed 100 KB.']
                 );
-
                 if ($validator->fails()) {
                     throw new ValidationException($validator);
                 }
 
                 $vehicle = $rows[$vehicleIndex] ?? [];
                 $vehicleId = $this->safeVehicleId((string) ($vehicle['id'] ?? 'new-vehicle'));
-                $directory = 'fleet/vehicles/'.$vehicleId.'/images';
-                $storedPath = $file->store($directory, 'public');
+                $storedPath = $file->store('fleet/vehicles/'.$vehicleId.'/images', 'public');
                 $storedPaths[] = $storedPath;
-
-                $rows[$vehicleIndex]['image'] = $this->filePayload($storedPath, $file);
+                $rows[$vehicleIndex]['image'] = $uploads->permanentPayload($storedPath, [
+                    'originalName' => $file->getClientOriginalName(),
+                    'mimeType' => $file->getClientMimeType(),
+                    'sizeBytes' => $file->getSize(),
+                ]);
             }
 
             foreach ($request->file('vehicle_document_files', []) as $vehicleIndex => $documentFiles) {
@@ -79,28 +123,22 @@ class VehicleController extends FleetBaseController
 
                     $validator = Validator::make(
                         ['document' => $file],
-                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120']]
+                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096']],
+                        ['document.max' => 'Each vehicle document must not exceed 4 MB.']
                     );
-
                     if ($validator->fails()) {
                         throw new ValidationException($validator);
                     }
 
                     $vehicle = $rows[$vehicleIndex] ?? [];
                     $vehicleId = $this->safeVehicleId((string) ($vehicle['id'] ?? 'new-vehicle'));
-                    $directory = 'fleet/vehicles/'.$vehicleId.'/documents';
-                    $storedPath = $file->store($directory, 'public');
+                    $storedPath = $file->store('fleet/vehicles/'.$vehicleId.'/documents', 'public');
                     $storedPaths[] = $storedPath;
-
-                    if (! isset($rows[$vehicleIndex]['docs']) || ! is_array($rows[$vehicleIndex]['docs'])) {
-                        $rows[$vehicleIndex]['docs'] = [];
-                    }
-
-                    if (! isset($rows[$vehicleIndex]['docs'][$documentIndex]) || ! is_array($rows[$vehicleIndex]['docs'][$documentIndex])) {
-                        $rows[$vehicleIndex]['docs'][$documentIndex] = [];
-                    }
-
-                    $rows[$vehicleIndex]['docs'][$documentIndex]['file'] = $this->filePayload($storedPath, $file);
+                    $rows[$vehicleIndex]['docs'][$documentIndex]['file'] = $uploads->permanentPayload($storedPath, [
+                        'originalName' => $file->getClientOriginalName(),
+                        'mimeType' => $file->getClientMimeType(),
+                        'sizeBytes' => $file->getSize(),
+                    ]);
                 }
             }
 
@@ -109,7 +147,6 @@ class VehicleController extends FleetBaseController
             if ($storedPaths !== []) {
                 Storage::disk('public')->delete($storedPaths);
             }
-
             throw $exception;
         }
 
@@ -158,18 +195,5 @@ class VehicleController extends FleetBaseController
         $safeId = preg_replace('/[^A-Za-z0-9_-]+/', '-', trim($vehicleId));
 
         return trim((string) $safeId, '-') ?: 'new-vehicle';
-    }
-
-    private function filePayload(string $storedPath, UploadedFile $file): array
-    {
-        return [
-            'filePath' => $storedPath,
-            'fileUrl' => Storage::disk('public')->url($storedPath),
-            'fileName' => basename($storedPath),
-            'originalName' => $file->getClientOriginalName(),
-            'mimeType' => $file->getClientMimeType(),
-            'sizeBytes' => $file->getSize(),
-            'uploadedAt' => now()->toDateTimeString(),
-        ];
     }
 }

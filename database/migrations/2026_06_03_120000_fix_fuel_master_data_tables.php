@@ -20,7 +20,7 @@ return new class extends Migration
 
         $fuelUnits = array_values(array_unique(array_filter(array_merge(
             $this->lookupValues(['fuel_unit']),
-            ['Per Liter', 'Per KG', 'Per kWh', 'Other']
+            ['Per Liter', 'Taka', 'Per KG', 'Per kWh', 'Other']
         ))));
 
         $this->seedRows('fleet_fuel_types', $fuelTypes);

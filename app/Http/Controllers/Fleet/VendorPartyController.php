@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetVendorParty;
+use App\Services\FleetTemporaryUploadService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,25 +27,52 @@ class VendorPartyController extends FleetBaseController
     protected string $modelClass = FleetVendorParty::class;
 
     /**
-     * Saves Vendor / Party rows. Document files are stored only inside this save
-     * request, so choosing a file does not create a storage file by itself.
+     * Files selected in the browser are first kept in private temporary storage.
+     * They are moved to permanent vendor storage only after this save succeeds.
      */
     public function sync(Request $request): JsonResponse
     {
-        if (! is_string($request->input('rows')) && ! $request->hasFile('document_files')) {
-            return parent::sync($request);
-        }
-
-        $rows = json_decode((string) $request->input('rows', '[]'), true);
+        $uploads = app(FleetTemporaryUploadService::class);
+        $inputRows = $request->input('rows', []);
+        $rows = is_string($inputRows) ? json_decode($inputRows, true) : $inputRows;
         if (! is_array($rows)) {
             throw ValidationException::withMessages([
                 'rows' => 'The vendor / party rows payload is invalid.',
             ]);
         }
 
+        $this->validateVendorContractorTypes($rows);
+        $this->validateFuelStationRows($rows);
+        $this->validateUniqueDocumentNames($rows);
+
         $storedPaths = [];
+        $userId = (int) $request->user()->id;
 
         try {
+            foreach ($rows as $partyIndex => &$party) {
+                if (! is_array($party)) {
+                    continue;
+                }
+                $partyId = Str::slug((string) ($party['partyId'] ?? 'new-party')) ?: 'new-party';
+                foreach (($party['documents'] ?? []) as $documentIndex => $document) {
+                    if (! is_array($document)) {
+                        continue;
+                    }
+                    $file = $document['file'] ?? [];
+                    if (is_array($file) && filled($file['tempToken'] ?? null)) {
+                        $party['documents'][$documentIndex]['file'] = $uploads->claim(
+                            $file,
+                            $userId,
+                            'fleet/vendor-party-documents/'.$partyId.'/'.now()->format('Y/m'),
+                            ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+                            5120
+                        );
+                        $storedPaths[] = $party['documents'][$documentIndex]['file']['filePath'];
+                    }
+                }
+            }
+            unset($party);
+
             foreach ($request->file('document_files', []) as $partyIndex => $documentFiles) {
                 if (! is_array($documentFiles)) {
                     continue;
@@ -78,15 +106,11 @@ class VendorPartyController extends FleetBaseController
                         $rows[$partyIndex]['documents'][$documentIndex] = [];
                     }
 
-                    $rows[$partyIndex]['documents'][$documentIndex]['file'] = [
-                        'filePath' => $storedPath,
-                        'fileUrl' => Storage::disk('public')->url($storedPath),
-                        'fileName' => basename($storedPath),
+                    $rows[$partyIndex]['documents'][$documentIndex]['file'] = $uploads->permanentPayload($storedPath, [
                         'originalName' => $file->getClientOriginalName(),
                         'mimeType' => $file->getClientMimeType(),
                         'sizeBytes' => $file->getSize(),
-                        'uploadedAt' => now()->toDateTimeString(),
-                    ];
+                    ]);
                 }
             }
 
@@ -105,7 +129,74 @@ class VendorPartyController extends FleetBaseController
         ]);
     }
 
-    public function uploadDocument(Request $request): JsonResponse
+    private function validateVendorContractorTypes(array $rows): void
+    {
+        $errors = [];
+        $allowed = config('fleetman.options.vendor_contractor_types', ['Car Related', 'Non-Car Related']);
+
+        foreach ($rows as $index => $row) {
+            if (! is_array($row) || (int) ($row['vendorTypeVersion'] ?? 0) < 1) {
+                continue;
+            }
+
+            if (strcasecmp(trim((string) ($row['status'] ?? '')), 'Draft') === 0) {
+                continue;
+            }
+
+            $type = trim((string) ($row['vendorContractorType'] ?? ''));
+            if (! in_array($type, $allowed, true)) {
+                $errors["rows.{$index}.vendorContractorType"] = 'Select a valid Vendor / Contractor Type.';
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function validateFuelStationRows(array $rows): void
+    {
+        $errors = [];
+
+        foreach ($rows as $index => $row) {
+            if (! is_array($row)) {
+                $errors["rows.{$index}"] = 'Each vendor / party row must be a valid object.';
+                continue;
+            }
+
+            // Legacy vendor rows are kept readable and syncable. The version
+            // is added whenever a vendor is created or edited in the updated form.
+            if ((int) ($row['fuelStationCapabilityVersion'] ?? 0) < 1) {
+                continue;
+            }
+
+            $status = strtolower(trim((string) ($row['status'] ?? '')));
+            if ($status === 'draft') {
+                continue;
+            }
+
+            $name = trim((string) ($row['partyName'] ?? $row['name'] ?? ''));
+            $type = trim((string) ($row['partyType'] ?? $row['type'] ?? ''));
+            $about = trim((string) ($row['about'] ?? $row['description'] ?? ''));
+            $combined = strtolower($name.' '.$type.' '.$about);
+            $isFuelStation = preg_match('/fuel|station|petrol|octane|octen|diesel|cng|lpg|gas/i', $combined) === 1;
+
+            if (! $isFuelStation) {
+                continue;
+            }
+
+            $fuelTypes = $row['fuelTypes'] ?? $row['supportedFuelTypes'] ?? $row['fuelsSold'] ?? [];
+            if (! is_array($fuelTypes) || collect($fuelTypes)->filter(fn ($fuel): bool => filled(is_array($fuel) ? ($fuel['type'] ?? $fuel['name'] ?? null) : $fuel))->isEmpty()) {
+                $errors["rows.{$index}.fuelTypes"] = "Select at least one fuel type sold by {$name}.";
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    public function uploadDocument(Request $request, FleetTemporaryUploadService $uploads): JsonResponse
     {
         $validated = $request->validate([
             'document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
@@ -120,16 +211,13 @@ class VendorPartyController extends FleetBaseController
 
         return response()->json([
             'ok' => true,
-            'file' => [
-                'filePath' => $storedPath,
-                'fileUrl' => Storage::disk('public')->url($storedPath),
-                'fileName' => basename($storedPath),
+            'file' => array_merge($uploads->permanentPayload($storedPath, [
                 'originalName' => $file->getClientOriginalName(),
                 'mimeType' => $file->getClientMimeType(),
                 'sizeBytes' => $file->getSize(),
+            ]), [
                 'documentName' => $validated['document_name'] ?? null,
-                'uploadedAt' => now()->toDateTimeString(),
-            ],
+            ]),
         ]);
     }
 

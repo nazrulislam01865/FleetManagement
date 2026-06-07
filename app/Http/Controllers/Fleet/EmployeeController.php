@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetEmployee;
+use App\Services\FleetTemporaryUploadService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -25,30 +27,57 @@ class EmployeeController extends FleetBaseController
     protected string $statusKey = 'status';
     protected string $modelClass = FleetEmployee::class;
 
-    /**
-     * Saves employee rows. Employee photo and document files are stored only
-     * inside this save request, under a folder named with the employee ID.
-     */
     public function sync(Request $request): JsonResponse
     {
-        if (
-            ! is_string($request->input('rows'))
-            && ! $request->hasFile('employee_document_files')
-            && ! $request->hasFile('employee_photo_files')
-        ) {
-            return parent::sync($request);
-        }
-
-        $rows = json_decode((string) $request->input('rows', '[]'), true);
+        $uploads = app(FleetTemporaryUploadService::class);
+        $rowsInput = $request->input('rows', []);
+        $rows = is_string($rowsInput) ? json_decode($rowsInput, true) : $rowsInput;
         if (! is_array($rows)) {
-            throw ValidationException::withMessages([
-                'rows' => 'The employee rows payload is invalid.',
-            ]);
+            throw ValidationException::withMessages(['rows' => 'The employee rows payload is invalid.']);
         }
 
+        $this->validateEmployeeRows($rows, $request);
+        $this->validateUniqueDocumentNames($rows);
         $storedPaths = [];
+        $userId = (int) $request->user()->id;
 
         try {
+            foreach ($rows as $employeeIndex => &$employee) {
+                if (! is_array($employee)) {
+                    continue;
+                }
+
+                $employeeId = $this->employeeFolderName($employee);
+                $photo = $employee['photo'] ?? [];
+                if (is_array($photo) && filled($photo['tempToken'] ?? null)) {
+                    $employee['photo'] = $uploads->claim(
+                        $photo,
+                        $userId,
+                        "fleet/employees/{$employeeId}/photo",
+                        ['jpg', 'jpeg', 'png', 'webp'],
+                        100,
+                        true
+                    );
+                    $employee['photoName'] = $employee['photo']['originalName'];
+                    $storedPaths[] = $employee['photo']['filePath'];
+                }
+
+                foreach (($employee['documents'] ?? []) as $documentIndex => $document) {
+                    $file = is_array($document) ? ($document['file'] ?? []) : [];
+                    if (is_array($file) && filled($file['tempToken'] ?? null)) {
+                        $employee['documents'][$documentIndex]['file'] = $uploads->claim(
+                            $file,
+                            $userId,
+                            "fleet/employees/{$employeeId}/documents",
+                            ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+                            4096
+                        );
+                        $storedPaths[] = $employee['documents'][$documentIndex]['file']['filePath'];
+                    }
+                }
+            }
+            unset($employee);
+
             foreach ($request->file('employee_photo_files', []) as $employeeIndex => $file) {
                 if (! $file instanceof UploadedFile) {
                     continue;
@@ -56,9 +85,9 @@ class EmployeeController extends FleetBaseController
 
                 $validator = Validator::make(
                     ['photo' => $file],
-                    ['photo' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120']]
+                    ['photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:100']],
+                    ['photo.max' => 'The employee photo must not exceed 100 KB.']
                 );
-
                 if ($validator->fails()) {
                     throw new ValidationException($validator);
                 }
@@ -66,16 +95,11 @@ class EmployeeController extends FleetBaseController
                 $employeeId = $this->employeeFolderName($rows[$employeeIndex] ?? []);
                 $storedPath = $file->store("fleet/employees/{$employeeId}/photo", 'public');
                 $storedPaths[] = $storedPath;
-
-                $rows[$employeeIndex]['photo'] = [
-                    'filePath' => $storedPath,
-                    'fileUrl' => Storage::disk('public')->url($storedPath),
-                    'fileName' => basename($storedPath),
+                $rows[$employeeIndex]['photo'] = $uploads->permanentPayload($storedPath, [
                     'originalName' => $file->getClientOriginalName(),
                     'mimeType' => $file->getClientMimeType(),
                     'sizeBytes' => $file->getSize(),
-                    'uploadedAt' => now()->toDateTimeString(),
-                ];
+                ]);
                 $rows[$employeeIndex]['photoName'] = $file->getClientOriginalName();
             }
 
@@ -91,9 +115,9 @@ class EmployeeController extends FleetBaseController
 
                     $validator = Validator::make(
                         ['document' => $file],
-                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120']]
+                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096']],
+                        ['document.max' => 'Each employee document must not exceed 4 MB.']
                     );
-
                     if ($validator->fails()) {
                         throw new ValidationException($validator);
                     }
@@ -101,24 +125,11 @@ class EmployeeController extends FleetBaseController
                     $employeeId = $this->employeeFolderName($rows[$employeeIndex] ?? []);
                     $storedPath = $file->store("fleet/employees/{$employeeId}/documents", 'public');
                     $storedPaths[] = $storedPath;
-
-                    if (! isset($rows[$employeeIndex]['documents']) || ! is_array($rows[$employeeIndex]['documents'])) {
-                        $rows[$employeeIndex]['documents'] = [];
-                    }
-
-                    if (! isset($rows[$employeeIndex]['documents'][$documentIndex]) || ! is_array($rows[$employeeIndex]['documents'][$documentIndex])) {
-                        $rows[$employeeIndex]['documents'][$documentIndex] = [];
-                    }
-
-                    $rows[$employeeIndex]['documents'][$documentIndex]['file'] = [
-                        'filePath' => $storedPath,
-                        'fileUrl' => Storage::disk('public')->url($storedPath),
-                        'fileName' => basename($storedPath),
+                    $rows[$employeeIndex]['documents'][$documentIndex]['file'] = $uploads->permanentPayload($storedPath, [
                         'originalName' => $file->getClientOriginalName(),
                         'mimeType' => $file->getClientMimeType(),
                         'sizeBytes' => $file->getSize(),
-                        'uploadedAt' => now()->toDateTimeString(),
-                    ];
+                    ]);
                 }
             }
 
@@ -127,14 +138,138 @@ class EmployeeController extends FleetBaseController
             if ($storedPaths !== []) {
                 Storage::disk('public')->delete($storedPaths);
             }
-
             throw $exception;
         }
 
-        return response()->json([
-            'ok' => true,
-            'rows' => $this->recordsFor(FleetEmployee::class),
-        ]);
+        return response()->json(['ok' => true, 'rows' => $this->recordsFor(FleetEmployee::class)]);
+    }
+
+    private function validateEmployeeRows(array $rows, Request $request): void
+    {
+        $errors = [];
+        $seenIds = [];
+        $seenNids = [];
+        $contactTypes = ['Office', 'Home', 'Relative', 'Other'];
+        $employeeDocuments = $this->documentNameValues('Employees', 'employee_document_template');
+        $salaryTenures = $this->values('employee_salary_tenure');
+        $statuses = $this->values('employee_status');
+
+        foreach ($rows as $index => $row) {
+            if (! is_array($row)) {
+                $errors["rows.{$index}"] = 'Each employee row must be a valid object.';
+                continue;
+            }
+
+            $employeeId = trim((string) ($row['employeeId'] ?? ''));
+            $nid = trim((string) ($row['nid'] ?? ''));
+            $this->trackUniqueEmployeeValue($seenIds, $errors, $employeeId, "rows.{$index}.employeeId", 'Employee ID');
+            $this->trackUniqueEmployeeValue($seenNids, $errors, $nid, "rows.{$index}.nid", 'NID');
+
+            if ((int) ($row['employeeValidationVersion'] ?? 0) < 1 || strcasecmp((string) ($row['status'] ?? ''), 'Draft') === 0) {
+                continue;
+            }
+
+            $validator = Validator::make($row, [
+                'employeeId' => ['required', 'string', 'max:100'],
+                'fullName' => ['required', 'string', 'max:255'],
+                'fatherName' => ['required', 'string', 'max:255'],
+                'motherName' => ['required', 'string', 'max:255'],
+                'nid' => ['required', 'regex:/^\d{1,17}$/'],
+                'email' => ['nullable', 'email:rfc', 'max:255'],
+                'reference' => ['nullable', 'string', 'max:255'],
+                'designation' => ['required', 'string', 'max:255'],
+                'joiningDate' => ['required', 'date'],
+                'status' => ['required', Rule::in($statuses)],
+                'socialMedia' => ['nullable', 'string', 'max:500'],
+                'age' => ['nullable', 'integer', 'between:0,120'],
+                'salary' => ['required', 'numeric', 'min:0'],
+                'salaryTenure' => ['required', Rule::in($salaryTenures)],
+                'overtimeRate' => ['nullable', 'numeric', 'min:0'],
+                'presentAddress' => ['required', 'string', 'max:1500'],
+                'permanentAddress' => ['required', 'string', 'max:1500'],
+                'about' => ['nullable', 'string', 'max:2000'],
+                'contacts' => ['required', 'array', 'min:1'],
+                'contacts.*.type' => ['required', Rule::in($contactTypes)],
+                'contacts.*.number' => ['required', 'regex:/^\d{11}$/'],
+                'documents' => ['required', 'array', 'min:1'],
+                'documents.*.name' => ['required', Rule::in($employeeDocuments)],
+                'documents.*.reference' => ['nullable', 'string', 'max:255'],
+                'photo' => ['required', 'array'],
+            ], [
+                'nid.regex' => 'NID must contain digits only and cannot exceed 17 digits.',
+                'contacts.*.number.regex' => 'Each contact phone number must be exactly 11 digits.',
+                'email.email' => 'Enter a valid employee email address.',
+            ]);
+
+            foreach ($validator->errors()->messages() as $key => $messages) {
+                $errors["rows.{$index}.{$key}"] = $messages;
+            }
+
+            $selectedContactTypes = [];
+            foreach ((array) ($row['contacts'] ?? []) as $contactIndex => $contact) {
+                if (! is_array($contact)) {
+                    continue;
+                }
+
+                $type = trim((string) ($contact['type'] ?? ''));
+                $normalized = strtolower($type);
+                if ($type !== '' && isset($selectedContactTypes[$normalized])) {
+                    $errors["rows.{$index}.contacts.{$contactIndex}.type"] = 'Each contact type can be selected only once for an employee.';
+                }
+                if ($type !== '') {
+                    $selectedContactTypes[$normalized] = true;
+                }
+                if (strcasecmp($type, 'Relative') === 0 && trim((string) ($contact['relationship'] ?? '')) === '') {
+                    $errors["rows.{$index}.contacts.{$contactIndex}.relationship"] = 'Relationship is required for a Relative contact.';
+                }
+            }
+
+            $photo = is_array($row['photo'] ?? null) ? $row['photo'] : [];
+            $directPhoto = $request->file("employee_photo_files.{$index}");
+            if (! $this->hasStoredFile($photo) && ! $directPhoto instanceof UploadedFile) {
+                $errors["rows.{$index}.photo"] = 'Employee Photo is required.';
+            } elseif ((int) ($photo['sizeBytes'] ?? 0) > 100 * 1024) {
+                $errors["rows.{$index}.photo"] = 'Employee Photo must not exceed 100 KB.';
+            }
+
+            foreach ((array) ($row['documents'] ?? []) as $documentIndex => $document) {
+                if (! is_array($document)) {
+                    continue;
+                }
+
+                $file = is_array($document['file'] ?? null) ? $document['file'] : [];
+                $directDocument = $request->file("employee_document_files.{$index}.{$documentIndex}");
+                if (! $this->hasStoredFile($file) && ! $directDocument instanceof UploadedFile) {
+                    $errors["rows.{$index}.documents.{$documentIndex}.file"] = 'Upload File is required for each employee document.';
+                } elseif ((int) ($file['sizeBytes'] ?? 0) > 4 * 1024 * 1024) {
+                    $errors["rows.{$index}.documents.{$documentIndex}.file"] = 'Each employee document must not exceed 4 MB.';
+                }
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function trackUniqueEmployeeValue(array &$seen, array &$errors, string $value, string $errorKey, string $label): void
+    {
+        if ($value === '') {
+            return;
+        }
+
+        $normalized = strtolower($value);
+        if (isset($seen[$normalized])) {
+            $errors[$errorKey] = "{$label} must be unique.";
+        }
+        $seen[$normalized] = true;
+    }
+
+    private function hasStoredFile(array $file): bool
+    {
+        return filled($file['tempToken'] ?? null)
+            || filled($file['filePath'] ?? null)
+            || filled($file['fileUrl'] ?? null);
     }
 
     private function employeeFolderName(array $row): string
@@ -145,33 +280,20 @@ class EmployeeController extends FleetBaseController
     private function persistRows(array $rows): void
     {
         $modelClass = $this->modelClass;
-        $idKey = $this->idKey;
-        $nameKey = $this->nameKey;
-        $statusKey = $this->statusKey;
-
-        DB::transaction(function () use ($modelClass, $rows, $idKey, $nameKey, $statusKey) {
-            $incomingCodes = collect($rows)
-                ->map(fn (array $row) => (string) ($row[$idKey] ?? ''))
-                ->filter()
-                ->values();
-
+        DB::transaction(function () use ($modelClass, $rows) {
+            $incomingCodes = collect($rows)->map(fn (array $row) => (string) ($row[$this->idKey] ?? ''))->filter()->values();
             $modelClass::query()->whereNotIn('code', $incomingCodes)->delete();
-
             foreach ($rows as $row) {
-                $code = (string) ($row[$idKey] ?? '');
+                $code = (string) ($row[$this->idKey] ?? '');
                 if ($code === '') {
                     continue;
                 }
-
                 /** @var Model $model */
-                $modelClass::updateOrCreate(
-                    ['code' => $code],
-                    [
-                        'name' => $row[$nameKey] ?? $code,
-                        'status' => $row[$statusKey] ?? null,
-                        'payload' => $row,
-                    ]
-                );
+                $modelClass::updateOrCreate(['code' => $code], [
+                    'name' => $row[$this->nameKey] ?? $code,
+                    'status' => $row[$this->statusKey] ?? null,
+                    'payload' => $row,
+                ]);
             }
         });
     }

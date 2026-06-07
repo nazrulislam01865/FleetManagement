@@ -32,8 +32,11 @@
                 
                 <div class="form-group" style="margin-bottom: 20px;">
                     <label for="logo">Upload New Logo (Image)</label>
-                    <input type="file" name="logo" id="logo" style="display: block; margin-top: 8px;" accept="image/png, image/jpeg, image/svg+xml, image/webp" required>
-                    <small style="color: #666; display: block; margin-top: 5px;">Recommended format: PNG or WebP with transparent background. Max size: 5MB.</small>
+                    <input type="file" id="logo" style="display: block; margin-top: 8px;" accept="image/png, image/jpeg, image/svg+xml, image/webp" required>
+                    <input type="hidden" id="logoData" name="logo">
+                    <div class="temp-upload-progress hidden" id="logoUploadProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
+                    <div class="upload-meta" id="logoUploadInfo"></div>
+                    <small style="color: #666; display: block; margin-top: 5px;">Recommended format: PNG or WebP with transparent background. Maximum size: 5 MB.</small>
                 </div>
 
                 <button type="submit" class="btn-primary" id="btnSaveLogo" style="padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; background: #2563eb; color: white;">Update Logo</button>
@@ -43,30 +46,61 @@
 </div>
 
 <script>
+    document.getElementById('logo')?.addEventListener('change', function () {
+        const uploads = window.FleetmanTemporaryUploads;
+        uploads.upload(this, {
+            hidden: document.getElementById('logoData'),
+            info: document.getElementById('logoUploadInfo'),
+            progress: document.getElementById('logoUploadProgress'),
+            extensions: ['png', 'jpg', 'jpeg', 'svg', 'webp'],
+            imageOnly: true,
+            maxBytes: 5 * 1024 * 1024,
+        });
+    });
+
     async function updateLogo(form) {
+        const uploads = window.FleetmanTemporaryUploads;
+        await uploads.waitForInputs([document.getElementById('logo')]);
+
+        const logoData = uploads.readHidden(document.getElementById('logoData'));
+        if (!logoData.tempToken) {
+            uploads.render({
+                info: document.getElementById('logoUploadInfo'),
+                progress: document.getElementById('logoUploadProgress'),
+                message: 'Please choose and finish uploading a logo before saving.',
+                error: true,
+            });
+            return;
+        }
+
         const btn = document.getElementById('btnSaveLogo');
         const originalText = btn.innerHTML;
-        btn.innerHTML = 'Uploading...';
+        btn.innerHTML = 'Saving...';
         btn.disabled = true;
-
-        const formData = new FormData(form);
 
         try {
             const response = await fetch('{{ route('fleet.settings.update-logo') }}', {
                 method: 'POST',
-                body: formData,
                 headers: {
-                    'Accept': 'application/json'
-                }
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                },
+                body: JSON.stringify({ logo: logoData }),
             });
 
-            const result = await response.json();
-
+            const result = await response.json().catch(() => ({}));
             if (response.ok && result.ok) {
                 alert('Logo updated successfully!');
                 window.location.reload();
             } else {
-                alert(result.message || 'Error updating logo.');
+                const message = result.message || Object.values(result.errors || {}).flat().join(' ') || 'Error updating logo.';
+                uploads.render({
+                    info: document.getElementById('logoUploadInfo'),
+                    progress: document.getElementById('logoUploadProgress'),
+                    message,
+                    error: true,
+                });
             }
         } catch (error) {
             console.error(error);

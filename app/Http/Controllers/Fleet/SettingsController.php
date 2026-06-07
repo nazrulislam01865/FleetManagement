@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Fleet;
 
+use App\Services\FleetTemporaryUploadService;
 use App\Support\FleetBrand;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SettingsController extends FleetBaseController
@@ -21,24 +23,37 @@ class SettingsController extends FleetBaseController
         ]));
     }
 
-    public function updateLogo(Request $request): JsonResponse
+    public function updateLogo(Request $request, FleetTemporaryUploadService $uploads): JsonResponse
     {
-        $request->validate([
-            'logo' => ['required', 'image', 'mimes:png,jpg,jpeg,svg,webp', 'max:5120'],
-        ]);
-
-        $file = $request->file('logo');
-        $extension = strtolower($file->extension() ?: $file->getClientOriginalExtension());
-        $filename = 'logo.' . $extension;
         $disk = Storage::disk('public');
+        $storedPath = null;
 
-        $storedPath = $disk->putFileAs('logo', $file, $filename);
+        $temporaryLogo = $request->input('logo');
+        if (is_string($temporaryLogo)) {
+            $temporaryLogo = json_decode($temporaryLogo, true);
+        }
 
-        if ($storedPath === false) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'The logo could not be stored. Please check storage permissions.',
-            ], 500);
+        if (is_array($temporaryLogo) && ! empty($temporaryLogo['tempToken'])) {
+            $payload = $uploads->claim(
+                $temporaryLogo,
+                (int) $request->user()->id,
+                'logo',
+                ['png', 'jpg', 'jpeg', 'svg', 'webp'],
+                5120,
+                true
+            );
+            $storedPath = $payload['filePath'];
+        } elseif ($request->hasFile('logo')) {
+            $validated = $request->validate([
+                'logo' => ['required', 'image', 'mimes:png,jpg,jpeg,svg,webp', 'max:5120'],
+            ]);
+            $storedPath = $validated['logo']->store('logo', 'public');
+        }
+
+        if (! $storedPath) {
+            throw ValidationException::withMessages([
+                'logo' => 'Please choose and finish uploading a logo before saving.',
+            ]);
         }
 
         foreach ($disk->files('logo') as $existingPath) {

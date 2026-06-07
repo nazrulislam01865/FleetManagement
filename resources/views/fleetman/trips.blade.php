@@ -4,7 +4,7 @@
 @section('mobile-title', 'Trips')
 
 @section('content')
-<div class="page-section">
+<div class="page-section trip-page">
     <div id="tripAddPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Add Trip']]">
             <x-slot:actions>
@@ -14,7 +14,7 @@
 
         <x-fleetman.title-card
             title="Add Trip"
-            subtitle="Create trips dynamically using saved vehicles from the vehicle table and saved drivers from the driver table."
+            subtitle="Create a trip using saved vehicles and drivers, record the total cost, and collect payment using one or more methods."
         >
             <x-slot:action>
                 <button type="button" class="btn secondary" id="loadTripSampleBtn">Use existing trip data</button>
@@ -23,51 +23,34 @@
 
         <div class="layout">
             <div>
-                <x-fleetman.section-card
-                    title="1. Basic Trip Information"
-                >
-                    <div class="grid3">
+                <x-fleetman.section-card title="1. Basic Trip Information">
+                    <div class="grid">
                         <x-fleetman.input id="tripId" label="Trip ID" required readonly />
                         <x-fleetman.input id="tripStartDate" label="Start Date" type="date" required />
-                        <x-fleetman.input id="tripEndDate" label="End Date" type="date" required />
                     </div>
 
-                    <div class="field" style="margin-top:16px">
-                        <label>Vehicle <span class="req">*</span></label>
-                        <div class="picker-field">
-                            <div class="picker-value" id="tripVehicleSummary">
-                                <div><b>No vehicle selected</b></div>
+                    <div class="grid" style="margin-top:16px">
+                        <div class="field searchable" id="tripVehicleField">
+                            <div class="search-label">
+                                <label for="tripVehicle">Vehicle <span class="req">*</span></label>
+                                <span class="search-tag">Searchable</span>
                             </div>
-                            <button type="button" class="btn secondary" id="selectTripVehicleBtn">Select Vehicle</button>
+                            <input id="tripVehicle" list="tripVehicleList" placeholder="Type vehicle ID, name, or registration" autocomplete="off" required>
+                            <datalist id="tripVehicleList"></datalist>
+                            <div class="hint">Choose an exact suggestion from the saved vehicle list.</div>
                         </div>
-                        <div class="quick-chips" id="recentTripVehicleChips"></div>
-                    </div>
 
-                    <div class="field" style="margin-top:16px">
-                        <label>Driver <span class="req">*</span></label>
-                        <div class="picker-field">
-                            <div class="picker-value" id="tripDriverSummary">
-                                <div><b>No driver selected</b></div>
+                        <div class="field searchable" id="tripDriverField">
+                            <div class="search-label">
+                                <label for="tripDriver">Driver <span class="req">*</span></label>
+                                <span class="search-tag">Searchable</span>
                             </div>
-                            <button type="button" class="btn secondary" id="selectTripDriverBtn">Select Driver</button>
+                            <input id="tripDriver" list="tripDriverList" placeholder="Type driver ID, name, or phone" autocomplete="off" required>
+                            <datalist id="tripDriverList"></datalist>
+                            <div class="hint">Choose an exact suggestion from the saved driver list.</div>
                         </div>
-                        <div class="quick-chips" id="recentTripDriverChips"></div>
                     </div>
 
-                    <div style="margin-top:18px">
-                        <label class="section-label">Status <span class="req">*</span></label>
-                        <div id="tripStatusChoices" class="choice-grid auto-grid"></div>
-                    </div>
-                    <div class="grid" style="margin-top:18px">
-                        <div>
-                            <label class="section-label">Trip Around <span class="req">*</span></label>
-                            <div id="tripAroundChoices" class="choice-grid auto-grid"></div>
-                        </div>
-                        <div>
-                            <label class="section-label">Trip Period <span class="req">*</span></label>
-                            <div id="tripPeriodChoices" class="choice-grid auto-grid"></div>
-                        </div>
-                    </div>
                     <div class="grid" style="margin-top:18px">
                         <x-fleetman.input id="tripPurpose" label="Purpose" placeholder="Example: Client visit / Staff movement" />
                         <div>
@@ -77,48 +60,42 @@
                     </div>
                 </x-fleetman.section-card>
 
-                <x-fleetman.section-card
-                    title="2. Route & Odometer"
-                >
+                <x-fleetman.section-card title="2. Route & Odometer">
                     <div class="grid">
                         <x-fleetman.input id="tripFromLocation" label="From Location" placeholder="Example: Head Office" />
                         <x-fleetman.input id="tripToLocation" label="To Location" placeholder="Example: Gulshan Client Office" />
                     </div>
                     <div class="grid" style="margin-top:16px">
-                        <x-fleetman.input id="tripOdoStart" label="Odo Start" type="number" placeholder="Starting reading" required />
-                        <x-fleetman.input id="tripOdoEnd" label="Odo End" type="number" placeholder="Ending reading" />
+                        <x-fleetman.input id="tripOdoStart" label="Odo Start (Optional)" type="number" min="0" step="1" placeholder="Starting reading" />
+                        <x-fleetman.input id="tripOdoEnd" label="Odo End (Optional)" type="number" min="0" step="1" placeholder="Ending reading" />
                     </div>
                 </x-fleetman.section-card>
 
-                <x-fleetman.section-card
-                    title="3. Trip Costs"
-                >
-                    <div class="grid">
-                        <x-fleetman.input id="tripFuelCost" label="Fuel Cost" type="number" step="0.01" placeholder="0" />
-                        <x-fleetman.input id="tripFoodCost" label="Food Cost" type="number" step="0.01" placeholder="0" />
+                <x-fleetman.section-card title="3. Trip Cost & Payments">
+                    <div class="grid3 trip-payment-summary">
+                        <x-fleetman.input id="tripTotalCost" label="Total Cost (Taka)" type="number" min="0.01" step="0.01" placeholder="0.00" required />
+                        <x-fleetman.input id="tripPaidAmount" label="Paid Amount" type="number" value="0" readonly />
+                        <x-fleetman.input id="tripBalanceDue" label="Remaining Payment Required" type="number" value="0" readonly />
                     </div>
-                    <div class="grid" style="margin-top:16px">
-                        <x-fleetman.input id="tripTolls" label="Tolls" type="number" step="0.01" placeholder="0" />
-                        <x-fleetman.input id="tripOtherCost" label="Other Cost" type="number" step="0.01" placeholder="0" />
+
+                    <div class="trip-payment-head">
+                        <div>
+                            <h3>Payment Methods</h3>
+                            <p>Add each payment separately when the client pays using multiple methods.</p>
+                        </div>
+                        <button type="button" class="btn secondary" id="addTripPaymentBtn">+ Add Payment</button>
                     </div>
-                    <div class="grid" style="margin-top:16px">
-                        <x-fleetman.input id="tripAccommodationCost" label="Accommodation Cost" type="number" step="0.01" placeholder="0" />
-                        <x-fleetman.input id="tripTotalCost" label="Total Estimated Cost" readonly />
-                    </div>
+                    <div id="tripPayments" class="trip-payment-list"></div>
                 </x-fleetman.section-card>
 
-                <x-fleetman.section-card
-                    title="4. Notes"
-                >
+                <x-fleetman.section-card title="4. Notes">
                     <x-fleetman.textarea id="tripDetails" label="Details" placeholder="Write trip details, purpose, or special instructions." required />
                 </x-fleetman.section-card>
             </div>
-
         </div>
 
         <div class="save-bar">
             <button type="button" class="btn light" id="resetTripBtn">Reset Form</button>
-            <button type="button" class="btn secondary" id="saveTripDraftBtn">Save as Draft</button>
             <button type="button" class="btn primary" id="saveTripBtn">Save Trip</button>
         </div>
     </div>
@@ -127,65 +104,33 @@
         <x-fleetman.topbar :items="[['label' => 'Trip List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportTripsBtn">⬇ Export CSV</button>
-                <button type="button" class="btn primary" id="newTripBtn">＋ Add Trip</button>
             </x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card
             title="Trip List"
-            subtitle="Saved trips with quick search, filters, export, and edit/delete actions."
+            subtitle="Saved trips with vehicle, driver, route, total cost, paid amount, and remaining payment."
         />
 
         <div class="kpi">
             <x-fleetman.kpi-card id="tripKpiTotal" label="Total Trips" />
-            <x-fleetman.kpi-card id="tripKpiRunning" label="Running Trips" />
-            <x-fleetman.kpi-card id="tripKpiCompleted" label="Completed Trips" />
             <x-fleetman.kpi-card id="tripKpiCost" label="Total Trip Cost" />
+            <x-fleetman.kpi-card id="tripKpiPaid" label="Total Paid" />
+            <x-fleetman.kpi-card id="tripKpiBalance" label="Total Balance" />
         </div>
 
         <div class="card">
-            <div class="filters">
-                <input id="tripSearch" placeholder="Search by trip ID, vehicle, driver, route, purpose, or status">
+            <div class="filters trip-list-filters">
+                <input id="tripSearch" placeholder="Search by trip ID, vehicle, driver, route, or purpose">
                 <input id="tripVehicleSearch" placeholder="Filter by vehicle">
-                <x-fleetman.select id="tripFilterStatus" label="" :options="$fleetman['options']['trip_statuses']" placeholder="All Status" />
-                <x-fleetman.select id="tripFilterAround" label="" :options="$fleetman['options']['trip_around']" placeholder="All Trip Areas" />
-                <div style="display:flex;gap:10px"><button type="button" class="btn secondary" id="applyTripFiltersBtn">Apply</button><button type="button" class="btn light" id="clearTripFiltersBtn">Clear</button></div>
+                <div class="trip-filter-actions"><button type="button" class="btn secondary" id="applyTripFiltersBtn">Apply</button><button type="button" class="btn light" id="clearTripFiltersBtn">Clear</button></div>
             </div>
             <div class="table-wrap trip-table">
                 <table>
-                    <thead><tr><th>Trip</th><th>Dates</th><th>Vehicle & Driver</th><th>Route</th><th>Odometer</th><th>Costs</th><th>Status</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Trip</th><th>Date</th><th>Vehicle & Driver</th><th>Route</th><th>Odometer</th><th>Payment</th><th>Actions</th></tr></thead>
                     <tbody id="tripTbody"></tbody>
                 </table>
             </div>
-        </div>
-    </div>
-</div>
-
-<div id="tripSelectorOverlay" class="overlay" aria-hidden="true">
-    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="tripSelectorTitle">
-        <div class="sheet-handle"></div>
-        <div class="sheet-head">
-            <div>
-                <h3 id="tripSelectorTitle">Select</h3>
-                <p id="tripSelectorSubtitle">Search and choose</p>
-            </div>
-            <button type="button" class="btn light" id="closeTripSelectorBtn">Close</button>
-        </div>
-        <div class="sheet-body">
-            <div class="sheet-search">
-                <input id="tripSelectorSearch" placeholder="Search">
-                <select id="tripSelectorFilter"></select>
-            </div>
-            <div class="sheet-stats" id="tripSelectorStats"></div>
-            <div class="selector-tabs">
-                <button type="button" class="selector-tab active" id="tripSelectorRecentTab">Recent</button>
-                <button type="button" class="selector-tab" id="tripSelectorAllTab">All</button>
-            </div>
-            <div class="list-items" id="tripSelectorList"></div>
-        </div>
-        <div class="sheet-foot">
-            <button type="button" class="btn light" id="clearTripSelectorChoiceBtn">Clear Selection</button>
-            <button type="button" class="btn primary" id="doneTripSelectorBtn">Done</button>
         </div>
     </div>
 </div>

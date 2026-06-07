@@ -95,11 +95,26 @@
         <main class="main-content">
             <?php echo $__env->yieldContent('content'); ?>
 
-            <footer class="fleet-footer">
-                © <?php echo e(date('Y')); ?> <?php echo e($brand['name'] ?? 'FleetMan'); ?>. All Rights Reserved.<br>
-                System Design, Development &amp; Intellectual Property owned by
-                <a href="https://itqanconsulting.com/" target="_blank"><b><?php echo e($brand['footer_owner'] ?? 'ITQAN Consulting'); ?></b></a>
-            </footer>
+            <?php if (isset($component)) { $__componentOriginal36bae408b14af0e7fcaf0db48c860d89 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal36bae408b14af0e7fcaf0db48c860d89 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.footer','data' => ['brand' => $brand]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.footer'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['brand' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($brand)]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal36bae408b14af0e7fcaf0db48c860d89)): ?>
+<?php $attributes = $__attributesOriginal36bae408b14af0e7fcaf0db48c860d89; ?>
+<?php unset($__attributesOriginal36bae408b14af0e7fcaf0db48c860d89); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal36bae408b14af0e7fcaf0db48c860d89)): ?>
+<?php $component = $__componentOriginal36bae408b14af0e7fcaf0db48c860d89; ?>
+<?php unset($__componentOriginal36bae408b14af0e7fcaf0db48c860d89); ?>
+<?php endif; ?>
         </main>
     </div>
 

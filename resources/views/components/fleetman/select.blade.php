@@ -13,7 +13,7 @@
     @if($label !== null && $label !== '')
         <label for="{{ $id }}">{{ $label }} @if($required)<span class="req">*</span>@endif</label>
     @endif
-    <select id="{{ $id }}" name="{{ $name ?? $id }}" {{ $attributes }}>
+    <select id="{{ $id }}" name="{{ $name ?? $id }}" @if($required) required aria-required="true" @endif {{ $attributes }}>
         @if ($placeholder !== null)
             <option value="">{{ $placeholder }}</option>
         @endif

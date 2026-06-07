@@ -13,16 +13,16 @@
         <div class="layout">
             <div>
                 <x-fleetman.section-card title="1. Trip & Assignment">
-                    <div class="grid2"><x-fleetman.input id="attendanceId" label="Attendance ID" readonly /><x-fleetman.input id="attendanceDate" label="Date" type="date" required /></div>
+                    <div class="grid2"><x-fleetman.input id="attendanceId" label="Attendance ID" required readonly /><x-fleetman.input id="attendanceDate" label="Date" type="date" required /></div>
                     <div class="grid3" style="margin-top:16px">
-                        <div class="field searchable"><div class="search-label"><label for="attendanceContract">Contract <span class="req">*</span></label><span class="search-tag">Searchable</span></div><input id="attendanceContract" list="attendanceContractList" placeholder="Type to search contract"><datalist id="attendanceContractList"></datalist></div>
-                        <div class="field searchable"><div class="search-label"><label for="attendanceVehicle">Vehicle <span class="req">*</span></label><span class="search-tag">Filtered</span></div><input id="attendanceVehicle" list="attendanceVehicleList" placeholder="Select vehicle from contract"><datalist id="attendanceVehicleList"></datalist></div>
-                        <div class="field searchable"><div class="search-label"><label for="attendanceDriver">Driver <span class="req">*</span></label><span class="search-tag">Filtered</span></div><input id="attendanceDriver" list="attendanceDriverList" placeholder="Select driver from contract"><datalist id="attendanceDriverList"></datalist></div>
+                        <div class="field searchable"><div class="search-label"><label for="attendanceContract">Contract <span class="req">*</span></label><span class="search-tag">Searchable</span></div><input id="attendanceContract" list="attendanceContractList" placeholder="Type to search contract" autocomplete="off" required aria-required="true"><datalist id="attendanceContractList"></datalist></div>
+                        <div class="field searchable"><div class="search-label"><label for="attendanceVehicle">Vehicle <span class="req">*</span></label><span class="search-tag">Filtered</span></div><input id="attendanceVehicle" list="attendanceVehicleList" placeholder="Select vehicle from contract" autocomplete="off" required aria-required="true"><datalist id="attendanceVehicleList"></datalist></div>
+                        <div class="field searchable"><div class="search-label"><label for="attendanceDriver">Driver <span class="req">*</span></label><span class="search-tag">Filtered</span></div><input id="attendanceDriver" list="attendanceDriverList" placeholder="Select driver from contract" autocomplete="off" required aria-required="true"><datalist id="attendanceDriverList"></datalist></div>
                     </div>
                 </x-fleetman.section-card>
 
                 <x-fleetman.section-card title="2. Time & Attendance">
-                    <div class="grid3"><x-fleetman.input id="attendanceStartTime" label="Start Time" type="time" required /><x-fleetman.input id="attendanceEndTime" label="End Time" type="time" /><div><label class="section-label">Status <span class="req">*</span></label><div id="attendanceStatusChoices" class="choice-grid auto-grid"></div></div></div>
+                    <div class="grid3"><x-fleetman.input id="attendanceStartTime" label="Start Time" type="time" required /><x-fleetman.input id="attendanceEndTime" label="End Time" type="time" /><div class="field" id="attendanceStatusField"><label class="section-label" id="attendanceStatusLabel">Status <span class="req">*</span></label><div id="attendanceStatusChoices" class="choice-grid auto-grid" role="group" aria-labelledby="attendanceStatusLabel" aria-required="true" tabindex="-1"></div></div></div>
                     <div class="quick-actions" style="margin-top:16px"><button type="button" class="btn secondary" data-time-now="attendanceStartTime">Start Now</button><button type="button" class="btn secondary" data-clear-field="attendanceStartTime">Clear Start</button><button type="button" class="btn secondary" data-time-now="attendanceEndTime">End Now</button><button type="button" class="btn secondary" data-clear-field="attendanceEndTime">Clear End</button></div>
                 </x-fleetman.section-card>
 
@@ -36,7 +36,7 @@
 
     <div id="attendanceListPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Log List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportAttendanceBtn">⬇ Export CSV</button><button type="button" class="btn primary" id="newAttendanceBtn">＋ Add Log</button></x-slot:actions>
+            <x-slot:actions><button type="button" class="btn light" id="exportAttendanceBtn">⬇ Export CSV</button></x-slot:actions>
         </x-fleetman.topbar>
         <x-fleetman.title-card title="Log List" subtitle="Database-backed drive log / attendance records using real contract, vehicle, and driver assignments." />
         <div class="kpi"><x-fleetman.kpi-card id="attendanceKpiTotal" label="Total Logs" /><x-fleetman.kpi-card id="attendanceKpiCompleted" label="Completed Logs" /><x-fleetman.kpi-card id="attendanceKpiRunning" label="Running Logs" /><x-fleetman.kpi-card id="attendanceKpiHours" label="Total Hours" /></div>

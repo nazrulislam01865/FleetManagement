@@ -81,11 +81,7 @@
         <main class="main-content">
             @yield('content')
 
-            <footer class="fleet-footer">
-                © {{ date('Y') }} {{ $brand['name'] ?? 'FleetMan' }}. All Rights Reserved.<br>
-                System Design, Development &amp; Intellectual Property owned by
-                <a href="https://itqanconsulting.com/" target="_blank"><b>{{ $brand['footer_owner'] ?? 'ITQAN Consulting' }}</b></a>
-            </footer>
+            <x-fleetman.footer :brand="$brand" />
         </main>
     </div>
 

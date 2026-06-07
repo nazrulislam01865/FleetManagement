@@ -13,7 +13,7 @@
         <x-fleetman.title-card
         class="desktop-title"
         title="Add Recharge"
-        subtitle="Select contract, load assigned vehicle, take live photos, enter fuel quantity, confirm ODO, and submit. Fuel type and latest active rate are loaded automatically."
+        subtitle="Select contract, load the assigned vehicle, take required photos, enter liquid fuel in liters or CNG/Gas/LPG cost in Taka, confirm ODO, and submit. Compatible stations load automatically."
     />
 
     <div class="help-card">
@@ -23,18 +23,12 @@
         <div class="capture-counter"><small>Photo Status</small><div id="photoCount">0 / 3 required</div></div>
     </div>
 
-    <datalist id="fuelStationList">
-        @foreach (($fleetman['fuelStations'] ?? []) as $station)
-            <option value="{{ $station }}"></option>
-        @endforeach
-    </datalist>
-
     <section class="step-card">
         <div class="step-head"><div class="step-no">1</div><div><h2>Select contract and vehicle</h2></div></div>
         <div class="grid">
             <div class="field">
                 <label for="contractSelect">Contract <span class="req">*</span></label>
-                <select id="contractSelect">
+                <select id="contractSelect" required aria-required="true">
                     <option value="">- Select contract -</option>
                     @foreach (($fleetman['contracts'] ?? []) as $contract)
                         <option value="{{ $contract['id'] }}">{{ $contract['label'] }}</option>
@@ -43,7 +37,7 @@
             </div>
             <div class="field">
                 <label for="vehicleSelect">Vehicle <span class="req">*</span></label>
-                <select id="vehicleSelect">
+                <select id="vehicleSelect" required aria-required="true">
                     <option value="">- Select contract first -</option>
                 </select>
             </div>
@@ -61,11 +55,25 @@
         <div class="fuel-panel">
             <div class="fuel-panel-head"><div><b>Main Fuel <span class="req">*</span></b></div><span class="fuel-chip required">Required</span></div>
             <div class="grid">
-                <div class="field"><label for="primaryFuelName">Main Fuel Name</label><input id="primaryFuelName" readonly value=""></div>
-                <div class="field"><label for="primaryStation">Primary Fuel Station <span class="req">*</span></label><input id="primaryStation" list="fuelStationList" placeholder="Type or select fuel station"></div>
-                <div class="field"><label for="primaryQty">Quantity <span class="req">*</span></label><input id="primaryQty" type="number" min="0" step="0.01" value="" inputmode="decimal"></div>
-                <div class="field"><label for="primaryRate">Fuel Rate</label><input id="primaryRate" readonly value=""></div>
-                <div class="field"><label for="primaryAmount">Amount</label><input id="primaryAmount" readonly value="৳ 0.00"></div>
+                <div class="field"><label for="primaryFuelName">Main Fuel Name <span class="req">*</span></label><input id="primaryFuelName" readonly required aria-required="true" value=""></div>
+                <div class="field">
+                    <label for="primaryStation">Primary Fuel Station <span class="req">*</span></label>
+                    <select id="primaryStation" disabled required aria-required="true">
+                        <option value="">- Select vehicle first -</option>
+                    </select>
+                    <small class="upload-meta" id="primaryStationHint" hidden></small>
+                </div>
+                <div class="field">
+                    <label for="primaryQty" id="primaryQtyLabel">Quantity (Liter) <span class="req">*</span></label>
+                    <input id="primaryQty" type="number" min="0.01" step="0.01" value="" inputmode="decimal" placeholder="Enter liters" required aria-required="true">
+                    <small class="upload-meta" id="primaryQtyHint" hidden></small>
+                </div>
+                <div class="field" id="primaryRateField">
+                    <label for="primaryRate" id="primaryRateLabel">Rate per Liter</label>
+                    <input id="primaryRate" readonly value="">
+                    <small class="upload-meta" id="primaryRateHint" hidden></small>
+                </div>
+                <div class="field"><label for="primaryAmount" id="primaryAmountLabel">Calculated Amount</label><input id="primaryAmount" readonly value="৳ 0.00"></div>
             </div>
         </div>
         <div class="secondary-toggle">
@@ -75,10 +83,24 @@
             <div class="fuel-panel-head"><div><b>Second Fuel</b></div><span class="fuel-chip optional">Optional</span></div>
             <div class="grid">
                 <div class="field"><label for="secondaryFuelName">Second Fuel Name</label><input id="secondaryFuelName" readonly value=""></div>
-                <div class="field"><label for="secondaryStation">Secondary Fuel Station</label><input id="secondaryStation" list="fuelStationList" placeholder="Type or select fuel station"></div>
-                <div class="field"><label for="secondaryQty">Quantity</label><input id="secondaryQty" type="number" min="0" step="0.01" value="0" inputmode="decimal"></div>
-                <div class="field"><label for="secondaryRate">Fuel Rate</label><input id="secondaryRate" readonly value=""></div>
-                <div class="field"><label for="secondaryAmount">Amount</label><input id="secondaryAmount" readonly value="৳ 0.00"></div>
+                <div class="field">
+                    <label for="secondaryStation">Secondary Fuel Station</label>
+                    <select id="secondaryStation" disabled>
+                        <option value="">- Select second fuel first -</option>
+                    </select>
+                    <small class="upload-meta" id="secondaryStationHint" hidden></small>
+                </div>
+                <div class="field">
+                    <label for="secondaryQty" id="secondaryQtyLabel">Quantity (Liter)</label>
+                    <input id="secondaryQty" type="number" min="0" step="0.01" value="0" inputmode="decimal" placeholder="Enter liters">
+                    <small class="upload-meta" id="secondaryQtyHint" hidden></small>
+                </div>
+                <div class="field" id="secondaryRateField">
+                    <label for="secondaryRate" id="secondaryRateLabel">Rate per Liter</label>
+                    <input id="secondaryRate" readonly value="">
+                    <small class="upload-meta" id="secondaryRateHint" hidden></small>
+                </div>
+                <div class="field"><label for="secondaryAmount" id="secondaryAmountLabel">Calculated Amount</label><input id="secondaryAmount" readonly value="৳ 0.00"></div>
             </div>
         </div>
         <div class="amount-strip"><div><small>Total Fuel Cost</small><b id="totalAmount">৳ 0.00</b></div><button class="btn light" type="button" id="recalculateFuelRechargeBtn">Recalculate</button></div>
@@ -87,13 +109,13 @@
     <section class="step-card">
         <div class="step-head"><div class="step-no">4</div><div><h2>ODO reading and submit</h2></div></div>
         <div class="grid">
-            <div class="field"><label for="startKm">Start KM</label><input id="startKm" readonly value=""></div>
-            <div class="field"><label for="endKm">End KM <span class="req">*</span></label><input id="endKm" type="number" min="0" value="" placeholder="Latest ODO reading" inputmode="numeric"></div>
+            <div class="field"><label for="startKm">Start KM <span class="req">*</span></label><input id="startKm" readonly required aria-required="true" value=""></div>
+            <div class="field"><label for="endKm">End KM <span class="req">*</span></label><input id="endKm" type="number" min="0" step="1" value="" placeholder="Latest ODO reading" inputmode="numeric" required aria-required="true"></div>
         </div>
         <div class="grid3" style="margin-top:12px">
             <div class="field"><label for="totalKm">Total KM</label><input id="totalKm" readonly value=""></div>
             <div class="field"><label for="mileage">Mileage (KM/L)</label><input id="mileage" readonly value=""></div>
-            <div class="field"><label for="submittedBy">Submitted By</label><input id="submittedBy" readonly value="{{ $account['name'] ?? 'Logged-in User' }}"></div>
+            <div class="field"><label for="submittedBy">Submitted By <span class="req">*</span></label><input id="submittedBy" readonly required aria-required="true" value="{{ $account['name'] ?? 'Logged-in User' }}"></div>
         </div>
         <div class="field" style="margin-top:12px"><label for="rechargeRemarks">Remarks</label><textarea id="rechargeRemarks" placeholder="Write any note about the fuel recharge."></textarea></div>
         <div class="log-grid" style="margin-top:12px">
@@ -106,7 +128,7 @@
 
     <div id="rechargeListPage" class="hidden" style="max-width: 100%; padding: 0 10px;">
         <x-fleetman.topbar :items="[['label' => 'Recharge List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportRechargesBtn">⬇ Export CSV</button><button type="button" class="btn primary" id="newRechargeBtn">＋ Add Recharge</button></x-slot:actions>
+            <x-slot:actions><button type="button" class="btn light" id="exportRechargesBtn">⬇ Export CSV</button></x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card title="Recharge List" subtitle="Clean list view with quick search, filters, and sample data. Designed to replace the spreadsheet-like screen with something easier to scan and use."></x-fleetman.title-card>

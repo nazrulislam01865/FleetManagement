@@ -95,7 +95,7 @@
                         </div>
                     </div>
                     <div class="grid">
-                        <div class="field"><label for="image">Vehicle Image</label><input id="image" type="file" accept="image/*"><input id="vehicleImageData" type="hidden"><small class="upload-meta" id="vehicleImageUploadInfo"></small><div class="hint">Allowed: jpg, png, webp. Recommended size below 5 MB.</div></div>
+                        <div class="field"><label for="image">Vehicle Image</label><input id="image" type="file" accept="image/jpeg,image/png,image/webp"><input id="vehicleImageData" type="hidden"><div class="temp-upload-progress hidden" id="vehicleImageProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta" id="vehicleImageUploadInfo"></div><div class="hint">Allowed: JPG, PNG or WEBP. Maximum size: 100 KB.</div></div>
                         <div class="field"><label for="notes">Notes</label><textarea id="notes" placeholder="Any special note about vehicle condition or assignment"></textarea></div>
                     </div>
                 </div>
@@ -113,7 +113,7 @@
         <x-fleetman.topbar :items="[['label' => 'Vehicle List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportVehiclesBtn">⬇ Export CSV</button>
-                <button type="button" class="btn primary" id="newVehicleBtn">＋ Add Vehicle</button>
+                
             </x-slot:actions>
         </x-fleetman.topbar>
 
