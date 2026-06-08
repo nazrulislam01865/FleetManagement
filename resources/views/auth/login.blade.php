@@ -16,7 +16,13 @@
     @endif
 
     @if (session('status'))
-        <div class="login-success" role="status">{{ session('status') }}</div>
+        @php
+            $statusMessage = (string) session('status');
+            $isSessionExpired = str_contains(strtolower($statusMessage), 'session expired');
+        @endphp
+        <div class="{{ $isSessionExpired ? 'login-error' : 'login-success' }}" role="{{ $isSessionExpired ? 'alert' : 'status' }}">
+            {{ $statusMessage }}
+        </div>
     @endif
 
     <form method="POST" action="{{ route('login.store') }}" class="login-form">

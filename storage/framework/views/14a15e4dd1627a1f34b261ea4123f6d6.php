@@ -15,7 +15,14 @@
     <?php endif; ?>
 
     <?php if(session('status')): ?>
-        <div class="login-success" role="status"><?php echo e(session('status')); ?></div>
+        <?php
+            $statusMessage = (string) session('status');
+            $isSessionExpired = str_contains(strtolower($statusMessage), 'session expired');
+        ?>
+        <div class="<?php echo e($isSessionExpired ? 'login-error' : 'login-success'); ?>" role="<?php echo e($isSessionExpired ? 'alert' : 'status'); ?>">
+            <?php echo e($statusMessage); ?>
+
+        </div>
     <?php endif; ?>
 
     <form method="POST" action="<?php echo e(route('login.store')); ?>" class="login-form">
