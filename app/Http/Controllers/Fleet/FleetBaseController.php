@@ -279,6 +279,10 @@ abstract class FleetBaseController extends Controller
     {
         $user = auth()->user();
         $roleName = $user?->fleetRole?->name ?? 'User';
+        $currentPage = strtolower(trim((string) ($pageData['page'] ?? $this->page)));
+        $records = $this->recordsFromDatabase($currentPage);
+        $isFuelRechargePage = $currentPage === 'fuel-recharge';
+        $isVehiclePage = $currentPage === 'vehicles';
 
         $logoUrl = FleetBrand::logoUrl();
 
@@ -293,18 +297,18 @@ abstract class FleetBaseController extends Controller
             'menuGroups' => $this->authorizedMenuGroups(config('fleetman.menu', [])),
             'activeMenu' => $activeMenu,
             'fleetman' => array_merge([
-                'options' => $this->optionsFromDatabase(),
-                'contracts' => $this->fuelRechargeContracts(),
-                'photoRequirements' => $this->photoRequirements(),
-                'fuelStations' => $this->fuelStationOptions(),
-                'samples' => $this->recordsFromDatabase(),
-                'records' => $this->recordsFromDatabase(),
-                'tripMasters' => $this->tripMastersFromDatabase(),
-                'contractMasters' => $this->contractMastersFromDatabase(),
-                'attendanceMasters' => $this->attendanceMastersFromDatabase(),
-                'latestFuelRates' => $this->latestActiveFuelRates(),
+                'options' => $this->optionsForPage($currentPage),
+                'contracts' => $isFuelRechargePage ? $this->fuelRechargeContracts() : [],
+                'photoRequirements' => $isFuelRechargePage ? $this->photoRequirements() : [],
+                'fuelStations' => $isFuelRechargePage ? $this->fuelStationOptions() : [],
+                'samples' => $records,
+                'records' => $records,
+                'tripMasters' => $currentPage === 'trips' ? $this->tripMastersFromDatabase() : [],
+                'contractMasters' => $currentPage === 'contracts' ? $this->contractMastersFromDatabase() : [],
+                'attendanceMasters' => $currentPage === 'driver-attendance' ? $this->attendanceMastersFromDatabase() : [],
+                'latestFuelRates' => ($isFuelRechargePage || $isVehiclePage) ? $this->latestActiveFuelRates() : [],
                 'resources' => $this->resourceUrls(),
-                'auth' => $this->fleetAuthPayload(),
+                'auth' => $this->fleetAuthPayload($currentPage),
             ], $pageData),
         ];
     }
@@ -314,22 +318,32 @@ abstract class FleetBaseController extends Controller
         return collect($groups)
             ->map(function (array $group): array {
                 $items = collect($group['items'] ?? [])
-                    ->map(function (array $item): ?array {
+                    ->filter(function (array $item): bool {
+                        return ! empty($item['route']) || count($item['children'] ?? []) > 0;
+                    })
+                    ->map(function (array $item): array {
+                        $itemAllowed = $this->menuItemAllowed($item);
+                        $item['allowed'] = $itemAllowed;
+
                         $children = collect($item['children'] ?? [])
-                            ->filter(fn (array $child): bool => $this->menuItemAllowed($child))
+                            ->filter(fn (array $child): bool => ! empty($child['route']))
+                            ->map(function (array $child) use ($itemAllowed): array {
+                                // Child options also require access to the parent/list module.
+                                $child['allowed'] = $itemAllowed && $this->menuItemAllowed($child);
+
+                                return $child;
+                            })
                             ->values()
                             ->all();
 
                         if ($children !== []) {
                             $item['children'] = $children;
-                            return $item;
+                        } else {
+                            unset($item['children']);
                         }
 
-                        unset($item['children']);
-
-                        return $this->menuItemAllowed($item) ? $item : null;
+                        return $item;
                     })
-                    ->filter()
                     ->values()
                     ->all();
 
@@ -355,7 +369,7 @@ abstract class FleetBaseController extends Controller
         return ! $user || ! method_exists($user, 'canFleet') || $user->canFleet($permission);
     }
 
-    protected function fleetAuthPayload(): array
+    protected function fleetAuthPayload(?string $currentPage = null): array
     {
         $user = auth()->user();
         $permissionKeys = collect(FleetRbac::permissions())->pluck('key')->values()->all();
@@ -363,6 +377,7 @@ abstract class FleetBaseController extends Controller
             ->filter(fn (string $permission): bool => ! $user || ! method_exists($user, 'canFleet') || $user->canFleet($permission))
             ->values()
             ->all();
+        $pageAccess = $this->pagePermissionAccess($currentPage);
 
         return [
             'user' => $user ? [
@@ -377,6 +392,65 @@ abstract class FleetBaseController extends Controller
             ] : null,
             'permissions' => $allowedPermissions,
             'isSuperAdmin' => $user?->isFleetSuperAdmin() ?? false,
+            'pageAccess' => $pageAccess,
+        ];
+    }
+
+    protected function pagePermissionAccess(?string $currentPage = null): array
+    {
+        $page = strtolower(trim((string) ($currentPage ?: $this->page)));
+        $pageMap = [
+            'dashboard' => ['dashboard.view', null],
+            'trips' => ['trips.view', 'trips.manage'],
+            'driver-attendance' => ['driver_attendance.view', 'driver_attendance.manage'],
+            'vehicles' => ['vehicles.view', 'vehicles.manage'],
+            'fuel-recharge' => ['fuel_recharge.view', 'fuel_recharge.manage'],
+            'fuel-prices' => ['fuel_prices.view', 'fuel_prices.manage'],
+            'contracts' => ['contracts.view', 'contracts.manage'],
+            'clients' => ['clients.view', 'clients.manage'],
+            'drivers' => ['drivers.view', 'drivers.manage'],
+            'employees' => ['employees.view', 'employees.manage'],
+            'vendors' => ['vendors.view', 'vendors.manage'],
+            'dues' => ['dues.view', 'dues.manage'],
+            'reports' => ['reports.view', null],
+            'master-data' => ['master_data.view', 'master_data.manage'],
+            'users' => ['users.view', 'users.manage'],
+            'role-matrix' => ['role_matrix.view', 'role_matrix.manage'],
+            'settings' => ['settings.manage', 'settings.manage'],
+        ];
+
+        if (str_starts_with($page, 'report-')) {
+            $page = 'reports';
+        }
+
+        $resourceMap = [
+            'vehicles' => ['vehicles.view', 'vehicles.manage'],
+            'fuel_prices' => ['fuel_prices.view', 'fuel_prices.manage'],
+            'fuel_recharges' => ['fuel_recharge.view', 'fuel_recharge.manage'],
+            'parties' => ['vendors.view', 'vendors.manage'],
+            'trips' => ['trips.view', 'trips.manage'],
+            'contracts' => ['contracts.view', 'contracts.manage'],
+            'drivers' => ['drivers.view', 'drivers.manage'],
+            'clients' => ['clients.view', 'clients.manage'],
+            'driver_attendance' => ['driver_attendance.view', 'driver_attendance.manage'],
+            'employees' => ['employees.view', 'employees.manage'],
+            'dues' => ['dues.view', 'dues.manage'],
+        ];
+
+        [$viewPermission, $managePermission] = $pageMap[$page]
+            ?? ($page === 'record-detail' ? ($resourceMap[$this->resource] ?? [null, null]) : [null, null]);
+        $user = auth()->user();
+        $can = static fn (?string $permission): bool => $permission === null
+            || ! $user
+            || ! method_exists($user, 'canFleet')
+            || $user->canFleet($permission);
+
+        return [
+            'viewPermission' => $viewPermission,
+            'managePermission' => $managePermission,
+            'canView' => $can($viewPermission),
+            'canManage' => $managePermission !== null && $can($viewPermission) && $can($managePermission),
+            'readOnly' => $viewPermission !== null && ($managePermission === null || ! ($can($viewPermission) && $can($managePermission))),
         ];
     }
 
@@ -439,6 +513,40 @@ abstract class FleetBaseController extends Controller
                 'chunk_bytes' => (int) config('fleetman.uploads.documents.chunk_bytes', 262144),
             ],
         ];
+    }
+
+    protected function optionsForPage(string $currentPage): array
+    {
+        $allOptions = $this->optionsFromDatabase();
+        $page = strtolower(trim($currentPage));
+        $keys = [
+            'vehicles' => [
+                'vehicle_vendors', 'drivers', 'vehicle_categories', 'usage_types', 'fuel_types',
+                'document_templates', 'document_reminders', 'rental_payment_cycles',
+            ],
+            'fuel-prices' => ['fuel_types', 'fuel_price_types', 'fuel_units', 'fuel_statuses'],
+            'vendors' => [
+                'party_types', 'party_statuses', 'vendor_contractor_types', 'fuel_types',
+                'payment_terms', 'party_document_templates', 'document_reminders',
+            ],
+            'trips' => ['trip_statuses', 'trip_around', 'trip_periods', 'trip_purposes', 'payment_types'],
+            'drivers' => [
+                'driver_vendors', 'driver_license_types', 'driver_contact_types', 'driver_salary_tenures',
+                'driver_statuses', 'driver_duty_types', 'driver_document_templates', 'document_reminders',
+            ],
+            'clients' => ['client_types', 'client_statuses', 'client_contact_methods'],
+            'driver-attendance' => ['attendance_statuses'],
+            'employees' => [
+                'employee_statuses', 'employee_salary_tenures', 'employee_designations',
+                'employee_document_templates', 'document_reminders',
+            ],
+            'contracts' => ['contract_document_templates', 'document_templates', 'document_reminders'],
+            'fuel-recharge' => ['fuel_types', 'fuel_units'],
+        ][$page] ?? [];
+
+        return collect($keys)
+            ->mapWithKeys(fn (string $key): array => [$key => $allOptions[$key] ?? []])
+            ->all();
     }
 
     protected function optionsFromDatabase(): array
@@ -864,20 +972,45 @@ abstract class FleetBaseController extends Controller
             ->all();
     }
 
-    protected function recordsFromDatabase(): array
+    protected function recordsFromDatabase(?string $currentPage = null): array
     {
-        return [
-            'contracts' => $this->contractRecordsFromDatabase(),
-            'vehicles' => $this->recordsFor(FleetVehicle::class),
-            'fuel_prices' => $this->recordsFor(FleetFuelPrice::class),
-            'fuel_recharges' => $this->recordsFor(FleetFuelRecharge::class),
-            'parties' => $this->recordsFor(FleetVendorParty::class),
-            'trips' => $this->recordsFor(FleetTrip::class),
-            'drivers' => $this->recordsFor(FleetDriver::class),
-            'clients' => $this->recordsFor(FleetClient::class),
-            'driver_attendance' => $this->recordsFor(FleetDriverAttendance::class),
-            'employees' => $this->recordsFor(FleetEmployee::class),
+        $user = auth()->user();
+        $can = static fn (string $permission): bool => ! $user
+            || ! method_exists($user, 'canFleet')
+            || $user->canFleet($permission);
+
+        // Only expose the record collection needed by the current page.
+        // Related dropdown/master payloads are supplied by dedicated workflow
+        // methods instead of embedding unrelated module tables in page source.
+        $page = strtolower(trim((string) $currentPage));
+        $pageToRecord = [
+            'contracts' => ['contracts', 'contracts.view', fn (): array => $this->contractRecordsFromDatabase()],
+            'vehicles' => ['vehicles', 'vehicles.view', fn (): array => $this->recordsFor(FleetVehicle::class)],
+            'fuel-prices' => ['fuel_prices', 'fuel_prices.view', fn (): array => $this->recordsFor(FleetFuelPrice::class)],
+            'fuel-recharge' => ['fuel_recharges', 'fuel_recharge.view', fn (): array => $this->recordsFor(FleetFuelRecharge::class)],
+            'vendors' => ['parties', 'vendors.view', fn (): array => $this->recordsFor(FleetVendorParty::class)],
+            'trips' => ['trips', 'trips.view', fn (): array => $this->recordsFor(FleetTrip::class)],
+            'drivers' => ['drivers', 'drivers.view', fn (): array => $this->recordsFor(FleetDriver::class)],
+            'clients' => ['clients', 'clients.view', fn (): array => $this->recordsFor(FleetClient::class)],
+            'driver-attendance' => ['driver_attendance', 'driver_attendance.view', fn (): array => $this->recordsFor(FleetDriverAttendance::class)],
+            'employees' => ['employees', 'employees.view', fn (): array => $this->recordsFor(FleetEmployee::class)],
         ];
+        $empty = [
+            'contracts' => [], 'vehicles' => [], 'fuel_prices' => [], 'fuel_recharges' => [],
+            'parties' => [], 'trips' => [], 'drivers' => [], 'clients' => [],
+            'driver_attendance' => [], 'employees' => [],
+        ];
+
+        if (! isset($pageToRecord[$page])) {
+            return $empty;
+        }
+
+        [$recordKey, $permission, $loader] = $pageToRecord[$page];
+        if ($can($permission)) {
+            $empty[$recordKey] = $loader();
+        }
+
+        return $empty;
     }
 
     protected function recordsFor(string $modelClass): array

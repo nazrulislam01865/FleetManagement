@@ -88,6 +88,8 @@ class FleetRbac
             self::permission('vendors.view', 'People & Partners', 'View', 'View Vendors & Parties', 'Open vendor and party records.', 'fleet.vendors', 110),
             self::permission('vendors.manage', 'People & Partners', 'Manage', 'Manage Vendors & Parties', 'Create, update, upload documents, sync and delete vendor/party records.', 'fleet.vendors.sync', 111),
 
+            self::permission('dues.view', 'Finance & Reports', 'View', 'View Dues & Payroll', 'Open dues and payroll records.', 'fleet.dues', 118),
+            self::permission('dues.manage', 'Finance & Reports', 'Manage', 'Manage Dues & Payroll', 'Generate payroll dues, update payment status and save due records.', 'fleet.dues.sync', 119),
             self::permission('reports.view', 'Finance & Reports', 'View', 'View Reports', 'Open reports and report details.', 'fleet.reports', 120),
 
             self::permission('master_data.view', 'System', 'View', 'View Master Data', 'Open master data setup screens.', 'fleet.master-data', 130),
@@ -114,6 +116,7 @@ class FleetRbac
             'drivers.view',
             'employees.view',
             'vendors.view',
+            'dues.view',
             'reports.view',
             'master_data.view',
             'users.view',
@@ -133,6 +136,7 @@ class FleetRbac
                 'drivers.manage',
                 'employees.manage',
                 'vendors.manage',
+                'dues.manage',
                 'users.manage',
                 'master_data.manage',
             ]),
@@ -151,6 +155,7 @@ class FleetRbac
                 'drivers.view',
                 'employees.view',
                 'vendors.view',
+                'dues.view',
                 'reports.view',
             ],
             'field_officer' => [
@@ -283,6 +288,67 @@ class FleetRbac
         $permission = collect(self::permissions())->firstWhere('route_name', $routeName);
 
         return $permission['key'] ?? null;
+    }
+
+    public static function permissionExists(string $permissionKey): bool
+    {
+        return collect(self::permissions())->contains(
+            fn (array $permission): bool => ($permission['key'] ?? null) === $permissionKey
+        );
+    }
+
+    public static function pairedPermission(string $permissionKey, string $targetAction): ?string
+    {
+        if (! in_array($targetAction, ['view', 'manage'], true)) {
+            return null;
+        }
+
+        $suffix = str_ends_with($permissionKey, '.view')
+            ? '.view'
+            : (str_ends_with($permissionKey, '.manage') ? '.manage' : null);
+
+        if (! $suffix) {
+            return null;
+        }
+
+        $paired = substr($permissionKey, 0, -strlen($suffix)).'.'.$targetAction;
+
+        return self::permissionExists($paired) ? $paired : null;
+    }
+
+    /**
+     * Return the first page the user may open. This prevents custom roles
+     * without dashboard access from being redirected straight to a 403 page.
+     */
+    public static function firstAllowedRoute(?User $user): string
+    {
+        $candidates = [
+            ['permission' => 'dashboard.view', 'route' => 'fleet.dashboard'],
+            ['permission' => 'trips.view', 'route' => 'fleet.trips'],
+            ['permission' => 'driver_attendance.view', 'route' => 'fleet.driver-attendance'],
+            ['permission' => 'vehicles.view', 'route' => 'fleet.vehicles'],
+            ['permission' => 'fuel_recharge.view', 'route' => 'fleet.fuel-recharge'],
+            ['permission' => 'fuel_prices.view', 'route' => 'fleet.fuel-prices'],
+            ['permission' => 'contracts.view', 'route' => 'fleet.contracts'],
+            ['permission' => 'clients.view', 'route' => 'fleet.clients'],
+            ['permission' => 'drivers.view', 'route' => 'fleet.drivers'],
+            ['permission' => 'employees.view', 'route' => 'fleet.employees'],
+            ['permission' => 'vendors.view', 'route' => 'fleet.vendors'],
+            ['permission' => 'dues.view', 'route' => 'fleet.dues'],
+            ['permission' => 'reports.view', 'route' => 'fleet.reports'],
+            ['permission' => 'users.view', 'route' => 'fleet.users'],
+            ['permission' => 'role_matrix.view', 'route' => 'fleet.role-matrix'],
+            ['permission' => 'master_data.view', 'route' => 'fleet.master-data'],
+            ['permission' => 'settings.manage', 'route' => 'fleet.settings'],
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (! $user || ! method_exists($user, 'canFleet') || $user->canFleet($candidate['permission'])) {
+                return $candidate['route'];
+            }
+        }
+
+        return 'fleet.dashboard';
     }
 
     private static function permission(string $key, string $module, string $action, string $label, string $description, ?string $routeName, int $sortOrder): array

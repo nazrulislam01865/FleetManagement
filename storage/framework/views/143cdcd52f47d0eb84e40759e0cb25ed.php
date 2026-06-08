@@ -235,15 +235,15 @@
             });
         }
 
+        const recordsUrl = "<?php echo e(route('fleet.dues.records')); ?>";
         const syncUrl = "<?php echo e(route('fleet.dues.sync')); ?>";
         const payrollUrl = "<?php echo e(route('fleet.dues.generate-payroll')); ?>";
 
         async function fetchDues() {
             try {
-                const response = await fetch(syncUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-                    body: JSON.stringify({ rows: [] })
+                const response = await fetch(recordsUrl, {
+                    method: 'GET',
+                    headers: { 'Accept': 'application/json' }
                 });
                 if (!response.ok) {
                     const errText = await response.text();

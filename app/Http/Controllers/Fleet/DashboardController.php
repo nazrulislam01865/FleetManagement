@@ -30,14 +30,21 @@ class DashboardController extends FleetBaseController
 
     private function dashboardData(): array
     {
-        $vehicles = $this->rows(FleetVehicle::class);
-        $drivers = $this->rows(FleetDriver::class);
-        $trips = $this->rows(FleetTrip::class);
-        $fuelPrices = $this->rows(FleetFuelPrice::class);
-        $clients = $this->rows(FleetClient::class);
-        $vendors = $this->rows(FleetVendorParty::class);
-        $attendance = $this->rows(FleetDriverAttendance::class);
-        $employees = $this->rows(FleetEmployee::class);
+        $user = auth()->user();
+        $can = static fn (string $permission): bool => ! $user
+            || ! method_exists($user, 'canFleet')
+            || $user->canFleet($permission);
+
+        // Dashboard summaries must not leak module data to roles that cannot
+        // open the corresponding module.
+        $vehicles = $can('vehicles.view') ? $this->rows(FleetVehicle::class) : [];
+        $drivers = $can('drivers.view') ? $this->rows(FleetDriver::class) : [];
+        $trips = $can('trips.view') ? $this->rows(FleetTrip::class) : [];
+        $fuelPrices = $can('fuel_prices.view') ? $this->rows(FleetFuelPrice::class) : [];
+        $clients = $can('clients.view') ? $this->rows(FleetClient::class) : [];
+        $vendors = $can('vendors.view') ? $this->rows(FleetVendorParty::class) : [];
+        $attendance = $can('driver_attendance.view') ? $this->rows(FleetDriverAttendance::class) : [];
+        $employees = $can('employees.view') ? $this->rows(FleetEmployee::class) : [];
 
         $activeVehicleCount = collect($vehicles)->filter(function (array $row) {
             return in_array($row['status'] ?? 'Active', ['Active', 'Needs document review'], true);
@@ -78,6 +85,7 @@ class DashboardController extends FleetBaseController
                     'helper' => $activeVehicleCount.' active / usable',
                     'icon' => '🚗',
                     'route' => 'fleet.vehicles',
+                    'permission' => 'vehicles.view',
                 ],
                 [
                     'label' => 'Drivers',
@@ -85,6 +93,7 @@ class DashboardController extends FleetBaseController
                     'helper' => $expiringDrivers.' license warning',
                     'icon' => '🧑‍✈️',
                     'route' => 'fleet.drivers',
+                    'permission' => 'drivers.view',
                 ],
                 [
                     'label' => 'Trips',
@@ -92,6 +101,7 @@ class DashboardController extends FleetBaseController
                     'helper' => $paidTrips.' fully paid · ৳'.number_format($totalTripBalance, 2).' balance',
                     'icon' => '🧭',
                     'route' => 'fleet.trips',
+                    'permission' => 'trips.view',
                 ],
                 [
                     'label' => 'Clients',
@@ -99,6 +109,7 @@ class DashboardController extends FleetBaseController
                     'helper' => count($vendors).' vendors / parties',
                     'icon' => '🏢',
                     'route' => 'fleet.clients',
+                    'permission' => 'clients.view',
                 ],
             ],
             'finance' => [
@@ -114,6 +125,16 @@ class DashboardController extends FleetBaseController
                 'trips' => array_slice($trips, 0, 5),
                 'drivers' => array_slice($drivers, 0, 5),
                 'clients' => array_slice($clients, 0, 5),
+            ],
+            'access' => [
+                'vehicles' => $can('vehicles.view'),
+                'drivers' => $can('drivers.view'),
+                'trips' => $can('trips.view'),
+                'clients' => $can('clients.view'),
+                'vendors' => $can('vendors.view'),
+                'attendance' => $can('driver_attendance.view'),
+                'fuelPrices' => $can('fuel_prices.view'),
+                'employees' => $can('employees.view'),
             ],
             'warnings' => [
                 ['title' => 'Driver license review', 'value' => $expiringDrivers, 'description' => 'Drivers with license validity within 180 days.'],

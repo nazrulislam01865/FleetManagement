@@ -368,6 +368,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
     const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
     const resources = () => window.FLEETMAN?.resources?.uploads || {};
+    const uploadScope = () => String(window.FLEETMAN?.page || document.body?.dataset?.page || '').trim().toLowerCase();
 
     function formatSize(bytes) {
         const value = Number(bytes || 0);
@@ -486,6 +487,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             xhr.open('POST', resources().chunk_store, true);
             xhr.setRequestHeader('Accept', 'application/json');
             xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken());
+            xhr.setRequestHeader('X-Fleet-Upload-Scope', uploadScope());
             xhr.upload.addEventListener('progress', (event) => {
                 if (event.lengthComputable) onProgress?.(event.loaded, event.total);
             });
@@ -509,7 +511,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         try {
             await fetch(template.replace('__UPLOAD_ID__', encodeURIComponent(uploadId)), {
                 method: 'DELETE',
-                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken(), 'X-Fleet-Upload-Scope': uploadScope() },
             });
         } catch (_) {}
     }
@@ -533,6 +535,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 formData.append('mime_type', file.type || 'application/octet-stream');
                 formData.append('file_size', String(file.size));
                 formData.append('upload_kind', 'document');
+                formData.append('upload_scope', uploadScope());
                 formData.append('chunk', chunk, `${file.name}.part${index}`);
 
                 let lastError = null;
@@ -561,8 +564,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': csrfToken(),
+                    'X-Fleet-Upload-Scope': uploadScope(),
                 },
-                body: JSON.stringify({ upload_id: uploadId }),
+                body: JSON.stringify({ upload_id: uploadId, upload_scope: uploadScope() }),
             });
             let response = {};
             try { response = await completion.json(); } catch (_) {}
@@ -585,6 +589,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             xhr.open('POST', endpoint, true);
             xhr.setRequestHeader('Accept', 'application/json');
             xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken());
+            xhr.setRequestHeader('X-Fleet-Upload-Scope', uploadScope());
             xhr.upload.addEventListener('progress', (event) => {
                 if (!event.lengthComputable) return;
                 payload.progress = (event.loaded / event.total) * 100;
@@ -603,6 +608,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const formData = new FormData();
             formData.append('file', file);
             formData.append('upload_kind', options.kind || 'generic');
+            formData.append('upload_scope', uploadScope());
             xhr.send(formData);
         });
     }
@@ -675,7 +681,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         if (!template) return;
         await fetch(template.replace('__TOKEN__', encodeURIComponent(token)), {
             method: 'DELETE',
-            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken(), 'X-Fleet-Upload-Scope': uploadScope() },
         });
     }
 

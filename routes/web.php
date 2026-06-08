@@ -21,7 +21,9 @@ use App\Http\Controllers\Fleet\UserManagementController;
 use App\Http\Controllers\Fleet\SettingsController;
 use App\Http\Controllers\Fleet\VehicleController;
 use App\Http\Controllers\Fleet\VendorPartyController;
+use App\Http\Middleware\EnsureFleetManageAccess;
 use App\Http\Middleware\EnsureFleetPermission;
+use App\Support\FleetRbac;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/brand/logo', [BrandAssetController::class, 'logo'])->name('brand.logo');
@@ -53,15 +55,29 @@ Route::post('/logout', [LoginController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');
 
-Route::redirect('/', '/fleet/dashboard');
+Route::get('/', function () {
+    return auth()->check()
+        ? redirect()->route(FleetRbac::firstAllowedRoute(auth()->user()))
+        : redirect()->route('login');
+});
 
 Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
-    Route::post('/uploads/temp', [TemporaryUploadController::class, 'store'])->name('uploads.store');
-    Route::post('/uploads/temp/chunks', [TemporaryUploadController::class, 'storeChunk'])->name('uploads.chunks.store');
-    Route::post('/uploads/temp/chunks/complete', [TemporaryUploadController::class, 'completeChunk'])->name('uploads.chunks.complete');
-    Route::delete('/uploads/temp/chunks/{uploadId}', [TemporaryUploadController::class, 'destroyChunk'])->name('uploads.chunks.destroy');
+    Route::post('/uploads/temp', [TemporaryUploadController::class, 'store'])
+        ->middleware(EnsureFleetManageAccess::class)
+        ->name('uploads.store');
+    Route::post('/uploads/temp/chunks', [TemporaryUploadController::class, 'storeChunk'])
+        ->middleware(EnsureFleetManageAccess::class)
+        ->name('uploads.chunks.store');
+    Route::post('/uploads/temp/chunks/complete', [TemporaryUploadController::class, 'completeChunk'])
+        ->middleware(EnsureFleetManageAccess::class)
+        ->name('uploads.chunks.complete');
+    Route::delete('/uploads/temp/chunks/{uploadId}', [TemporaryUploadController::class, 'destroyChunk'])
+        ->middleware(EnsureFleetManageAccess::class)
+        ->name('uploads.chunks.destroy');
     Route::get('/uploads/temp/{token}', [TemporaryUploadController::class, 'preview'])->name('uploads.preview');
-    Route::delete('/uploads/temp/{token}', [TemporaryUploadController::class, 'destroy'])->name('uploads.destroy');
+    Route::delete('/uploads/temp/{token}', [TemporaryUploadController::class, 'destroy'])
+        ->middleware(EnsureFleetManageAccess::class)
+        ->name('uploads.destroy');
     Route::get('/files/{path}', [FleetFileController::class, 'show'])->where('path', '.*')->name('files.show');
 
     Route::get('/dashboard', [DashboardController::class, 'index'])
@@ -99,10 +115,16 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
         ->name('fuel-recharge.sync');
 
     Route::get('/dues', [\App\Http\Controllers\Fleet\DueController::class, 'index'])
+        ->middleware(EnsureFleetPermission::class.':dues.view')
         ->name('dues');
+    Route::get('/dues/records', [\App\Http\Controllers\Fleet\DueController::class, 'records'])
+        ->middleware(EnsureFleetPermission::class.':dues.view')
+        ->name('dues.records');
     Route::post('/dues/sync', [\App\Http\Controllers\Fleet\DueController::class, 'sync'])
+        ->middleware(EnsureFleetPermission::class.':dues.manage')
         ->name('dues.sync');
     Route::post('/dues/generate-payroll', [\App\Http\Controllers\Fleet\DueController::class, 'generatePayroll'])
+        ->middleware(EnsureFleetPermission::class.':dues.manage')
         ->name('dues.generate-payroll');
 
     Route::get('/vendors', [VendorPartyController::class, 'index'])

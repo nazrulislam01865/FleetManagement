@@ -97,6 +97,12 @@ foreach ($fuelRechargeDates as $dateIndex => $date) {
 return [
     'inactivity_timeout_minutes' => 15,
 
+    'uploads' => [
+        'documents' => [
+            'chunk_bytes' => 262144,
+        ],
+    ],
+
     'brand' => [
         'name' => 'FleetMan',
         'tagline' => 'Fleet Management System',
@@ -121,7 +127,7 @@ return [
                     'route' => 'fleet.trips',
                     'permission' => 'trips.view',
                     'children' => [
-                        ['key' => 'trips-add', 'label' => 'Add Trip', 'icon' => '↳', 'route' => 'fleet.trips', 'routeParams' => ['action' => 'add'], 'permission' => 'trips.view'],
+                        ['key' => 'trips-add', 'label' => 'Add Trip', 'icon' => '↳', 'route' => 'fleet.trips', 'routeParams' => ['action' => 'add'], 'permission' => 'trips.manage'],
                         ['key' => 'trips-list', 'label' => 'Trip List', 'icon' => '↳', 'route' => 'fleet.trips', 'routeParams' => ['action' => 'list'], 'permission' => 'trips.view'],
                     ]
                 ],
@@ -132,7 +138,7 @@ return [
                     'route' => 'fleet.driver-attendance',
                     'permission' => 'driver_attendance.view',
                     'children' => [
-                        ['key' => 'logs-add', 'label' => 'Add Log', 'icon' => '↳', 'route' => 'fleet.driver-attendance', 'routeParams' => ['action' => 'add'], 'permission' => 'driver_attendance.view'],
+                        ['key' => 'logs-add', 'label' => 'Add Log', 'icon' => '↳', 'route' => 'fleet.driver-attendance', 'routeParams' => ['action' => 'add'], 'permission' => 'driver_attendance.manage'],
                         ['key' => 'logs-list', 'label' => 'Log List', 'icon' => '↳', 'route' => 'fleet.driver-attendance', 'routeParams' => ['action' => 'list'], 'permission' => 'driver_attendance.view'],
                     ]
                 ],
@@ -149,7 +155,7 @@ return [
                     'route' => 'fleet.vehicles',
                     'permission' => 'vehicles.view',
                     'children' => [
-                        ['key' => 'vehicles-add', 'label' => 'Add Vehicle', 'icon' => '↳', 'route' => 'fleet.vehicles', 'routeParams' => ['action' => 'add'], 'permission' => 'vehicles.view'],
+                        ['key' => 'vehicles-add', 'label' => 'Add Vehicle', 'icon' => '↳', 'route' => 'fleet.vehicles', 'routeParams' => ['action' => 'add'], 'permission' => 'vehicles.manage'],
                         ['key' => 'vehicles-list', 'label' => 'Vehicle List', 'icon' => '↳', 'route' => 'fleet.vehicles', 'routeParams' => ['action' => 'list'], 'permission' => 'vehicles.view'],
                     ]
                 ],
@@ -160,7 +166,7 @@ return [
                     'route' => 'fleet.fuel-recharge',
                     'permission' => 'fuel_recharge.view',
                     'children' => [
-                        ['key' => 'recharge-add', 'label' => 'Add Fuel', 'icon' => '↳', 'route' => 'fleet.fuel-recharge', 'routeParams' => ['action' => 'add'], 'permission' => 'fuel_recharge.view'],
+                        ['key' => 'recharge-add', 'label' => 'Add Fuel', 'icon' => '↳', 'route' => 'fleet.fuel-recharge', 'routeParams' => ['action' => 'add'], 'permission' => 'fuel_recharge.manage'],
                         ['key' => 'recharge-list', 'label' => 'Recharge List', 'icon' => '↳', 'route' => 'fleet.fuel-recharge', 'routeParams' => ['action' => 'list'], 'permission' => 'fuel_recharge.view'],
                     ]
                 ],
@@ -171,7 +177,7 @@ return [
                     'route' => 'fleet.fuel-prices',
                     'permission' => 'fuel_prices.view',
                     'children' => [
-                        ['key' => 'prices-add', 'label' => 'Add Price', 'icon' => '↳', 'route' => 'fleet.fuel-prices', 'routeParams' => ['action' => 'add'], 'permission' => 'fuel_prices.view'],
+                        ['key' => 'prices-add', 'label' => 'Add Price', 'icon' => '↳', 'route' => 'fleet.fuel-prices', 'routeParams' => ['action' => 'add'], 'permission' => 'fuel_prices.manage'],
                         ['key' => 'prices-list', 'label' => 'Price List', 'icon' => '↳', 'route' => 'fleet.fuel-prices', 'routeParams' => ['action' => 'list'], 'permission' => 'fuel_prices.view'],
                     ]
                 ],
@@ -187,7 +193,7 @@ return [
                     'route' => 'fleet.contracts',
                     'permission' => 'contracts.view',
                     'children' => [
-                        ['key' => 'contracts-add', 'label' => 'Add Contract', 'icon' => '↳', 'route' => 'fleet.contracts', 'routeParams' => ['action' => 'add'], 'permission' => 'contracts.view'],
+                        ['key' => 'contracts-add', 'label' => 'Add Contract', 'icon' => '↳', 'route' => 'fleet.contracts', 'routeParams' => ['action' => 'add'], 'permission' => 'contracts.manage'],
                         ['key' => 'contracts-list', 'label' => 'Contract List', 'icon' => '↳', 'route' => 'fleet.contracts', 'routeParams' => ['action' => 'list'], 'permission' => 'contracts.view'],
                     ]
                 ],
@@ -198,7 +204,7 @@ return [
                     'route' => 'fleet.clients',
                     'permission' => 'clients.view',
                     'children' => [
-                        ['key' => 'clients-add', 'label' => 'Add Client', 'icon' => '↳', 'route' => 'fleet.clients', 'routeParams' => ['action' => 'add'], 'permission' => 'clients.view'],
+                        ['key' => 'clients-add', 'label' => 'Add Client', 'icon' => '↳', 'route' => 'fleet.clients', 'routeParams' => ['action' => 'add'], 'permission' => 'clients.manage'],
                         ['key' => 'clients-list', 'label' => 'Client List', 'icon' => '↳', 'route' => 'fleet.clients', 'routeParams' => ['action' => 'list'], 'permission' => 'clients.view'],
                     ]
                 ],
@@ -214,7 +220,7 @@ return [
                     'route' => 'fleet.drivers',
                     'permission' => 'drivers.view',
                     'children' => [
-                        ['key' => 'drivers-add', 'label' => 'Add Driver', 'icon' => '↳', 'route' => 'fleet.drivers', 'routeParams' => ['action' => 'add'], 'permission' => 'drivers.view'],
+                        ['key' => 'drivers-add', 'label' => 'Add Driver', 'icon' => '↳', 'route' => 'fleet.drivers', 'routeParams' => ['action' => 'add'], 'permission' => 'drivers.manage'],
                         ['key' => 'drivers-list', 'label' => 'Driver List', 'icon' => '↳', 'route' => 'fleet.drivers', 'routeParams' => ['action' => 'list'], 'permission' => 'drivers.view'],
                     ]
                 ],
@@ -225,7 +231,7 @@ return [
                     'route' => 'fleet.employees',
                     'permission' => 'employees.view',
                     'children' => [
-                        ['key' => 'employees-add', 'label' => 'Add Employee', 'icon' => '↳', 'route' => 'fleet.employees', 'routeParams' => ['action' => 'add'], 'permission' => 'employees.view'],
+                        ['key' => 'employees-add', 'label' => 'Add Employee', 'icon' => '↳', 'route' => 'fleet.employees', 'routeParams' => ['action' => 'add'], 'permission' => 'employees.manage'],
                         ['key' => 'employees-list', 'label' => 'Employee List', 'icon' => '↳', 'route' => 'fleet.employees', 'routeParams' => ['action' => 'list'], 'permission' => 'employees.view'],
                     ]
                 ],
@@ -236,7 +242,7 @@ return [
                     'route' => 'fleet.vendors',
                     'permission' => 'vendors.view',
                     'children' => [
-                        ['key' => 'vendors-add', 'label' => 'Add Vendor', 'icon' => '↳', 'route' => 'fleet.vendors', 'routeParams' => ['action' => 'add'], 'permission' => 'vendors.view'],
+                        ['key' => 'vendors-add', 'label' => 'Add Vendor', 'icon' => '↳', 'route' => 'fleet.vendors', 'routeParams' => ['action' => 'add'], 'permission' => 'vendors.manage'],
                         ['key' => 'vendors-list', 'label' => 'Vendor List', 'icon' => '↳', 'route' => 'fleet.vendors', 'routeParams' => ['action' => 'list'], 'permission' => 'vendors.view'],
                     ]
                 ],
@@ -245,7 +251,7 @@ return [
         [
             'title' => 'Finance & Reports',
             'items' => [
-                ['key' => 'dues', 'label' => 'Dues & Payroll', 'icon' => '💵', 'route' => 'fleet.dues', 'permission' => null],
+                ['key' => 'dues', 'label' => 'Dues & Payroll', 'icon' => '💵', 'route' => 'fleet.dues', 'permission' => 'dues.view'],
                 [
                     'key' => 'reports',
                     'label' => 'Reports',
@@ -275,7 +281,7 @@ return [
                         ['key' => 'master-data-vehicle-categories', 'label' => 'Vehicle Category', 'icon' => '↳', 'route' => 'fleet.master-data.vehicle-categories', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-vehicle-sub-categories', 'label' => 'Vehicle Sub Category', 'icon' => '↳', 'route' => 'fleet.master-data.vehicle-sub-categories', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-party-types', 'label' => 'Party Type', 'icon' => '↳', 'route' => 'fleet.master-data.party-types', 'permission' => 'master_data.view'],
-                        ['key' => 'master-data-document-names', 'label' => 'Docuemnt Type', 'icon' => '↳', 'route' => 'fleet.master-data.document-names', 'permission' => 'master_data.view'],
+                        ['key' => 'master-data-document-names', 'label' => 'Document Name', 'icon' => '↳', 'route' => 'fleet.master-data.document-names', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-licence-types', 'label' => 'Licence Type', 'icon' => '↳', 'route' => 'fleet.master-data.licence-types', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-driver-contact-types', 'label' => 'Contact Type', 'icon' => '↳', 'route' => 'fleet.master-data.driver-contact-types', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-client-types', 'label' => 'Client Type', 'icon' => '↳', 'route' => 'fleet.master-data.client-types', 'permission' => 'master_data.view'],

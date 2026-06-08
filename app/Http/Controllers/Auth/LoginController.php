@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Support\FleetBrand;
+use App\Support\FleetRbac;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ class LoginController extends Controller
     public function show(): View|RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route('fleet.dashboard');
+            return redirect()->route(FleetRbac::firstAllowedRoute(Auth::user()));
         }
 
         $logoUrl = FleetBrand::logoUrl();
@@ -40,7 +41,7 @@ class LoginController extends Controller
             $request->session()->regenerate();
             $request->session()->put('fleetman.last_activity_at', now()->timestamp);
 
-            return redirect()->route('fleet.dashboard');
+            return redirect()->route(FleetRbac::firstAllowedRoute($request->user()));
         }
 
         return back()

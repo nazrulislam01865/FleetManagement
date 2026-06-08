@@ -546,3 +546,52 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
     min-height:48px!important;
     margin-bottom:0!important;
 }
+
+/* Role-based access: unavailable options stay visible but muted and non-interactive. */
+.menu-item.rbac-muted,
+.submenu-item.rbac-muted{
+    opacity:.42;
+    cursor:not-allowed;
+    filter:grayscale(.65);
+    user-select:none;
+}
+.menu-item.rbac-muted:hover,
+.submenu-item.rbac-muted:hover{
+    background:transparent;
+    color:inherit;
+}
+.rbac-lock{
+    margin-left:auto;
+    font-size:11px;
+    opacity:.8;
+}
+.rbac-control-muted,
+.rbac-control-muted:hover{
+    opacity:.42!important;
+    cursor:not-allowed!important;
+    filter:grayscale(.7);
+    transform:none!important;
+    box-shadow:none!important;
+}
+.rbac-readonly-banner{
+    display:flex;
+    align-items:center;
+    gap:11px;
+    margin:0 auto 16px;
+    max-width:1320px;
+    padding:12px 14px;
+    border:1px solid #d8dee9;
+    border-radius:14px;
+    background:#f6f7f9;
+    color:#475467;
+}
+.rbac-readonly-banner>span{font-size:20px;flex:none;}
+.rbac-readonly-banner b{display:block;color:#344054;font-size:14px;}
+.rbac-readonly-banner small{display:block;margin-top:2px;line-height:1.4;}
+.dashboard-access-muted,
+.compact-row.dashboard-access-muted{
+    opacity:.46;
+    cursor:not-allowed;
+    filter:grayscale(.65);
+    pointer-events:none;
+}

@@ -10,6 +10,8 @@
         $recent = $fleetman['dashboard']['recent'] ?? [];
         $warnings = $fleetman['dashboard']['warnings'] ?? [];
         $latestFuel = $finance['fuel_rate'] ?? null;
+        $access = $fleetman['dashboard']['access'] ?? [];
+        $canFleet = static fn (string $permission): bool => auth()->user()?->canFleet($permission) ?? false;
     @endphp
 
     <x-fleetman.topbar :items="[['label' => 'DASHBOARD']]" />
@@ -20,9 +22,21 @@
             <h1>Welcome back, {{ auth()->user()->name ?? ($account['name'] ?? 'User') }}</h1>
             <p>Monitor trips, vehicles, drivers, fuel, clients, vendors, employees, and attendance from one place.</p>
             <div class="hero-actions">
-                <a class="btn primary" href="{{ route('fleet.driver-attendance', ['action' => 'add']) }}">📝 Add Log</a>
-                <a class="btn secondary" href="{{ route('fleet.fuel-recharge', ['action' => 'add']) }}">⛽ Add Fuel</a>
-                <a class="btn light" href="{{ route('fleet.trips', ['action' => 'add']) }}">🧭 Add Trip</a>
+                @if($canFleet('driver_attendance.view') && $canFleet('driver_attendance.manage'))
+                    <a class="btn primary" href="{{ route('fleet.driver-attendance', ['action' => 'add']) }}">📝 Add Log</a>
+                @else
+                    <span class="btn primary dashboard-access-muted" aria-disabled="true" title="Access not granted for your role">🔒 Add Log</span>
+                @endif
+                @if($canFleet('fuel_recharge.view') && $canFleet('fuel_recharge.manage'))
+                    <a class="btn secondary" href="{{ route('fleet.fuel-recharge', ['action' => 'add']) }}">⛽ Add Fuel</a>
+                @else
+                    <span class="btn secondary dashboard-access-muted" aria-disabled="true" title="Access not granted for your role">🔒 Add Fuel</span>
+                @endif
+                @if($canFleet('trips.view') && $canFleet('trips.manage'))
+                    <a class="btn light" href="{{ route('fleet.trips', ['action' => 'add']) }}">🧭 Add Trip</a>
+                @else
+                    <span class="btn light dashboard-access-muted" aria-disabled="true" title="Access not granted for your role">🔒 Add Trip</span>
+                @endif
             </div>
         </div>
         <div class="dashboard-hero-card">
@@ -38,14 +52,26 @@
 
     <div class="dashboard-kpis">
         @foreach($stats as $stat)
-            <a class="dashboard-kpi-card" href="{{ route($stat['route']) }}">
-                <div class="dashboard-kpi-icon">{{ $stat['icon'] }}</div>
-                <div>
-                    <strong>{{ $stat['value'] }}</strong>
-                    <span>{{ $stat['label'] }}</span>
-                    <small>{{ $stat['helper'] }}</small>
+            @php($statAllowed = $canFleet($stat['permission'] ?? ''))
+            @if($statAllowed)
+                <a class="dashboard-kpi-card" href="{{ route($stat['route']) }}">
+                    <div class="dashboard-kpi-icon">{{ $stat['icon'] }}</div>
+                    <div>
+                        <strong>{{ $stat['value'] }}</strong>
+                        <span>{{ $stat['label'] }}</span>
+                        <small>{{ $stat['helper'] }}</small>
+                    </div>
+                </a>
+            @else
+                <div class="dashboard-kpi-card dashboard-access-muted" aria-disabled="true" title="Access not granted for your role">
+                    <div class="dashboard-kpi-icon">🔒</div>
+                    <div>
+                        <strong>—</strong>
+                        <span>{{ $stat['label'] }}</span>
+                        <small>Access not granted</small>
+                    </div>
                 </div>
-            </a>
+            @endif
         @endforeach
     </div>
 
@@ -77,6 +103,9 @@
     <div class="dashboard-grid dashboard-grid-wide">
         <x-fleetman.section-card title="Recent Trips" class="dashboard-panel">
             <div class="compact-list">
+                @if(!($access['trips'] ?? false))
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                @else
                 @forelse(($recent['trips'] ?? []) as $trip)
                     <a href="{{ route('fleet.trips') }}" class="compact-row">
                         <div class="compact-icon">🧭</div>
@@ -87,11 +116,15 @@
                 @empty
                     <div class="empty compact-empty">No trips found.</div>
                 @endforelse
+                @endif
             </div>
         </x-fleetman.section-card>
 
         <x-fleetman.section-card title="Recent Vehicles" class="dashboard-panel">
             <div class="compact-list">
+                @if(!($access['vehicles'] ?? false))
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                @else
                 @forelse(($recent['vehicles'] ?? []) as $vehicle)
                     <a href="{{ route('fleet.vehicles') }}" class="compact-row">
                         <div class="compact-icon">🚗</div>
@@ -101,6 +134,7 @@
                 @empty
                     <div class="empty compact-empty">No vehicles found.</div>
                 @endforelse
+                @endif
             </div>
         </x-fleetman.section-card>
     </div>
@@ -108,6 +142,9 @@
     <div class="dashboard-grid dashboard-grid-wide">
         <x-fleetman.section-card title="Recent Drivers" class="dashboard-panel">
             <div class="compact-list">
+                @if(!($access['drivers'] ?? false))
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                @else
                 @forelse(($recent['drivers'] ?? []) as $driver)
                     <a href="{{ route('fleet.drivers') }}" class="compact-row">
                         <div class="compact-icon">🧑‍✈️</div>
@@ -117,11 +154,15 @@
                 @empty
                     <div class="empty compact-empty">No drivers found.</div>
                 @endforelse
+                @endif
             </div>
         </x-fleetman.section-card>
 
         <x-fleetman.section-card title="Recent Parties" class="dashboard-panel">
             <div class="compact-list">
+                @if(!($access['clients'] ?? false))
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                @else
                 @forelse(($recent['clients'] ?? []) as $client)
                     <a href="{{ route('fleet.clients') }}" class="compact-row">
                         <div class="compact-icon">🏢</div>
@@ -131,6 +172,7 @@
                 @empty
                     <div class="empty compact-empty">No clients found.</div>
                 @endforelse
+                @endif
             </div>
         </x-fleetman.section-card>
     </div>

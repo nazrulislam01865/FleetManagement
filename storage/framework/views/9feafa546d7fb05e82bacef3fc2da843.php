@@ -8,6 +8,8 @@
         $recent = $fleetman['dashboard']['recent'] ?? [];
         $warnings = $fleetman['dashboard']['warnings'] ?? [];
         $latestFuel = $finance['fuel_rate'] ?? null;
+        $access = $fleetman['dashboard']['access'] ?? [];
+        $canFleet = static fn (string $permission): bool => auth()->user()?->canFleet($permission) ?? false;
     ?>
 
     <?php if (isset($component)) { $__componentOriginal9c1bf3ca5b4372ced6ff0d503060f43b = $component; } ?>
@@ -37,9 +39,21 @@
             <h1>Welcome back, <?php echo e(auth()->user()->name ?? ($account['name'] ?? 'User')); ?></h1>
             <p>Monitor trips, vehicles, drivers, fuel, clients, vendors, employees, and attendance from one place.</p>
             <div class="hero-actions">
-                <a class="btn primary" href="<?php echo e(route('fleet.driver-attendance', ['action' => 'add'])); ?>">📝 Add Log</a>
-                <a class="btn secondary" href="<?php echo e(route('fleet.fuel-recharge', ['action' => 'add'])); ?>">⛽ Add Fuel</a>
-                <a class="btn light" href="<?php echo e(route('fleet.trips', ['action' => 'add'])); ?>">🧭 Add Trip</a>
+                <?php if($canFleet('driver_attendance.view') && $canFleet('driver_attendance.manage')): ?>
+                    <a class="btn primary" href="<?php echo e(route('fleet.driver-attendance', ['action' => 'add'])); ?>">📝 Add Log</a>
+                <?php else: ?>
+                    <span class="btn primary dashboard-access-muted" aria-disabled="true" title="Access not granted for your role">🔒 Add Log</span>
+                <?php endif; ?>
+                <?php if($canFleet('fuel_recharge.view') && $canFleet('fuel_recharge.manage')): ?>
+                    <a class="btn secondary" href="<?php echo e(route('fleet.fuel-recharge', ['action' => 'add'])); ?>">⛽ Add Fuel</a>
+                <?php else: ?>
+                    <span class="btn secondary dashboard-access-muted" aria-disabled="true" title="Access not granted for your role">🔒 Add Fuel</span>
+                <?php endif; ?>
+                <?php if($canFleet('trips.view') && $canFleet('trips.manage')): ?>
+                    <a class="btn light" href="<?php echo e(route('fleet.trips', ['action' => 'add'])); ?>">🧭 Add Trip</a>
+                <?php else: ?>
+                    <span class="btn light dashboard-access-muted" aria-disabled="true" title="Access not granted for your role">🔒 Add Trip</span>
+                <?php endif; ?>
             </div>
         </div>
         <div class="dashboard-hero-card">
@@ -55,14 +69,26 @@
 
     <div class="dashboard-kpis">
         <?php $__currentLoopData = $stats; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $stat): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-            <a class="dashboard-kpi-card" href="<?php echo e(route($stat['route'])); ?>">
-                <div class="dashboard-kpi-icon"><?php echo e($stat['icon']); ?></div>
-                <div>
-                    <strong><?php echo e($stat['value']); ?></strong>
-                    <span><?php echo e($stat['label']); ?></span>
-                    <small><?php echo e($stat['helper']); ?></small>
+            <?php ($statAllowed = $canFleet($stat['permission'] ?? '')); ?>
+            <?php if($statAllowed): ?>
+                <a class="dashboard-kpi-card" href="<?php echo e(route($stat['route'])); ?>">
+                    <div class="dashboard-kpi-icon"><?php echo e($stat['icon']); ?></div>
+                    <div>
+                        <strong><?php echo e($stat['value']); ?></strong>
+                        <span><?php echo e($stat['label']); ?></span>
+                        <small><?php echo e($stat['helper']); ?></small>
+                    </div>
+                </a>
+            <?php else: ?>
+                <div class="dashboard-kpi-card dashboard-access-muted" aria-disabled="true" title="Access not granted for your role">
+                    <div class="dashboard-kpi-icon">🔒</div>
+                    <div>
+                        <strong>—</strong>
+                        <span><?php echo e($stat['label']); ?></span>
+                        <small>Access not granted</small>
+                    </div>
                 </div>
-            </a>
+            <?php endif; ?>
         <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
     </div>
 
@@ -139,6 +165,9 @@
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Trips','class' => 'dashboard-panel']); ?>
             <div class="compact-list">
+                <?php if(!($access['trips'] ?? false)): ?>
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['trips'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $trip): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.trips')); ?>" class="compact-row">
                         <div class="compact-icon">🧭</div>
@@ -148,6 +177,7 @@
                     </a>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                     <div class="empty compact-empty">No trips found.</div>
+                <?php endif; ?>
                 <?php endif; ?>
             </div>
          <?php echo $__env->renderComponent(); ?>
@@ -172,6 +202,9 @@
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Vehicles','class' => 'dashboard-panel']); ?>
             <div class="compact-list">
+                <?php if(!($access['vehicles'] ?? false)): ?>
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['vehicles'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $vehicle): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.vehicles')); ?>" class="compact-row">
                         <div class="compact-icon">🚗</div>
@@ -180,6 +213,7 @@
                     </a>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                     <div class="empty compact-empty">No vehicles found.</div>
+                <?php endif; ?>
                 <?php endif; ?>
             </div>
          <?php echo $__env->renderComponent(); ?>
@@ -206,6 +240,9 @@
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Drivers','class' => 'dashboard-panel']); ?>
             <div class="compact-list">
+                <?php if(!($access['drivers'] ?? false)): ?>
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['drivers'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $driver): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.drivers')); ?>" class="compact-row">
                         <div class="compact-icon">🧑‍✈️</div>
@@ -214,6 +251,7 @@
                     </a>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                     <div class="empty compact-empty">No drivers found.</div>
+                <?php endif; ?>
                 <?php endif; ?>
             </div>
          <?php echo $__env->renderComponent(); ?>
@@ -238,6 +276,9 @@
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Parties','class' => 'dashboard-panel']); ?>
             <div class="compact-list">
+                <?php if(!($access['clients'] ?? false)): ?>
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['clients'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $client): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.clients')); ?>" class="compact-row">
                         <div class="compact-icon">🏢</div>
@@ -246,6 +287,7 @@
                     </a>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                     <div class="empty compact-empty">No clients found.</div>
+                <?php endif; ?>
                 <?php endif; ?>
             </div>
          <?php echo $__env->renderComponent(); ?>
