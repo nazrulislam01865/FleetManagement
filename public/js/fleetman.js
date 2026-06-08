@@ -1055,6 +1055,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
         }
 
+        const fuelPriorities = ['Primary', 'Secondary', 'Tertiary'];
+
         function addFuelRow(row = {}) {
             const wrapper = $('#vehicleFuelRows');
             if (!wrapper) return;
@@ -1069,7 +1071,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 <div class="field">
                     <label>Fuel Priority <span class="req">*</span></label>
                     <select class="fuelPriority" required>
-                        ${['Primary', 'Secondary', 'Tertiary'].map((priority) => `<option value="${priority}" ${row.priority === priority ? 'selected' : ''}>${priority}</option>`).join('')}
+                        <option value="">Select priority</option>
+                        ${fuelPriorities.map((priority) => `<option value="${priority}" ${row.priority === priority ? 'selected' : ''}>${priority}</option>`).join('')}
                     </select>
                 </div>
                 <div class="field">
@@ -1083,10 +1086,44 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (row.type && !row.rate) updateFuelRate(div, true);
             if (row.type && row.rate) updateFuelRate(div, false);
             refreshVehicleFuelOptions();
+            refreshVehicleFuelPriorityOptions();
         }
 
         function refreshVehicleFuelOptions() {
             documentSelects.refresh('#vehicleFuelRows', '.fuelType', fuelTypes, 'Select fuel type');
+        }
+
+        function refreshVehicleFuelPriorityOptions() {
+            const rows = $$('#vehicleFuelRows .fuel-row');
+            const claimed = new Set();
+
+            rows.forEach((row) => {
+                const select = $('.fuelPriority', row);
+                if (!select) return;
+                const current = String(select.value || '');
+                if (current && claimed.has(current)) select.value = '';
+                else if (current) claimed.add(current);
+            });
+
+            rows.forEach((row) => {
+                const select = $('.fuelPriority', row);
+                if (!select) return;
+                const current = String(select.value || '');
+                const selectedElsewhere = new Set(rows
+                    .filter((otherRow) => otherRow !== row)
+                    .map((otherRow) => String($('.fuelPriority', otherRow)?.value || ''))
+                    .filter(Boolean));
+                const available = fuelPriorities.filter((priority) => priority === current || !selectedElsewhere.has(priority));
+                select.innerHTML = '<option value="">Select priority</option>'
+                    + available.map((priority) => `<option value="${priority}">${priority}</option>`).join('');
+                select.value = available.includes(current) ? current : '';
+            });
+
+            const addButton = $('#addFuelRowBtn');
+            if (addButton) {
+                addButton.disabled = rows.length >= fuelPriorities.length;
+                addButton.title = addButton.disabled ? 'All fuel priorities are already used.' : '';
+            }
         }
 
         function refreshVehicleDocumentOptions() {
@@ -1342,6 +1379,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 invalidate(null, 'Mark one fuel as Primary.', $('#vehicleFuelRows'));
             }
             const selectedFuelNames = new Map();
+            const selectedFuelPriorities = new Map();
             $$('#vehicleFuelRows .fuel-row').forEach((row) => {
                 const type = $('.fuelType', row);
                 const priority = $('.fuelPriority', row);
@@ -1353,6 +1391,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     invalidate(selectedFuelNames.get(normalized), 'This fuel type has already been selected.');
                 } else selectedFuelNames.set(normalized, type);
                 if (!priority?.value) invalidate(priority, 'Fuel Priority is required.');
+                else if (selectedFuelPriorities.has(priority.value)) {
+                    invalidate(priority, 'This fuel priority has already been selected.');
+                    invalidate(selectedFuelPriorities.get(priority.value), 'This fuel priority has already been selected.');
+                } else selectedFuelPriorities.set(priority.value, priority);
                 if (!rate?.value || Number(rate.value) <= 0) invalidate(rate, 'Add an active fuel price, then select this fuel type.');
             });
 
@@ -1625,7 +1667,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         $('#category')?.addEventListener('change', () => updateSubCategory(''));
         $('#rentalType')?.addEventListener('change', toggleRentalFields);
         ['#driverPaymentAmount', '#vehicleRentalAmount'].forEach((selector) => $(selector)?.addEventListener('input', recalculateRentalTotal));
-        $('#addFuelRowBtn')?.addEventListener('click', () => addFuelRow());
+        $('#addFuelRowBtn')?.addEventListener('click', () => {
+            if ($$('#vehicleFuelRows .fuel-row').length >= fuelPriorities.length) {
+                toast('Primary, Secondary, and Tertiary priorities are already used.');
+                return;
+            }
+            addFuelRow();
+        });
         $('#addDocRowBtn')?.addEventListener('click', () => addDocRow());
         $('#clearVehicleBtn')?.addEventListener('click', () => resetForm());
         $('#saveVehicleBtn')?.addEventListener('click', saveVehicle);
@@ -1639,6 +1687,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (fuelSelect) {
                 updateFuelRate(fuelSelect.closest('.fuel-row'), true);
                 refreshVehicleFuelOptions();
+            }
+
+            if (event.target.closest('#vehicleFuelRows .fuelPriority')) {
+                refreshVehicleFuelPriorityOptions();
             }
 
             const docName = event.target.closest('#vehicleDocRows .docName');
@@ -1678,7 +1730,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 const documentRow = row?.classList.contains('doc-row');
                 row?.remove();
                 if (documentRow) refreshVehicleDocumentOptions();
-                if (row?.classList.contains('fuel-row')) refreshVehicleFuelOptions();
+                if (row?.classList.contains('fuel-row')) {
+                    refreshVehicleFuelOptions();
+                    refreshVehicleFuelPriorityOptions();
+                }
             }
             const view = event.target.closest('.view-vehicle');
             if (view) viewVehicle(view.dataset.id);

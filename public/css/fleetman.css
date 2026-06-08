@@ -595,3 +595,10 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
     filter:grayscale(.65);
     pointer-events:none;
 }
+
+/* Report filters: native searchable dropdowns and contract-based dependent fields */
+.report-searchable-field{min-width:0;}
+.report-searchable-field .search-label{min-height:24px;margin-bottom:7px;}
+.report-searchable-field .search-label label{margin-bottom:0;}
+.report-searchable-field input[list]{padding-right:36px;background-color:#fff;}
+.report-searchable-field input[list]:disabled{background:#eef1f5;color:#667085;cursor:not-allowed;}

@@ -299,6 +299,10 @@ class VehicleController extends FleetBaseController
             if ($normalizedFuelNames->duplicates()->isNotEmpty()) {
                 $errors["rows.{$index}.fuels"] = 'Each fuel type can be selected only once.';
             }
+            $normalizedFuelPriorities = $fuelRows->map(fn (array $fuel) => trim((string) ($fuel['priority'] ?? '')))->filter();
+            if ($normalizedFuelPriorities->duplicates()->isNotEmpty()) {
+                $errors["rows.{$index}.fuels"] = 'Each fuel priority can be selected only once.';
+            }
             if (! $fuelRows->contains(fn (array $fuel) => ($fuel['priority'] ?? '') === 'Primary')) {
                 $errors["rows.{$index}.fuels"] = 'One fuel type must be marked as Primary.';
             }

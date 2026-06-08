@@ -64,11 +64,11 @@
         <div class="report-filter-grid daily-filter-grid">
             <div class="field"><label for="fromDate">From Date</label><input id="fromDate" type="date"></div>
             <div class="field"><label for="toDate">To Date</label><input id="toDate" type="date"></div>
-            <div class="field"><label for="contractFilter">Contract</label><select id="contractFilter"></select></div>
-            <div class="field"><label for="vehicleFilter">Car / Vehicle</label><select id="vehicleFilter"></select></div>
-            <div class="field"><label for="driverFilter">Driver</label><select id="driverFilter"></select></div>
-            <div class="field"><label for="statusFilter">Submission Status</label><select id="statusFilter"></select></div>
-            <div class="field"><label for="fuelFilter">Fuel Type</label><select id="fuelFilter"></select></div>
+            <div class="field searchable report-searchable-field"><div class="search-label"><label for="contractFilter">Contract</label><span class="search-tag">Searchable</span></div><input id="contractFilter" list="contractFilterList" placeholder="All contracts" autocomplete="off"><datalist id="contractFilterList"></datalist></div>
+            <div class="field searchable report-searchable-field"><div class="search-label"><label for="vehicleFilter">Car / Vehicle</label><span class="search-tag">Filtered</span></div><input id="vehicleFilter" list="vehicleFilterList" placeholder="All vehicles" autocomplete="off"><datalist id="vehicleFilterList"></datalist></div>
+            <div class="field searchable report-searchable-field"><div class="search-label"><label for="driverFilter">Driver</label><span class="search-tag">Filtered</span></div><input id="driverFilter" list="driverFilterList" placeholder="All drivers" autocomplete="off"><datalist id="driverFilterList"></datalist></div>
+            <div class="field searchable report-searchable-field"><div class="search-label"><label for="statusFilter">Submission Status</label><span class="search-tag">Searchable</span></div><input id="statusFilter" list="statusFilterList" placeholder="All statuses" autocomplete="off"><datalist id="statusFilterList"></datalist></div>
+            <div class="field searchable report-searchable-field"><div class="search-label"><label for="fuelFilter">Fuel Type</label><span class="search-tag">Searchable</span></div><input id="fuelFilter" list="fuelFilterList" placeholder="All fuel types" autocomplete="off"><datalist id="fuelFilterList"></datalist></div>
             <div class="field"><label for="pageSize">Rows per page</label><select id="pageSize"><option value="10">Load 10 rows</option><option value="20">Load 20 rows</option><option value="30">Load 30 rows</option><option value="50">Load 50 rows</option></select></div>
         </div>
         <div class="action-row">
@@ -179,7 +179,7 @@
 <script>
     window.FLEETMAN.report = <?php echo json_encode($report, 15, 512) ?>;
 </script>
-<script src="<?php echo e(asset('js/fleetman-reports.js')); ?>"></script>
+<script src="<?php echo e(asset('js/fleetman-reports.js')); ?>?v=<?php echo e(filemtime(public_path('js/fleetman-reports.js'))); ?>"></script>
 <?php $__env->stopPush(); ?>
 
 <?php echo $__env->make('layouts.fleetman', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FleetManagement/resources/views/fleetman/reports/daily-driver-fuel.blade.php ENDPATH**/ ?>

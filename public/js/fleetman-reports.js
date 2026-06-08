@@ -21,17 +21,33 @@
     const tkPerKm = (totalCost, totalKm) => num(totalKm) > 0 ? (num(totalCost) / Math.max(num(totalKm), 1)) : 0;
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
 
-    function fillSelect(id, items, allLabel = 'All') {
-        const select = $('#' + id);
-        if (!select) return;
-        const unique = [...new Set((items || []).filter(Boolean))].sort();
-        select.innerHTML = `<option value="">${escapeHtml(allLabel)}</option>` + unique.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('');
+    function uniqueSorted(items) {
+        return [...new Set((items || []).filter(Boolean).map((item) => String(item)))].sort((left, right) => left.localeCompare(right));
     }
 
-    function fillSimpleSelect(id, items, selectedValue = '') {
-        const select = $('#' + id);
-        if (!select) return;
-        select.innerHTML = (items || []).map((item) => `<option value="${escapeHtml(item.value)}" ${item.value === selectedValue ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
+    function fillSearchableInput(id, items, options = {}) {
+        const input = $('#' + id);
+        const list = $('#' + (options.listId || `${id}List`));
+        if (!input || !list) return;
+
+        const unique = uniqueSorted(items);
+        const current = String(input.value || '');
+        list.innerHTML = unique.map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+
+        if (options.clearInvalid && current && !unique.includes(current)) {
+            input.value = '';
+        }
+    }
+
+    function fillSearchableOptions(id, items, selectedValue = '') {
+        const input = $('#' + id);
+        const list = $('#' + `${id}List`);
+        if (!input || !list) return;
+
+        const normalizedItems = (items || []).filter((item) => item && item.value && item.label);
+        list.innerHTML = normalizedItems.map((item) => `<option value="${escapeHtml(item.label)}"></option>`).join('');
+        const selected = normalizedItems.find((item) => item.value === selectedValue || item.label === selectedValue) || normalizedItems[0];
+        input.value = selected?.label || '';
     }
 
     function reportDate(value) {
@@ -97,12 +113,24 @@
 
     function selectedWeek() {
         const selected = value('#weekFilter');
-        return (report.weeks || []).find((week) => week.value === selected) || (report.weeks || [])[0] || null;
+        return (report.weeks || []).find((week) => week.value === selected || week.label === selected) || (report.weeks || [])[0] || null;
     }
 
     function selectedMonth() {
         const selected = value('#monthFilter');
-        return (report.months || []).find((month) => month.value === selected) || (report.months || [])[0] || null;
+        return (report.months || []).find((month) => month.value === selected || month.label === selected) || (report.months || [])[0] || null;
+    }
+
+    function refreshContractDependentFilters(clearInvalid = true) {
+        const contract = value('#contractFilter');
+        const matchingRows = contract ? records.filter((row) => row.contract === contract) : records;
+        fillSearchableInput('vehicleFilter', matchingRows.map((row) => row.car), { clearInvalid });
+        fillSearchableInput('driverFilter', matchingRows.map((row) => row.driver), { clearInvalid });
+    }
+
+    function isValidContractSearchValue() {
+        const contract = value('#contractFilter');
+        return !contract || uniqueSorted((report.filters || {}).contracts || []).includes(contract);
     }
 
     function groupKey(row) {
@@ -396,8 +424,9 @@
             $('#fromDate').value = report.defaults?.fromDate || report.dateRange?.min || '';
             $('#toDate').value = report.defaults?.toDate || report.dateRange?.max || '';
         }
-        if (page === 'weekly' && $('#weekFilter')) $('#weekFilter').value = report.defaults?.week || (report.weeks || [])[0]?.value || '';
-        if (page === 'monthly' && $('#monthFilter')) $('#monthFilter').value = report.defaults?.month || (report.months || [])[0]?.value || '';
+        if (page === 'weekly' && $('#weekFilter')) fillSearchableOptions('weekFilter', report.weeks || [], report.defaults?.week);
+        if (page === 'monthly' && $('#monthFilter')) fillSearchableOptions('monthFilter', report.months || [], report.defaults?.month);
+        refreshContractDependentFilters(false);
         applyReport();
     }
 
@@ -512,15 +541,16 @@
 
     function init() {
         const filters = report.filters || {};
-        fillSelect('contractFilter', filters.contracts || []);
-        fillSelect('vehicleFilter', filters.vehicles || []);
-        fillSelect('driverFilter', filters.drivers || []);
-        fillSelect('statusFilter', filters.statuses || []);
-        fillSelect('fuelFilter', filters.fuelTypes || []);
+        fillSearchableInput('contractFilter', filters.contracts || []);
+        fillSearchableInput('vehicleFilter', filters.vehicles || []);
+        fillSearchableInput('driverFilter', filters.drivers || []);
+        fillSearchableInput('statusFilter', filters.statuses || []);
+        fillSearchableInput('fuelFilter', filters.fuelTypes || []);
         if ($('#fromDate')) $('#fromDate').value = report.defaults?.fromDate || report.dateRange?.min || '';
         if ($('#toDate')) $('#toDate').value = report.defaults?.toDate || report.dateRange?.max || '';
-        fillSimpleSelect('weekFilter', report.weeks || [], report.defaults?.week);
-        fillSimpleSelect('monthFilter', report.months || [], report.defaults?.month);
+        fillSearchableOptions('weekFilter', report.weeks || [], report.defaults?.week);
+        fillSearchableOptions('monthFilter', report.months || [], report.defaults?.month);
+        refreshContractDependentFilters(false);
         bindEvents();
         applyReport();
     }
@@ -529,7 +559,16 @@
         $('[data-report-apply]')?.addEventListener('click', applyReport);
         $('[data-report-reset]')?.addEventListener('click', resetFilters);
         $('#pageSize')?.addEventListener('change', () => { currentPage = 1; applyReport(); });
-        ['#fromDate', '#toDate', '#contractFilter', '#vehicleFilter', '#driverFilter', '#statusFilter', '#fuelFilter', '#weekFilter', '#monthFilter'].forEach((selector) => {
+        $('#contractFilter')?.addEventListener('input', () => {
+            if (!isValidContractSearchValue()) return;
+            refreshContractDependentFilters(true);
+            applyReport();
+        });
+        $('#contractFilter')?.addEventListener('change', () => {
+            refreshContractDependentFilters(true);
+            applyReport();
+        });
+        ['#fromDate', '#toDate', '#vehicleFilter', '#driverFilter', '#statusFilter', '#fuelFilter', '#weekFilter', '#monthFilter'].forEach((selector) => {
             $(selector)?.addEventListener('change', applyReport);
         });
         $('.report-prev-page')?.addEventListener('click', () => {
