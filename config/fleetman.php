@@ -281,7 +281,7 @@ return [
                         ['key' => 'master-data-vehicle-categories', 'label' => 'Vehicle Category', 'icon' => '↳', 'route' => 'fleet.master-data.vehicle-categories', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-vehicle-sub-categories', 'label' => 'Vehicle Sub Category', 'icon' => '↳', 'route' => 'fleet.master-data.vehicle-sub-categories', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-party-types', 'label' => 'Party Type', 'icon' => '↳', 'route' => 'fleet.master-data.party-types', 'permission' => 'master_data.view'],
-                        ['key' => 'master-data-document-names', 'label' => 'Document Name', 'icon' => '↳', 'route' => 'fleet.master-data.document-names', 'permission' => 'master_data.view'],
+                        ['key' => 'master-data-document-names', 'label' => 'Document Type', 'icon' => '↳', 'route' => 'fleet.master-data.document-names', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-licence-types', 'label' => 'Licence Type', 'icon' => '↳', 'route' => 'fleet.master-data.licence-types', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-driver-contact-types', 'label' => 'Contact Type', 'icon' => '↳', 'route' => 'fleet.master-data.driver-contact-types', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-client-types', 'label' => 'Client Type', 'icon' => '↳', 'route' => 'fleet.master-data.client-types', 'permission' => 'master_data.view'],
