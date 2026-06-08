@@ -79,7 +79,9 @@
         </script>
 
         <main class="main-content">
-            @yield('content')
+            <div class="fleet-main-body">
+                @yield('content')
+            </div>
 
             <x-fleetman.footer :brand="$brand" />
         </main>

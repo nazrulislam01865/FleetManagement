@@ -7,13 +7,13 @@
 <div class="page-section role-matrix-page">
     <x-fleetman.topbar :items="[['label' => 'System'], ['label' => 'Role Matrix']]">
         <x-slot:actions>
-            <span class="badge soft">Super Admin controls all access</span>
+            <span class="badge soft">Roles control user access</span>
         </x-slot:actions>
     </x-fleetman.topbar>
 
     <x-fleetman.title-card
         title="Role Based Access Matrix"
-        subtitle="Add users, assign roles, and control which role can view or manage each FleetMan module. Super Admin is protected and always has full access."
+        subtitle="Create project roles and choose which FleetMan modules each role can view or manage. Users receive access from the role assigned on the Users page."
     />
 
     @if (session('status'))
@@ -22,19 +22,19 @@
 
     @if ($errors->any())
         <div class="role-alert role-alert-danger">
-            <b>Could not save role matrix or user.</b>
+            <b>Could not save the role or permission matrix.</b>
             <span>{{ $errors->first() }}</span>
         </div>
     @endif
 
     <div class="role-overview-grid">
-        @foreach($users as $user)
-            <div class="role-overview-card {{ $user->isFleetSuperAdmin() ? 'super' : '' }}">
-                <div class="role-overview-icon">{{ $user->isFleetSuperAdmin() ? '🛡️' : '👤' }}</div>
+        @foreach($roles as $role)
+            <div class="role-overview-card {{ $role->isSuperAdmin() ? 'super' : '' }}">
+                <div class="role-overview-icon">{{ $role->isSuperAdmin() ? '🛡️' : '👥' }}</div>
                 <div>
-                    <strong>{{ $user->name }}</strong>
-                    <span>{{ $user->email }}</span>
-                    <small>Role: {{ $user->fleetRole?->name ?? 'None' }}</small>
+                    <strong>{{ $role->name }}</strong>
+                    <span>{{ $role->description ?: 'Custom project role.' }}</span>
+                    <small>{{ $role->users_count }} assigned user{{ $role->users_count === 1 ? '' : 's' }} · {{ $role->is_system ? 'System' : 'Custom' }}</small>
                 </div>
             </div>
         @endforeach
@@ -43,51 +43,31 @@
     <section class="card role-card">
         <div class="section-head">
             <div>
-                <h2>Add User By Role</h2>
-                <p>Create a login user directly from the Role Matrix and assign the proper project role at the same time.</p>
+                <h2>Create New Role</h2>
+                <p>Add a role here, then select its permissions from the checkbox table below.</p>
             </div>
-            @if($canManageUsers)
-                <span class="badge ok">Super Admin / Admin User</span>
+            @if($canManageRoleMatrix)
+                <span class="badge ok">Role management enabled</span>
             @else
                 <span class="badge warn">View only</span>
             @endif
         </div>
 
-        @if($canManageUsers)
-            <form method="POST" action="{{ route('fleet.role-matrix.users.store') }}">
+        @if($canManageRoleMatrix)
+            <form method="POST" action="{{ route('fleet.role-matrix.roles.store') }}">
                 @csrf
-                <div class="grid3">
-                    <x-fleetman.input id="matrixUserName" name="name" label="Name" placeholder="Enter user name" :value="old('name')" required />
-                    <x-fleetman.input id="matrixUserEmail" name="email" label="Email" type="email" placeholder="name@example.com" :value="old('email')" required />
-                    <div class="field">
-                        <label for="matrixUserRole">Role <span class="req">*</span></label>
-                        <select id="matrixUserRole" name="fleet_role_id" required>
-                            <option value="">Select role</option>
-                            @foreach($userCreateRoleOptions as $role)
-                                <option value="{{ $role->id }}" @selected((string) old('fleet_role_id') === (string) $role->id)>
-                                    {{ $role->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
+                <div class="grid3 role-create-grid">
+                    <x-fleetman.input id="roleName" name="name" label="Role Name" placeholder="Enter role name" :value="old('name')" required />
+                    <x-fleetman.input id="roleDescription" name="description" label="Description" placeholder="Enter a short description" :value="old('description')" />
                     <div class="field">
                         <label>&nbsp;</label>
-                        <button type="submit" class="btn primary" style="width:100%;min-height:46px">Add User</button>
+                        <button type="submit" class="btn primary" style="width:100%;min-height:46px">Create Role</button>
                     </div>
                 </div>
-                <div class="grid" style="margin-top:16px">
-                    <x-fleetman.input id="matrixUserPassword" name="password" label="Password" type="password" placeholder="Minimum 8 characters" required />
-                    <x-fleetman.input id="matrixUserPasswordConfirm" name="password_confirmation" label="Confirm Password" type="password" placeholder="Retype password" required />
-                </div>
-                @if(! $canAssignSuperAdmin)
-                    <div class="role-matrix-note" style="margin-top:14px;margin-bottom:0">
-                        Admin User can add users and assign normal project roles only. Only Super Admin can assign another Super Admin.
-                    </div>
-                @endif
             </form>
         @else
             <div class="role-matrix-note" style="margin-bottom:0">
-                You can view the Role Matrix, but only Super Admin and Admin User can add users.
+                You can view role permissions, but you do not have permission to create or update roles.
             </div>
         @endif
     </section>
@@ -99,7 +79,7 @@
             <div class="section-head">
                 <div>
                     <h2>Permission Matrix</h2>
-                    <p>Tick a permission for each role. View opens the page; Manage allows save/sync/upload actions for that module.</p>
+                    <p>Tick a permission for each role. View opens the page; Manage allows save, sync, upload, and delete actions for that module.</p>
                 </div>
                 @if($canManageRoleMatrix)
                     <button type="submit" class="btn primary">Save Role Matrix</button>
@@ -109,7 +89,7 @@
             </div>
 
             <div class="role-matrix-note">
-                Recommended project roles are kept small: <b>Super Admin</b>, <b>Admin User</b>, <b>Supervisor</b>, <b>Field Officer</b>, and <b>Fuel Operator</b>. You can change access anytime from this matrix.
+                Super Admin is protected and always has full access. Create users and assign one of these roles from the <b>Users</b> page.
             </div>
 
             <div class="table-wrap role-matrix-table-wrap">
@@ -118,15 +98,15 @@
                         <tr>
                             <th class="role-permission-col">Permission</th>
                             <th>Action</th>
-                            @foreach($users as $user)
-                                <th>{{ $user->name }}</th>
+                            @foreach($roles as $role)
+                                <th>{{ $role->name }}</th>
                             @endforeach
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($permissions->groupBy('module') as $module => $modulePermissions)
                             <tr class="role-module-row">
-                                <td colspan="{{ 2 + $users->count() }}">{{ $module }}</td>
+                                <td colspan="{{ 2 + $roles->count() }}">{{ $module }}</td>
                             </tr>
                             @foreach($modulePermissions as $permission)
                                 <tr>
@@ -136,18 +116,18 @@
                                         <code>{{ $permission->key }}</code>
                                     </td>
                                     <td><span class="badge {{ $permission->action === 'Manage' ? 'warn' : 'soft' }}">{{ $permission->action }}</span></td>
-                                    @foreach($users as $user)
+                                    @foreach($roles as $role)
                                         @php
-                                            $checked = $user->isFleetSuperAdmin()
+                                            $checked = $role->isSuperAdmin()
                                                 ? true
-                                                : (bool) ($permissionMatrix[$user->id][$permission->key] ?? false);
-                                            $disabled = ! $canManageRoleMatrix || $user->isFleetSuperAdmin();
+                                                : (bool) ($permissionMatrix[$role->id][$permission->key] ?? false);
+                                            $disabled = ! $canManageRoleMatrix || $role->isSuperAdmin();
                                         @endphp
                                         <td class="role-check-cell">
                                             <label class="role-check {{ $checked ? 'checked' : '' }} {{ $disabled ? 'disabled' : '' }}">
                                                 <input
                                                     type="checkbox"
-                                                    name="permissions[{{ $user->id }}][]"
+                                                    name="permissions[{{ $role->id }}][]"
                                                     value="{{ $permission->key }}"
                                                     @checked($checked)
                                                     @disabled($disabled)
@@ -159,77 +139,6 @@
                                 </tr>
                             @endforeach
                         @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <section class="card role-card">
-            <div class="section-head">
-                <div>
-                    <h2>User Role Assignment</h2>
-                    <p>Assign each logged-in user to the correct role. Your own Super Admin role is locked to prevent accidental lockout.</p>
-                </div>
-                @if($canManageRoleMatrix)
-                    <button type="submit" class="btn primary">Save User Roles</button>
-                @endif
-            </div>
-
-            <div class="table-wrap role-user-table-wrap">
-                <table class="role-user-table">
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Email</th>
-                            <th>Current Role</th>
-                            <th>Assign Role</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($users as $user)
-                            @php
-                                $lockCurrentUser = auth()->id() === $user->id && auth()->user()?->isFleetSuperAdmin();
-                                $lockSuperAdminTarget = $user->fleetRole?->slug === 'super_admin' && ! $canAssignSuperAdmin;
-                            @endphp
-                            <tr>
-                                <td>
-                                    <b>{{ $user->name }}</b>
-                                    @if(auth()->id() === $user->id)
-                                        <span class="badge soft">You</span>
-                                    @endif
-                                </td>
-                                <td>{{ $user->email }}</td>
-                                <td>
-                                    <span class="badge {{ $user->fleetRole?->slug === 'super_admin' ? 'ok' : 'soft' }}">
-                                        {{ $user->fleetRole?->name ?? 'No Role' }}
-                                    </span>
-                                </td>
-                                <td>
-                                    @if($lockCurrentUser || $lockSuperAdminTarget)
-                                        <input type="hidden" name="user_roles[{{ $user->id }}]" value="{{ $user->fleet_role_id }}">
-                                    @endif
-                                    @if($lockSuperAdminTarget)
-                                        <select disabled>
-                                            <option>{{ $user->fleetRole?->name ?? 'Super Admin' }}</option>
-                                        </select>
-                                        <div class="hint">Only Super Admin can change another Super Admin user.</div>
-                                    @else
-                                        <select name="user_roles[{{ $user->id }}]" @disabled(! $canManageRoleMatrix || $lockCurrentUser)>
-                                            @foreach($roleOptions as $role)
-                                                <option value="{{ $role->id }}" @selected((int) $user->fleet_role_id === (int) $role->id)>
-                                                    {{ $role->name }}
-                                                </option>
-                                            @endforeach
-                                        </select>
-                                    @endif
-                                    @if($lockCurrentUser)
-                                        <div class="hint">Locked for safety. Another Super Admin can change this later.</div>
-                                    @endif
-                                </td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="4" class="empty">No users found.</td></tr>
-                        @endforelse
                     </tbody>
                 </table>
             </div>

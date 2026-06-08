@@ -29,7 +29,7 @@
                     <div style="margin-top:16px"><x-fleetman.textarea id="clientAddress" label="Permanent Address" required placeholder="House / Road / Area / City" /></div>
                     <div style="margin-top:16px"><x-fleetman.textarea id="clientAbout" label="About / Notes" required placeholder="Short note about this client, operation area, service requirement, billing note, etc." /></div>
                 </x-fleetman.section-card>
-                <x-fleetman.section-card title="2. Contact Person(s)">
+                <x-fleetman.section-card title="2. Contact Person(s)" class="client-contact-card">
                     <x-slot:action><button type="button" class="btn light" id="addClientContactBtn">＋ Add Contact Person</button></x-slot:action>
                     <div id="clientContacts"></div>
                 </x-fleetman.section-card>

@@ -28,7 +28,16 @@
                         <x-fleetman.input id="partyId" label="Vendor / Party ID" required readonly />
                         <x-fleetman.input id="partyName" label="Party Name" placeholder="Example: Speed Transport Services" required />
                         <x-fleetman.select id="partyType" label="Party Type" :options="$fleetman['options']['party_types']" placeholder="Select type" required />
-                        <x-fleetman.select id="vendorContractorType" label="Vendor / Contractor Type" :options="$fleetman['options']['vendor_contractor_types']" placeholder="Select vendor type" required />
+                        @php
+                            $defaultVendorContractorType = collect($fleetman['options']['vendor_contractor_types'] ?? [])->first() ?? '';
+                        @endphp
+                        <input
+                            type="hidden"
+                            id="vendorContractorType"
+                            name="vendorContractorType"
+                            value="{{ $defaultVendorContractorType }}"
+                            data-default-value="{{ $defaultVendorContractorType }}"
+                        >
                         <x-fleetman.select id="partyStatus" label="Status" :options="$fleetman['options']['party_statuses']" required />
                     </div>
                     <div id="partyFuelTypesField" class="fuel-station-config hidden" style="margin-top:16px">
@@ -36,11 +45,8 @@
                             <label>Fuel Types Sold <span class="req">*</span></label>
                             @php
                                 $vendorFuelTypes = collect($fleetman['options']['fuel_types'] ?? [])
-                                    ->reject(fn ($fuelType) => in_array(
-                                        strtolower(trim((string) $fuelType)),
-                                        ['lpg', 'electric', 'hybrid charge', 'electric charge'],
-                                        true
-                                    ))
+                                    ->filter(fn ($fuelType) => filled($fuelType))
+                                    ->unique()
                                     ->values();
                             @endphp
                             <div class="fuel-type-check-grid" id="partyFuelTypes">
@@ -57,7 +63,7 @@
                     <div class="grid3" style="margin-top:16px">
                         <x-fleetman.input id="partyPhone" label="Phone Number" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="01XXXXXXXXX" hint="Enter exactly 11 digits." required />
                         <x-fleetman.input id="partyEmail" label="Email" type="email" placeholder="vendor@example.com" />
-                        <x-fleetman.input id="partyWhatsapp" label="WhatsApp Number" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="01XXXXXXXXX" hint="Enter exactly 11 digits when provided." />
+                        <x-fleetman.input id="partyWhatsapp" label="WhatsApp Number" type="tel" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="01XXXXXXXXX" />
                     </div>
                     <div class="grid3" style="margin-top:16px">
                         <x-fleetman.input id="tradeLicense" label="Trade License No." inputmode="numeric" pattern="[0-9]+" placeholder="Optional" hint="Digits only." />

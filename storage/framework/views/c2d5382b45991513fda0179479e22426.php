@@ -105,23 +105,47 @@
                     </div>
 
                     <div class="grid" style="margin-top:16px">
-                        <div class="field searchable" id="tripVehicleField">
-                            <div class="search-label">
-                                <label for="tripVehicle">Vehicle <span class="req">*</span></label>
-                                <span class="search-tag">Searchable</span>
-                            </div>
-                            <input id="tripVehicle" list="tripVehicleList" placeholder="Type vehicle ID, name, or registration" autocomplete="off" required>
-                            <datalist id="tripVehicleList"></datalist>
-                        </div>
+                        <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'tripVehicle','label' => 'Vehicle','placeholder' => 'Enter vehicle','autocomplete' => 'off','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.input'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['id' => 'tripVehicle','label' => 'Vehicle','placeholder' => 'Enter vehicle','autocomplete' => 'off','required' => true]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
+<?php $attributes = $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523; ?>
+<?php unset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
+<?php $component = $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523; ?>
+<?php unset($__componentOriginal8e448d98e7f6e76a56b5afe0e1522523); ?>
+<?php endif; ?>
 
-                        <div class="field searchable" id="tripDriverField">
-                            <div class="search-label">
-                                <label for="tripDriver">Driver <span class="req">*</span></label>
-                                <span class="search-tag">Searchable</span>
-                            </div>
-                            <input id="tripDriver" list="tripDriverList" placeholder="Type driver ID, name, or phone" autocomplete="off" required>
-                            <datalist id="tripDriverList"></datalist>
-                        </div>
+                        <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'tripDriver','label' => 'Driver','placeholder' => 'Enter driver','autocomplete' => 'off','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.input'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['id' => 'tripDriver','label' => 'Driver','placeholder' => 'Enter driver','autocomplete' => 'off','required' => true]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
+<?php $attributes = $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523; ?>
+<?php unset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
+<?php $component = $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523; ?>
+<?php unset($__componentOriginal8e448d98e7f6e76a56b5afe0e1522523); ?>
+<?php endif; ?>
                     </div>
 
                     <div class="grid" style="margin-top:18px">

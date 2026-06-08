@@ -22,8 +22,22 @@
                 </x-fleetman.section-card>
 
                 <x-fleetman.section-card title="2. Time & Attendance">
-                    <div class="grid3"><x-fleetman.input id="attendanceStartTime" label="Start Time" type="time" required /><x-fleetman.input id="attendanceEndTime" label="End Time" type="time" /><div class="field" id="attendanceStatusField"><label class="section-label" id="attendanceStatusLabel">Status <span class="req">*</span></label><div id="attendanceStatusChoices" class="choice-grid auto-grid" role="group" aria-labelledby="attendanceStatusLabel" aria-required="true" tabindex="-1"></div></div></div>
-                    <div class="quick-actions" style="margin-top:16px"><button type="button" class="btn secondary" data-time-now="attendanceStartTime">Start Now</button><button type="button" class="btn secondary" data-clear-field="attendanceStartTime">Clear Start</button><button type="button" class="btn secondary" data-time-now="attendanceEndTime">End Now</button><button type="button" class="btn secondary" data-clear-field="attendanceEndTime">Clear End</button></div>
+                    <div class="attendance-time-grid">
+                        <div class="attendance-time-group">
+                            <x-fleetman.input id="attendanceStartTime" label="Start Time" type="time" step="60" required />
+                            <button type="button" class="btn secondary" data-time-now="attendanceStartTime">Start Now</button>
+                            <button type="button" class="btn secondary" data-clear-field="attendanceStartTime">Clear Start</button>
+                        </div>
+                        <div class="attendance-time-group">
+                            <x-fleetman.input id="attendanceEndTime" label="End Time" type="time" step="60" />
+                            <button type="button" class="btn secondary" data-time-now="attendanceEndTime">End Now</button>
+                            <button type="button" class="btn secondary" data-clear-field="attendanceEndTime">Clear End</button>
+                        </div>
+                    </div>
+                    <div class="field attendance-status-row" id="attendanceStatusField">
+                        <label class="section-label" id="attendanceStatusLabel">Status <span class="req">*</span></label>
+                        <div id="attendanceStatusChoices" class="choice-grid auto-grid" role="group" aria-labelledby="attendanceStatusLabel" aria-required="true" tabindex="-1"></div>
+                    </div>
                 </x-fleetman.section-card>
 
                 <x-fleetman.section-card title="3. Notes">

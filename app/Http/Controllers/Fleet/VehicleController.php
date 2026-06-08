@@ -266,7 +266,7 @@ class VehicleController extends FleetBaseController
                 'subCategory' => ['nullable', 'string', 'max:255'],
                 'usage' => ['required', Rule::in($usageTypes)],
                 'rentalType' => ['required', Rule::in(['With Driver', 'Without Driver'])],
-                'driver' => ['required', Rule::in($drivers)],
+                'driver' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', Rule::in($drivers)],
                 'driverPaymentAmount' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', 'numeric', 'min:0'],
                 'driverPaymentCycle' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', Rule::in($paymentCycles)],
                 'vehicleRentalAmount' => ['required', 'numeric', 'min:0'],

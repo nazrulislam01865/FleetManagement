@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\FleetRbac;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -38,12 +39,42 @@ class UserManagementController extends FleetBaseController
             'fleet_role_id' => ['required', 'integer', Rule::in($roleIds)],
         ]);
 
-        User::query()->create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => $validated['password'],
-            'fleet_role_id' => $validated['fleet_role_id'],
-        ]);
+        DB::transaction(function () use ($validated): void {
+            $user = User::query()->create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password' => $validated['password'],
+                'fleet_role_id' => $validated['fleet_role_id'],
+            ]);
+
+            if (! Schema::hasTable('fleet_user_permissions')) {
+                return;
+            }
+
+            $role = FleetRole::query()->find($validated['fleet_role_id']);
+            if (! $role) {
+                return;
+            }
+
+            $permissionRows = DB::table('fleet_role_permissions')
+                ->where('role_id', $role->id)
+                ->get();
+            $now = now();
+
+            foreach ($permissionRows as $permissionRow) {
+                DB::table('fleet_user_permissions')->updateOrInsert(
+                    [
+                        'user_id' => $user->id,
+                        'permission_id' => $permissionRow->permission_id,
+                    ],
+                    [
+                        'allowed' => $role->isSuperAdmin() ? true : (bool) $permissionRow->allowed,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ]
+                );
+            }
+        });
 
         return redirect()
             ->route('fleet.users')

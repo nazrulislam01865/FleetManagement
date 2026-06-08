@@ -47,9 +47,9 @@ class TripController extends FleetBaseController
             'rows.*.tripId' => ['required', 'string', 'max:100', 'distinct'],
             'rows.*.startDate' => ['required', 'date'],
             'rows.*.vehicle' => ['required', 'string', 'max:255'],
-            'rows.*.vehicleId' => ['required', 'string', 'max:100'],
+            'rows.*.vehicleId' => ['nullable', 'string', 'max:100'],
             'rows.*.driver' => ['required', 'string', 'max:255'],
-            'rows.*.driverId' => ['required', 'string', 'max:100'],
+            'rows.*.driverId' => ['nullable', 'string', 'max:100'],
             'rows.*.purpose' => ['nullable', 'string', 'max:255'],
             'rows.*.client' => ['nullable', 'string', 'max:255'],
             'rows.*.clientId' => ['nullable', 'string', 'max:100'],
@@ -67,9 +67,7 @@ class TripController extends FleetBaseController
             'rows.*.tripId.required' => 'Trip ID is required.',
             'rows.*.startDate.required' => 'Start date is required.',
             'rows.*.vehicle.required' => 'Vehicle is required.',
-            'rows.*.vehicleId.required' => 'Select a vehicle from the saved vehicle suggestions.',
             'rows.*.driver.required' => 'Driver is required.',
-            'rows.*.driverId.required' => 'Select a driver from the saved driver suggestions.',
             'rows.*.totalCost.required' => 'Total cost is required.',
             'rows.*.totalCost.gt' => 'Total cost must be greater than zero.',
             'rows.*.payments.*.method.required' => 'A payment method is required for every entered payment.',
@@ -77,33 +75,17 @@ class TripController extends FleetBaseController
             'rows.*.details.required' => 'Trip details are required.',
         ]);
 
-        $vehicleIds = collect($vehicleMap)->pluck('id')->filter()->unique()->all();
-        $driverIds = collect($driverMap)->pluck('id')->filter()->unique()->all();
         $clientIds = collect($clientMap)->pluck('id')->filter()->unique()->all();
         $existingTrips = Schema::hasTable('fleet_trips')
             ? FleetTrip::query()->get()->mapWithKeys(fn (FleetTrip $trip) => [$trip->code => $trip->payload ?? []])->all()
             : [];
 
-        $validator->after(function ($validator) use ($normalizedRows, $vehicleIds, $driverIds, $clientIds, $existingTrips): void {
+        $validator->after(function ($validator) use ($normalizedRows, $clientIds, $existingTrips): void {
             foreach ($normalizedRows as $index => $row) {
                 $existing = $existingTrips[(string) ($row['tripId'] ?? '')] ?? null;
-                $sameHistoricalVehicle = is_array($existing)
-                    && (string) ($existing['vehicleId'] ?? '') === (string) ($row['vehicleId'] ?? '')
-                    && (string) ($existing['vehicle'] ?? '') === (string) ($row['vehicle'] ?? '');
-                $sameHistoricalDriver = is_array($existing)
-                    && (string) ($existing['driverId'] ?? '') === (string) ($row['driverId'] ?? '')
-                    && (string) ($existing['driver'] ?? '') === (string) ($row['driver'] ?? '');
                 $sameHistoricalClient = is_array($existing)
                     && (string) ($existing['clientId'] ?? '') === (string) ($row['clientId'] ?? '')
                     && (string) ($existing['client'] ?? '') === (string) ($row['client'] ?? '');
-
-                if (! in_array((string) ($row['vehicleId'] ?? ''), $vehicleIds, true) && ! $sameHistoricalVehicle) {
-                    $validator->errors()->add("rows.$index.vehicle", 'Select a valid vehicle from the saved vehicle suggestions.');
-                }
-
-                if (! in_array((string) ($row['driverId'] ?? ''), $driverIds, true) && ! $sameHistoricalDriver) {
-                    $validator->errors()->add("rows.$index.driver", 'Select a valid driver from the saved driver suggestions.');
-                }
 
                 $requiresClientSelection = (int) ($row['tripValidationVersion'] ?? 0) >= 2;
                 if ($requiresClientSelection && $this->isClientVisit((string) ($row['purpose'] ?? ''))) {
@@ -172,9 +154,9 @@ class TripController extends FleetBaseController
             'tripValidationVersion' => isset($row['tripValidationVersion']) ? (int) $row['tripValidationVersion'] : null,
             'tripId' => trim((string) ($row['tripId'] ?? '')),
             'startDate' => (string) ($row['startDate'] ?? ''),
-            'vehicle' => $vehicle['label'] ?? trim((string) ($row['vehicle'] ?? '')),
+            'vehicle' => trim((string) ($row['vehicle'] ?? '')),
             'vehicleId' => $vehicle['id'] ?? trim((string) ($row['vehicleId'] ?? '')),
-            'driver' => $driver['label'] ?? trim((string) ($row['driver'] ?? '')),
+            'driver' => trim((string) ($row['driver'] ?? '')),
             'driverId' => $driver['id'] ?? trim((string) ($row['driverId'] ?? '')),
             'purpose' => trim((string) ($row['purpose'] ?? '')),
             'client' => $client['label'] ?? trim((string) ($row['client'] ?? '')),

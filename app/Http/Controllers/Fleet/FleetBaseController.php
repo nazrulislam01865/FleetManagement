@@ -50,6 +50,126 @@ abstract class FleetBaseController extends Controller
         ]));
     }
 
+    public function show(string $code): View
+    {
+        $this->ensureRecordDetailsAccess();
+
+        $modelClass = $this->modelClass;
+        $query = $modelClass::query()->where('code', $code);
+
+        if ($this->resource === 'contracts') {
+            $query->whereNotIn('status', ['fuel_recharge', 'attendance']);
+        }
+
+        /** @var Model $record */
+        $record = $query->firstOrFail();
+        $payload = is_array($record->payload) ? $record->payload : [];
+        if ($this->resource === 'fuel_recharges') {
+            unset($payload['submittedAt'], $payload['submittedLocation']);
+        }
+        $detail = $this->recordDetailDefinition();
+        $recordTitle = trim((string) ($payload[$detail['title_key']] ?? $payload[$this->nameKey] ?? $record->name ?? $record->code));
+
+        $recordViewData = [
+            'record' => $record,
+            'recordPayload' => $payload,
+            'recordTitle' => $recordTitle !== '' ? $recordTitle : $record->code,
+            'detail' => $detail,
+        ];
+
+        return view('fleetman.record-view', array_merge(
+            $this->shared($this->activeMenu, array_merge([
+                'page' => 'record-detail',
+            ], $recordViewData)),
+            $recordViewData,
+        ));
+    }
+
+    protected function ensureRecordDetailsAccess(): void
+    {
+        $user = auth()->user();
+        $roleSlug = strtolower((string) ($user?->fleetRole?->slug ?? ''));
+        $roleName = strtolower((string) ($user?->fleetRole?->name ?? ''));
+        $allowed = (bool) ($user?->isFleetSuperAdmin())
+            || in_array($roleSlug, ['super_admin', 'admin_user'], true)
+            || $roleName === 'admin user';
+
+        abort_unless($allowed, 403, 'Only Super Admin and Admin User can view full details.');
+    }
+
+    protected function recordDetailDefinition(): array
+    {
+        $definitions = [
+            'vehicles' => [
+                'title' => 'Vehicle Details',
+                'list_label' => 'Vehicle List',
+                'list_route' => 'fleet.vehicles',
+                'title_key' => 'name',
+            ],
+            'fuel_prices' => [
+                'title' => 'Fuel Price Details',
+                'list_label' => 'Fuel Price List',
+                'list_route' => 'fleet.fuel-prices',
+                'title_key' => 'name',
+            ],
+            'fuel_recharges' => [
+                'title' => 'Fuel Recharge Details',
+                'list_label' => 'Recharge List',
+                'list_route' => 'fleet.fuel-recharge',
+                'title_key' => 'rechargeId',
+            ],
+            'parties' => [
+                'title' => 'Vendor / Party Details',
+                'list_label' => 'Vendor List',
+                'list_route' => 'fleet.vendors',
+                'title_key' => 'partyName',
+            ],
+            'trips' => [
+                'title' => 'Trip Details',
+                'list_label' => 'Trip List',
+                'list_route' => 'fleet.trips',
+                'title_key' => 'tripId',
+            ],
+            'drivers' => [
+                'title' => 'Driver Details',
+                'list_label' => 'Driver List',
+                'list_route' => 'fleet.drivers',
+                'title_key' => 'fullName',
+            ],
+            'clients' => [
+                'title' => 'Client Details',
+                'list_label' => 'Client List',
+                'list_route' => 'fleet.clients',
+                'title_key' => 'clientName',
+            ],
+            'employees' => [
+                'title' => 'Employee Details',
+                'list_label' => 'Employee List',
+                'list_route' => 'fleet.employees',
+                'title_key' => 'fullName',
+            ],
+            'driver_attendance' => [
+                'title' => 'Driver Attendance Details',
+                'list_label' => 'Log List',
+                'list_route' => 'fleet.driver-attendance',
+                'title_key' => 'logId',
+            ],
+            'contracts' => [
+                'title' => 'Contract Details',
+                'list_label' => 'Contract List',
+                'list_route' => 'fleet.contracts',
+                'title_key' => 'contractId',
+            ],
+        ];
+
+        return $definitions[$this->resource] ?? [
+            'title' => 'Record Details',
+            'list_label' => 'Back to List',
+            'list_route' => 'fleet.dashboard',
+            'title_key' => $this->nameKey,
+        ];
+    }
+
     public function sync(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -234,19 +354,47 @@ abstract class FleetBaseController extends Controller
     protected function resourceUrls(): array
     {
         return [
-            'vehicles' => ['sync' => route('fleet.vehicles.sync')],
-            'fuel_prices' => ['sync' => route('fleet.fuel-prices.sync')],
-            'fuel_recharges' => ['sync' => route('fleet.fuel-recharge.sync')],
+            'vehicles' => [
+                'sync' => route('fleet.vehicles.sync'),
+                'show_template' => route('fleet.vehicles.show', ['code' => '__CODE__']),
+            ],
+            'fuel_prices' => [
+                'sync' => route('fleet.fuel-prices.sync'),
+                'show_template' => route('fleet.fuel-prices.show', ['code' => '__CODE__']),
+            ],
+            'fuel_recharges' => [
+                'sync' => route('fleet.fuel-recharge.sync'),
+                'show_template' => route('fleet.fuel-recharge.show', ['code' => '__CODE__']),
+            ],
             'parties' => array_filter([
                 'sync' => route('fleet.vendors.sync'),
+                'show_template' => route('fleet.vendors.show', ['code' => '__CODE__']),
                 'document_upload' => Route::has('fleet.vendors.documents.upload') ? route('fleet.vendors.documents.upload') : null,
             ]),
-            'trips' => ['sync' => route('fleet.trips.sync')],
-            'contracts' => Route::has('fleet.contracts.sync') ? ['sync' => route('fleet.contracts.sync')] : [],
-            'drivers' => ['sync' => route('fleet.drivers.sync')],
-            'clients' => ['sync' => route('fleet.clients.sync')],
-            'driver_attendance' => ['sync' => route('fleet.driver-attendance.sync')],
-            'employees' => ['sync' => route('fleet.employees.sync')],
+            'trips' => [
+                'sync' => route('fleet.trips.sync'),
+                'show_template' => route('fleet.trips.show', ['code' => '__CODE__']),
+            ],
+            'contracts' => Route::has('fleet.contracts.sync') ? [
+                'sync' => route('fleet.contracts.sync'),
+                'show_template' => route('fleet.contracts.show', ['code' => '__CODE__']),
+            ] : [],
+            'drivers' => [
+                'sync' => route('fleet.drivers.sync'),
+                'show_template' => route('fleet.drivers.show', ['code' => '__CODE__']),
+            ],
+            'clients' => [
+                'sync' => route('fleet.clients.sync'),
+                'show_template' => route('fleet.clients.show', ['code' => '__CODE__']),
+            ],
+            'driver_attendance' => [
+                'sync' => route('fleet.driver-attendance.sync'),
+                'show_template' => route('fleet.driver-attendance.show', ['code' => '__CODE__']),
+            ],
+            'employees' => [
+                'sync' => route('fleet.employees.sync'),
+                'show_template' => route('fleet.employees.show', ['code' => '__CODE__']),
+            ],
             'master_data' => Route::has('fleet.master-data.sync') ? ['sync' => route('fleet.master-data.sync')] : [],
             'uploads' => [
                 'store' => route('fleet.uploads.store'),
@@ -263,7 +411,7 @@ abstract class FleetBaseController extends Controller
             'vendors' => $this->uniqueValues($this->payloadColumn(FleetVendorParty::class, 'partyName')),
             'vehicle_vendors' => $this->driverVendorValues(),
             'driver_vendors' => $this->driverVendorValues(),
-            'drivers' => $this->uniqueValues(array_merge($this->values('driver_select'), $this->payloadColumn(FleetDriver::class, 'fullName'))),
+            'drivers' => $this->uniqueValues($this->payloadColumn(FleetDriver::class, 'fullName')),
             'vehicle_categories' => $this->vehicleCategoryOptions(),
             'usage_types' => $this->choiceValues('usage_type'),
             'fuel_types' => $this->fuelTypeValues(),

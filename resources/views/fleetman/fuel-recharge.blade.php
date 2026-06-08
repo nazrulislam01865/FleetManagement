@@ -118,10 +118,6 @@
             <div class="field"><label for="submittedBy">Submitted By <span class="req">*</span></label><input id="submittedBy" readonly required aria-required="true" value="{{ $account['name'] ?? 'Logged-in User' }}"></div>
         </div>
         <div class="field" style="margin-top:12px"><label for="rechargeRemarks">Remarks</label><textarea id="rechargeRemarks" placeholder="Write any note about the fuel recharge."></textarea></div>
-        <div class="log-grid" style="margin-top:12px">
-            <div class="log-box"><small>Submit Time</small><b id="submitTime">Not submitted</b></div>
-            <div class="log-box"><small>Submit Place</small><b id="submitPlace">Not submitted</b></div>
-        </div>
         <div class="bottom-submit"><button class="btn light" id="resetRechargeBtn" type="button">Reset Form</button><button class="btn secondary" id="draftRechargeBtn" type="button">Save Draft</button><button class="btn green" id="submitRechargeBtn" type="button">Submit</button></div>
     </section>
     </div>

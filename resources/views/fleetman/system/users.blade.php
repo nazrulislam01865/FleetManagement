@@ -39,7 +39,7 @@
         </div>
 
         @if($canManageUsers)
-            <form method="POST" action="{{ route('fleet.users.store') }}">
+            <form id="createFleetUserForm" method="POST" action="{{ route('fleet.users.store') }}">
                 @csrf
                 <div class="grid3">
                     <x-fleetman.input id="userName" name="name" label="Name" placeholder="Enter user name" :value="old('name')" required />
@@ -55,14 +55,13 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="field">
-                        <label>&nbsp;</label>
-                        <button type="submit" class="btn primary" style="width:100%;min-height:46px">Add User</button>
-                    </div>
                 </div>
                 <div class="grid" style="margin-top:16px">
                     <x-fleetman.input id="userPassword" name="password" label="Password" type="password" placeholder="Minimum 8 characters" required />
                     <x-fleetman.input id="userPasswordConfirm" name="password_confirmation" label="Confirm Password" type="password" placeholder="Retype password" required />
+                </div>
+                <div style="margin-top:16px">
+                    <button type="submit" class="btn primary" style="width:100%;min-height:46px">Create User</button>
                 </div>
                 @if(! $canAssignSuperAdmin)
                     <div class="role-matrix-note" style="margin-top:14px;margin-bottom:0">
@@ -130,3 +129,28 @@
     </section>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+    (() => {
+        const form = document.getElementById('createFleetUserForm');
+        const password = document.getElementById('userPassword');
+        const confirmation = document.getElementById('userPasswordConfirm');
+
+        if (!form || !password || !confirmation) return;
+
+        const validatePasswordMatch = () => {
+            confirmation.setCustomValidity(
+                confirmation.value !== '' && password.value !== confirmation.value
+                    ? 'Password and Confirm Password must match.'
+                    : ''
+            );
+        };
+
+        password.addEventListener('input', validatePasswordMatch);
+        confirmation.addEventListener('input', validatePasswordMatch);
+        form.addEventListener('submit', validatePasswordMatch);
+    })();
+</script>
+@endpush
+

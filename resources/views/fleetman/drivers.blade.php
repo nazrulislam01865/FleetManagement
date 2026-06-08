@@ -45,7 +45,7 @@
                         <x-fleetman.select id="driverSalaryTenure" label="Salary Tenure" required :options="$fleetman['options']['driver_salary_tenures']" />
                         <x-fleetman.input id="driverOtRate" label="Overtime Rate/Hourly" type="number" value="50" required min="0" step="0.01" />
                         <x-fleetman.input id="driverWorkingHour" label="Regular Working Hour" type="number" value="270" required min="1" step="0.01" />
-                        <x-fleetman.select id="driverVendor" label="Vendor / Contractor" :options="array_merge(['Own Payroll'], $fleetman['options']['driver_vendors'] ?? [])" placeholder="Select car-related vendor / contractor" required hint="Only active vendors assigned to a master type marked Car Related are shown." />
+                        <x-fleetman.select id="driverVendor" label="Vendor" :options="array_merge(['Own Payroll'], $fleetman['options']['driver_vendors'] ?? [])" placeholder="Select vendor" required />
                         <x-fleetman.select id="driverStatus" label="Driver Status" :options="$fleetman['options']['driver_statuses']" required />
                     </div>
                     <div class="field" id="driverDutyField" style="margin-top:16px">

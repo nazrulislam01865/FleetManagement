@@ -93,7 +93,9 @@
         </script>
 
         <main class="main-content">
-            <?php echo $__env->yieldContent('content'); ?>
+            <div class="fleet-main-body">
+                <?php echo $__env->yieldContent('content'); ?>
+            </div>
 
             <?php if (isset($component)) { $__componentOriginal36bae408b14af0e7fcaf0db48c860d89 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal36bae408b14af0e7fcaf0db48c860d89 = $attributes; } ?>

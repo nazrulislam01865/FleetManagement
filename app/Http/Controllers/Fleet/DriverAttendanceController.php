@@ -25,7 +25,12 @@ class DriverAttendanceController extends FleetBaseController
             'rows.*' => ['array'],
         ]);
 
-        $rows = $validated['rows'];
+        $rows = collect($validated['rows'])
+            ->map(fn (array $row): array => $this->withCalculatedDuration($row))
+            ->values()
+            ->all();
+
+        $request->merge(['rows' => $rows]);
         $this->validateAttendanceRows($rows);
 
         $response = parent::sync($request);
@@ -200,6 +205,24 @@ class DriverAttendanceController extends FleetBaseController
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
+    }
+
+    protected function withCalculatedDuration(array $row): array
+    {
+        $startTime = trim((string) ($row['startTime'] ?? ''));
+        $endTime = trim((string) ($row['endTime'] ?? ''));
+
+        if (! $this->isValidTime($startTime) || ! $this->isValidTime($endTime)) {
+            return $row;
+        }
+
+        [$startHour, $startMinute] = array_map('intval', explode(':', $startTime));
+        [$endHour, $endMinute] = array_map('intval', explode(':', $endTime));
+        $minutes = max(0, (($endHour * 60) + $endMinute) - (($startHour * 60) + $startMinute));
+
+        $row['hours'] = intdiv($minutes, 60).'h '.($minutes % 60).'m';
+
+        return $row;
     }
 
     protected function matchesAttendanceValue(string $needle, array $values): bool

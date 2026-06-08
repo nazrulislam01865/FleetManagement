@@ -222,12 +222,53 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
         return values.join(' • ');
     }
 
+    function recordDetailUrl(record = {}) {
+        const resourceByPage = {
+            vehicles: 'vehicles',
+            'fuel-prices': 'fuel_prices',
+            'fuel-recharge': 'fuel_recharges',
+            vendors: 'parties',
+            trips: 'trips',
+            drivers: 'drivers',
+            clients: 'clients',
+            employees: 'employees',
+            'driver-attendance': 'driver_attendance',
+            contracts: 'contracts',
+        };
+        const idKeysByResource = {
+            vehicles: ['id'],
+            fuel_prices: ['fuelPriceId'],
+            fuel_recharges: ['rechargeId'],
+            parties: ['partyId'],
+            trips: ['tripId'],
+            drivers: ['driverId'],
+            clients: ['clientId'],
+            employees: ['employeeId'],
+            driver_attendance: ['logId'],
+            contracts: ['contractId'],
+        };
+        const resource = resourceByPage[String(document.body.dataset.page || '')];
+        const template = String(window.FLEETMAN?.resources?.[resource]?.show_template || '');
+        const idKeys = idKeysByResource[resource] || [];
+        const code = idKeys.map((key) => record?.[key]).find((value) => String(value ?? '').trim() !== '');
+
+        if (!resource || !template || code === undefined || code === null || String(code).trim() === '') return '';
+
+        return template.replace('__CODE__', encodeURIComponent(String(code)));
+    }
+
     function show(type, record = {}) {
         if (!canViewDetails()) {
             toast('Only Super Admin and Admin User can view full details.');
             return;
         }
         if (!record) return;
+
+        const detailsUrl = recordDetailUrl(record);
+        if (detailsUrl) {
+            window.location.assign(detailsUrl);
+            return;
+        }
 
         const overlay = ensureModal();
         const files = collectFiles(record);
@@ -671,9 +712,11 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
         function toggleRentalFields() {
             const withDriver = value('#rentalType') === 'With Driver';
+            const driverField = $('#driver')?.closest('.field');
             const wrapper = $('#driverPaymentFields');
+            driverField?.classList.toggle('hidden', !withDriver);
             wrapper?.classList.toggle('hidden', !withDriver);
-            ['#driverPaymentAmount', '#driverPaymentCycle'].forEach((selector) => {
+            ['#driver', '#driverPaymentAmount', '#driverPaymentCycle'].forEach((selector) => {
                 const field = $(selector);
                 if (!field) return;
                 field.required = withDriver;
@@ -1019,7 +1062,6 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 ['#engineNo', 'Engine Number is required.'],
                 ['#category', 'Vehicle Category is required.'],
                 ['#rentalType', 'Rental Type is required.'],
-                ['#driver', 'Driver is required.'],
                 ['#vehicleRentalAmount', 'Vehicle Rental Amount is required.'],
                 ['#vehiclePaymentCycle', 'Vehicle Payment Cycle is required.'],
             ].forEach(([selector, message]) => {
@@ -1042,8 +1084,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             }
 
             if (vehicle.rentalType === 'With Driver') {
+                const driver = $('#driver');
                 const amount = $('#driverPaymentAmount');
                 const cycle = $('#driverPaymentCycle');
+                if (!driver?.value) invalidate(driver, 'Driver is required.');
                 if (!String(amount?.value || '').trim()) invalidate(amount, 'Driver Payment Amount is required.');
                 else if (Number(amount.value) < 0) invalidate(amount, 'Driver Payment Amount cannot be negative.');
                 if (!cycle?.value) invalidate(cycle, 'Driver Payment Cycle is required.');
@@ -1418,7 +1462,6 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (event.target.matches('input,select,textarea')) clearVehicleFieldError(event.target);
         });
 
-        populateBase();
         resetForm();
         renderTable();
         if (window.location.search.includes('action=add')) {
@@ -1685,7 +1728,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const view = event.target.closest('.view-fuel-price');
             if (view) {
                 const row = prices.find((item) => item.fuelPriceId === view.dataset.id);
-                if (row) alert(`${row.name}\nFuel Type: ${row.fuelType}\nPrice: ${row.price} ${row.unit}\nEffective Date: ${row.effectiveDate}\nStatus: ${row.status}\nReference: ${row.reference || '-'}`);
+                if (row) window.FleetmanDetailViewer?.show('Fuel Price Details', row);
             }
             const edit = event.target.closest('.edit-fuel-price');
             if (edit) editFuelPrice(edit.dataset.id);
@@ -2085,7 +2128,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
             const startKm = Number(value('#startKm') || 0);
             const endKm = Number(value('#endKm') || 0);
-            const totalKm = startKm > 0 && endKm >= startKm ? endKm - startKm : 0;
+            const totalKm = startKm >= 0 && endKm > startKm ? endKm - startKm : 0;
             setValue('#totalKm', totalKm > 0 ? totalKm : '');
 
             const mileageQty = rechargeMileageQuantity(primaryName, primary.enteredValue, secondaryName, secondary.enteredValue);
@@ -2606,12 +2649,6 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#totalKm', '');
             setValue('#mileage', '');
             setValue('#rechargeRemarks', '');
-            const submitTime = $('#submitTime');
-            const submitPlace = $('#submitPlace');
-            const submitPlaceDetail = $('#submitPlaceDetail');
-            if (submitTime) submitTime.textContent = 'Not submitted';
-            if (submitPlace) submitPlace.textContent = 'Not submitted';
-            if (submitPlaceDetail) submitPlaceDetail.textContent = 'Place name will be saved if location is allowed.';
             recalculate();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -2627,7 +2664,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const secondary = fuelEntryValues('secondary', secondaryName, secondaryEnabled);
             const endKm = Number(value('#endKm') || 0);
             const startKm = Number(value('#startKm') || vehicle?.startKm || vehicle?.odo || vehicle?.lastOdo || 0);
-            const totalKm = startKm > 0 && endKm >= startKm ? endKm - startKm : 0;
+            const totalKm = startKm >= 0 && endKm > startKm ? endKm - startKm : 0;
             const mileageQty = rechargeMileageQuantity(primaryName, primary.enteredValue, secondaryName, secondary.enteredValue);
             const diesel = (normalizeFuelName(primaryName) === 'diesel' ? primary.qty : 0)
                 + (normalizeFuelName(secondaryName) === 'diesel' ? secondary.qty : 0);
@@ -2690,8 +2727,6 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 fuelType: secondaryEnabled && secondaryName ? `${primaryName} + ${secondaryName}` : primaryName,
                 remarks: value('#rechargeRemarks'),
                 photos: collectPhotoPayload(),
-                submittedAt: new Date().toISOString(),
-                submittedLocation: submitLocation || null,
             };
         }
 
@@ -2874,8 +2909,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const endKm = Number(endRaw);
             if (endRaw === '' || !Number.isFinite(endKm) || endKm <= 0) {
                 invalidate($('#endKm'), 'End KM is required and must be greater than zero.');
-            } else if (Number.isFinite(startKm) && startKm >= 0 && endKm < startKm) {
-                invalidate($('#endKm'), 'End KM cannot be lower than Start KM.');
+            } else if (Number.isFinite(startKm) && startKm >= 0 && endKm <= startKm) {
+                invalidate($('#endKm'), 'Ending KM must be greater than Starting KM.');
             }
 
             if (!String(value('#submittedBy') || '').trim()) {
@@ -2903,15 +2938,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Submitting...';
             }
-            $('#submitTime').textContent = new Date().toLocaleString();
-            const submitPlace = $('#submitPlace');
-            const submitDetail = $('#submitPlaceDetail');
-            submitPlace.textContent = 'Getting place name...';
-            submitDetail.textContent = 'Browser/device may ask for location permission.';
-            const location = await requestCurrentPlace();
-            submitPlace.textContent = location.place || 'Location unavailable';
-            submitDetail.textContent = location.error || 'Place name and time saved with the fuel recharge entry.';
-            const saved = await saveRecharge('Submitted', location);
+            const saved = await saveRecharge('Submitted', null);
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Submit';
@@ -3486,7 +3513,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             });
             setValue('#partyId', genId());
             setValue('#partyStatus', 'Active');
-            setValue('#vendorContractorType', '');
+            setValue('#vendorContractorType', $('#vendorContractorType')?.dataset.defaultValue || '');
             setValue('#paymentTerms', 'Cash');
             setPartyFuelTypes([]);
             toggleFuelStationFields();
@@ -3722,7 +3749,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#partyId', sample.partyId);
             setValue('#partyName', sample.partyName);
             setValue('#partyType', sample.partyType);
-            setValue('#vendorContractorType', sample.vendorContractorType || '');
+            setValue('#vendorContractorType', sample.vendorContractorType || $('#vendorContractorType')?.dataset.defaultValue || '');
             toggleFuelStationFields();
             setPartyFuelTypes(sample.fuelTypes || sample.supportedFuelTypes || []);
             setValue('#partyStatus', sample.status);
@@ -3748,7 +3775,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#partyId', party.partyId);
             setValue('#partyName', party.partyName);
             setValue('#partyType', party.partyType);
-            setValue('#vendorContractorType', party.vendorContractorType || '');
+            setValue('#vendorContractorType', party.vendorContractorType || $('#vendorContractorType')?.dataset.defaultValue || '');
             toggleFuelStationFields();
             setPartyFuelTypes(party.fuelTypes || party.supportedFuelTypes || []);
             setValue('#partyStatus', party.status);
@@ -4045,18 +4072,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function fillSuggestions() {
-            const vehicleList = $('#tripVehicleList');
-            const driverList = $('#tripDriverList');
             const clientList = $('#tripClientList');
-            if (vehicleList) {
-                vehicleList.innerHTML = vehicles.map((item) => {
-                    const detail = [item.regNo, item.model, item.type].filter(Boolean).join(' • ');
-                    return `<option value="${escapeHtml(vehicleValue(item))}">${escapeHtml(detail)}</option>`;
-                }).join('');
-            }
-            if (driverList) {
-                driverList.innerHTML = drivers.map((item) => `<option value="${escapeHtml(driverValue(item))}">${escapeHtml(item.phone)}</option>`).join('');
-            }
             if (clientList) {
                 clientList.innerHTML = clients.map((item) => `<option value="${escapeHtml(clientValue(item))}">${escapeHtml([item.phone, item.email].filter(Boolean).join(' • '))}</option>`).join('');
             }
@@ -4183,17 +4199,6 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 }
             });
 
-            const vehicleInput = $('#tripVehicle');
-            const driverInput = $('#tripDriver');
-            if (vehicleInput?.value.trim() && !findVehicle(vehicleInput.value)) {
-                markInvalid(vehicleInput, 'Select a vehicle from the suggestion list.');
-                errors.push(vehicleInput);
-            }
-            if (driverInput?.value.trim() && !findDriver(driverInput.value)) {
-                markInvalid(driverInput, 'Select a driver from the suggestion list.');
-                errors.push(driverInput);
-            }
-
             const clientInput = $('#tripClient');
             if (isClientVisit()) {
                 if (!clientInput?.value.trim()) {
@@ -4263,8 +4268,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function collect() {
-            const vehicle = findVehicle(value('#tripVehicle'));
-            const driver = findDriver(value('#tripDriver'));
+            const vehicleText = value('#tripVehicle').trim();
+            const driverText = value('#tripDriver').trim();
+            const vehicle = findVehicle(vehicleText);
+            const driver = findDriver(driverText);
             const client = isClientVisit() ? findClient(value('#tripClient')) : null;
             const payments = collectPayments();
             const summary = recalculatePayment();
@@ -4272,9 +4279,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 tripValidationVersion: 2,
                 tripId: value('#tripId').trim(),
                 startDate: value('#tripStartDate'),
-                vehicle: vehicle ? vehicleValue(vehicle) : value('#tripVehicle').trim(),
+                vehicle: vehicleText,
                 vehicleId: vehicle?.id || '',
-                driver: driver ? driverValue(driver) : value('#tripDriver').trim(),
+                driver: driverText,
                 driverId: driver?.id || '',
                 purpose: value('#tripPurpose').trim(),
                 client: client ? clientValue(client) : '',
@@ -4463,21 +4470,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         $('#clearTripFiltersBtn')?.addEventListener('click', clearFilters);
         ['#tripSearch', '#tripVehicleSearch'].forEach((selector) => $(selector)?.addEventListener('input', renderList));
 
-        ['#tripVehicle', '#tripDriver', '#tripClient'].forEach((selector) => {
-            $(selector)?.addEventListener('change', (event) => {
-                const match = selector === '#tripVehicle'
-                    ? findVehicle(event.target.value)
-                    : selector === '#tripDriver'
-                        ? findDriver(event.target.value)
-                        : findClient(event.target.value);
-                if (match) {
-                    event.target.value = selector === '#tripVehicle'
-                        ? vehicleValue(match)
-                        : selector === '#tripDriver'
-                            ? driverValue(match)
-                            : clientValue(match);
-                }
-            });
+        $('#tripClient')?.addEventListener('change', (event) => {
+            const match = findClient(event.target.value);
+            if (match) event.target.value = clientValue(match);
         });
 
         $('#tripPurpose')?.addEventListener('input', (event) => {
@@ -4826,7 +4821,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 ['#driverSalaryTenure', 'Salary Tenure is required.'],
                 ['#driverOtRate', 'Overtime Rate/Hourly is required.'],
                 ['#driverWorkingHour', 'Regular Working Hour is required.'],
-                ['#driverVendor', 'Vendor / Contractor is required.'],
+                ['#driverVendor', 'Vendor is required.'],
                 ['#driverStatus', 'Driver Status is required.'],
                 ['#driverPresentAddress', 'Present Address is required.'],
                 ['#driverPermanentAddress', 'Permanent Address is required.'],
@@ -5904,10 +5899,68 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         let selectedStatus = 'Completed';
 
         const normalize = (text) => String(text || '').trim();
+
+        function normalizeTimeValue(raw) {
+            if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
+                return `${String(raw.getHours()).padStart(2, '0')}:${String(raw.getMinutes()).padStart(2, '0')}`;
+            }
+
+            const text = String(raw ?? '').trim();
+            if (!text) return '';
+
+            const match = text.match(/^(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*([ap]m)?$/i);
+            if (match) {
+                let hours = Number(match[1]);
+                const minutes = Number(match[2]);
+                const meridiem = String(match[3] || '').toLowerCase();
+
+                if (meridiem) {
+                    if (hours < 1 || hours > 12) return '';
+                    if (meridiem === 'am' && hours === 12) hours = 0;
+                    if (meridiem === 'pm' && hours !== 12) hours += 12;
+                }
+
+                if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
+                    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                }
+            }
+
+            const parsed = new Date(text);
+            if (!Number.isNaN(parsed.getTime())) {
+                return `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}`;
+            }
+
+            return '';
+        }
+
+        function setTimeValue(selector, raw) {
+            const input = $(selector);
+            if (!input) return '';
+            const normalized = normalizeTimeValue(raw);
+            input.value = normalized;
+
+            if (normalized && input.value !== normalized && 'valueAsNumber' in input) {
+                const [hours, minutes] = normalized.split(':').map(Number);
+                input.valueAsNumber = ((hours * 60) + minutes) * 60000;
+            }
+
+            return input.value;
+        }
         const unique = (items) => Array.from(new Set((items || []).map(normalize).filter(Boolean)));
         const labelOf = (item) => typeof item === 'string' ? item : (item?.label || item?.name || item?.id || '');
         const contractLabel = (contract = {}) => contract.label || [contract.id || contract.contractId, contract.name || contract.partyName].filter(Boolean).join(' - ');
         const contractLabels = unique((masters.contracts || []).map(contractLabel));
+
+        logs = logs.map((row) => {
+            const startTime = normalizeTimeValue(row?.startTime);
+            const endTime = normalizeTimeValue(row?.endTime);
+            return {
+                ...row,
+                startTime,
+                endTime,
+                hours: startTime && endTime ? calcHours(startTime, endTime) : (row?.hours || '0h 0m'),
+            };
+        });
 
         function saveStore() {
             syncResource('driver_attendance', logs);
@@ -6021,13 +6074,14 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function setNow(fieldId) {
-            const d = new Date();
-            setValue('#' + fieldId, String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'));
+            setTimeValue('#' + fieldId, new Date());
             clearFieldError(document.getElementById(fieldId));
             updateSummary();
         }
 
         function calcHours(start, end) {
+            start = normalizeTimeValue(start);
+            end = normalizeTimeValue(end);
             if (!start || !end) return '0h 0m';
             const [sh, sm] = start.split(':').map(Number);
             const [eh, em] = end.split(':').map(Number);
@@ -6057,6 +6111,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             updateSummary();
             const contract = selectedContract();
             const assignment = selectedAssignment(contract);
+            const startTime = normalizeTimeValue(value('#attendanceStartTime'));
+            const endTime = normalizeTimeValue(value('#attendanceEndTime'));
             return {
                 logId: value('#attendanceId') || genId(),
                 date: value('#attendanceDate'),
@@ -6067,10 +6123,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 vehicleId: assignment?.vehicleId || '',
                 driver: value('#attendanceDriver'),
                 driverId: assignment?.driverId || '',
-                startTime: value('#attendanceStartTime'),
-                endTime: value('#attendanceEndTime'),
+                startTime,
+                endTime,
                 status: statusOverride || selectedStatus,
-                hours: $('#attendanceSummaryHours')?.textContent || '0h 0m',
+                hours: calcHours(startTime, endTime),
                 notes: value('#attendanceNotes').trim(),
                 savedAt: new Date().toISOString(),
             };
@@ -6203,10 +6259,12 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function saveLog(statusOverride) {
-            const row = collect(statusOverride);
-            if (statusOverride !== 'Draft' && !validate(row)) return;
+            const isDraft = statusOverride === 'Draft';
+            const row = collect(isDraft ? 'Draft' : statusOverride);
+            if (isDraft) row.status = 'Draft';
+            if (!isDraft && !validate(row)) return;
             upsert(row);
-            toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Attendance saved. Redirecting to list.');
+            toast(isDraft ? 'Draft saved.' : 'Attendance saved. Redirecting to list.');
             setTimeout(() => {
                 renderList();
                 setVisible('attendanceListPage');
@@ -6225,8 +6283,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const firstVehicle = vehiclesFor(firstContract)[0] || '';
             if (firstVehicle) setValue('#attendanceVehicle', firstVehicle);
             populateDriversBySelection();
-            setValue('#attendanceStartTime', '09:00');
-            setValue('#attendanceEndTime', '17:00');
+            setTimeValue('#attendanceStartTime', '09:00');
+            setTimeValue('#attendanceEndTime', '17:00');
             selectedStatus = 'Completed';
             renderStatusChoices();
             updateSummary();
@@ -6285,8 +6343,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             setValue('#attendanceVehicle', row.vehicle);
             onVehicleChange();
             setValue('#attendanceDriver', row.driver);
-            setValue('#attendanceStartTime', row.startTime);
-            setValue('#attendanceEndTime', row.endTime);
+            setTimeValue('#attendanceStartTime', row.startTime);
+            setTimeValue('#attendanceEndTime', row.endTime);
             selectedStatus = row.status === 'Draft' ? 'Initiated' : row.status;
             renderStatusChoices();
             setValue('#attendanceNotes', row.notes);
@@ -6296,9 +6354,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
         function viewLog(id) {
             const row = logs.find((item) => item.logId === id);
-            if (row) {
-                alert(`${row.logId}\nDate: ${row.date}\nContract: ${row.contract}\nVehicle: ${row.vehicle}\nDriver: ${row.driver}\nTime: ${row.startTime} to ${row.endTime || '-'}\nHours: ${row.hours}\nStatus: ${row.status}\nNotes: ${row.notes || '-'}`);
-            }
+            if (row) window.FleetmanDetailViewer?.show('Driver Attendance Details', row);
         }
 
         function deleteLog(id) {
@@ -7295,12 +7351,27 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         $('#licenceTypeMasterName')?.addEventListener('input', () => {
             if (!value('#licenceTypeMasterCode') || !value('#licenceTypeEditingCode')) setValue('#licenceTypeMasterCode', codeFrom(value('#licenceTypeMasterName')));
         });
-        $('#driverContactTypeMasterName')?.addEventListener('input', () => {
-            if (!value('#driverContactTypeMasterCode') || !value('#driverContactTypeEditingCode')) setValue('#driverContactTypeMasterCode', codeFrom(value('#driverContactTypeMasterName')));
-        });
-        $('#paymentTypeMasterName')?.addEventListener('input', () => {
-            if (!value('#paymentTypeMasterCode') || !value('#paymentTypeEditingCode')) setValue('#paymentTypeMasterCode', codeFrom(value('#paymentTypeMasterName')));
-        });
+        function bindMasterCodeGenerator(nameSelector, codeSelector, editingSelector = '') {
+            const nameInput = $(nameSelector);
+            const codeInput = $(codeSelector);
+            if (!nameInput || !codeInput) return;
+
+            const initialCode = codeInput.value.trim();
+            nameInput.addEventListener('input', () => {
+                const isEditing = editingSelector ? Boolean(value(editingSelector)) : initialCode !== '';
+                if (isEditing) return;
+
+                const name = nameInput.value.trim();
+                codeInput.value = name ? codeFrom(name) : '';
+            });
+        }
+
+        bindMasterCodeGenerator('#clientTypeMasterName', '#clientTypeMasterCode', '#clientTypeEditingCode');
+        bindMasterCodeGenerator('#driverContactTypeMasterName', '#driverContactTypeMasterCode', '#driverContactTypeEditingCode');
+        bindMasterCodeGenerator('#contactMethodMasterName', '#contactMethodMasterCode', '#contactMethodEditingCode');
+        bindMasterCodeGenerator('#fuelTypeMasterName', '#fuelTypeMasterCode', '#fuelTypeEditingCode');
+        bindMasterCodeGenerator('#fuelUnitMasterName', '#fuelUnitMasterCode', '#fuelUnitEditingCode');
+        bindMasterCodeGenerator('#paymentTypeName', '#paymentTypeCode');
 
         document.addEventListener('click', (event) => {
             const editVehicleCategoryBtn = event.target.closest('[data-master-edit-vehicle-category]');
@@ -7595,6 +7666,36 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             });
         }
 
+        function refreshUniqueAssignmentSelects(selectSelector, items, placeholder) {
+            const wrapper = $('#contractAssignments');
+            if (!wrapper) return;
+
+            const selects = $$(selectSelector, wrapper);
+            const selectedValues = selects
+                .map((select) => String(select.value || '').trim())
+                .filter(Boolean);
+
+            selects.forEach((select) => {
+                const current = String(select.value || '').trim();
+                const selectedElsewhere = new Set(
+                    selectedValues
+                        .filter((selected) => selected && selected !== current)
+                        .map((selected) => selected.toLowerCase())
+                );
+                const availableItems = (items || []).filter((item) => {
+                    const itemValue = String(item?.value || item?.id || item?.name || item?.label || item || '').trim();
+                    return itemValue === current || !selectedElsewhere.has(itemValue.toLowerCase());
+                });
+
+                select.innerHTML = optionHtml(availableItems, current, placeholder);
+            });
+        }
+
+        function refreshContractAssignmentOptions() {
+            refreshUniqueAssignmentSelects('.contractAsgDriver', masters.drivers || [], 'Select driver');
+            refreshUniqueAssignmentSelects('.contractAsgVehicle', masters.vehicles || [], 'Select vehicle');
+        }
+
         function addAssignment(row = {}) {
             assignmentCounter += 1;
             const wrapper = $('#contractAssignments');
@@ -7629,10 +7730,43 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     </div>
                 </div>`;
             wrapper.appendChild(card);
+            refreshContractAssignmentOptions();
+        }
+
+        function normalizedContractDocumentNames() {
+            return (documentNames || [])
+                .map((item) => typeof item === 'string'
+                    ? item
+                    : (item?.value || item?.id || item?.name || item?.label || ''))
+                .map((item) => String(item || '').trim())
+                .filter(Boolean);
         }
 
         function refreshContractDocumentOptions() {
-            documentSelects.refresh('#contractDocuments', '.contractDocName', documentNames, 'Select document name');
+            const wrapper = $('#contractDocuments');
+            if (!wrapper) return;
+
+            const selects = $$('.contractDocName', wrapper);
+            const selectedValues = selects
+                .map((select) => String(select.value || '').trim())
+                .filter(Boolean);
+            const availableDocumentNames = normalizedContractDocumentNames();
+
+            selects.forEach((select) => {
+                const current = String(select.value || '').trim();
+                const currentKey = current.toLowerCase();
+                const selectedElsewhere = new Set(
+                    selectedValues
+                        .filter((selected) => selected.toLowerCase() !== currentKey)
+                        .map((selected) => selected.toLowerCase())
+                );
+                const optionsForRow = availableDocumentNames.filter((name) => {
+                    const nameKey = name.toLowerCase();
+                    return nameKey === currentKey || !selectedElsewhere.has(nameKey);
+                });
+
+                select.innerHTML = optionHtml(optionsForRow, current, 'Select document name');
+            });
         }
 
         function addDocument(row = {}) {
@@ -7641,7 +7775,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (!wrapper) return;
             const card = document.createElement('div');
             card.className = 'contract-doc-card';
-            const documentNameOptions = (documentNames || []).map((name) => ({ id: name, label: name }));
+            const documentNameOptions = normalizedContractDocumentNames().map((name) => ({ id: name, label: name }));
             card.innerHTML = `
                 <div class="contract-card-head">
                     <div>
@@ -8005,9 +8139,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
 
         function viewContract(id) {
             const row = contracts.find((item) => item.contractId === id);
-            if (!row) return;
-            const docs = (row.documents || []).map((doc) => doc.name).filter(Boolean).join(', ') || '-';
-            alert(`${row.contractId}\nParty: ${row.partyName}\nContract With: ${row.contractWith}\nStatus: ${row.status}\nSaved As: ${row.savedAs}\nAmount: ${money(row.amount)}\nAssignments: ${(row.assignments || []).length}\nDocuments: ${docs}`);
+            if (row) window.FleetmanDetailViewer?.show('Contract Details', row);
         }
 
         function editContract(id) {
@@ -8063,8 +8195,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const remove = event.target.closest('.remove-contract-card');
             if (remove) {
                 const card = remove.closest('.contract-assignment-card,.contract-doc-card');
+                const assignmentCard = card?.classList.contains('contract-assignment-card');
                 const documentCard = card?.classList.contains('contract-doc-card');
                 card?.remove();
+                if (assignmentCard) refreshContractAssignmentOptions();
                 if (documentCard) refreshContractDocumentOptions();
             }
 
@@ -8110,6 +8244,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         document.addEventListener('change', (event) => {
             const changedField = event.target.closest('#contractCreatePage input, #contractCreatePage select, #contractCreatePage textarea');
             if (changedField) clearContractFieldError(changedField);
+
+            const assignmentSelect = event.target.closest('#contractAssignments .contractAsgDriver, #contractAssignments .contractAsgVehicle');
+            if (assignmentSelect) refreshContractAssignmentOptions();
 
             const documentName = event.target.closest('#contractDocuments .contractDocName');
             if (documentName) refreshContractDocumentOptions();

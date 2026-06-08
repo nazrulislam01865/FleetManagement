@@ -31,7 +31,7 @@ a{color:inherit}
 .menu-item{color:#dce6f8;text-decoration:none;display:flex;align-items:center;gap:9px;padding:10px 9px;border-radius:9px;margin:3px 0;font-size:13px;font-weight:750;opacity:.96}
 .menu-item.active,.menu-item:hover{background:rgba(255,255,255,.095)}
 .menu-nav{flex:1 0 auto;padding-bottom:18px}
-.main-content{flex:1;min-width:0;padding:20px 24px 0}
+.main-content{flex:1;min-width:0;padding:20px 24px 0;min-height:100vh;display:flex;flex-direction:column}.fleet-main-body{flex:1 0 auto;min-width:0}
 .mobile-top{display:none;position:sticky;top:0;z-index:60;background:#0d1629;color:#fff;padding:12px 14px;align-items:center;justify-content:space-between;box-shadow:0 8px 24px rgba(0,0,0,.16)}
 .mobile-top button{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 10px;font-weight:800}.mobile-top b{color:#2383ff;font-size:18px}.mobile-top span{font-size:12px;color:#cbd7e8;font-weight:700}.drawer-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:45}.drawer-open .drawer-backdrop{display:block}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px}.breadcrumb{font-size:13px;color:#6b7890;text-transform:uppercase;font-weight:800}.breadcrumb a{color:var(--blue);font-weight:900;text-decoration:none}.breadcrumb span{margin:0 7px;color:#98a2b3}.top-actions{display:flex;gap:10px;flex-wrap:wrap}
@@ -169,71 +169,102 @@ h1{font-size:24px;margin:0 0 5px}.subtitle{color:var(--muted);margin:0;line-heig
     .repeat-row .remove-row{width:100%!important;margin-top:0!important;}
 }
 
-/* Client page contact-person alignment */
-#clientContacts .contact-row{
-    grid-template-columns:minmax(170px,1.05fr) minmax(140px,.8fr) minmax(170px,1fr) minmax(160px,.9fr);
-    align-items:end;
-    gap:16px 14px;
+/* Client page contact-person responsive layout */
+.client-contact-card{
+    container-type:inline-size;
+    container-name:client-contact-card;
+    min-width:0;
+    max-width:100%;
 }
-#clientContacts .contact-row .field{min-width:0;}
-#clientContacts .contact-row .field label{
-    min-height:44px;
-    display:flex;
-    align-items:flex-end;
-    margin-bottom:8px;
-    line-height:1.18;
+#clientContacts{
+    min-width:0;
+    max-width:100%;
 }
-#clientContacts .contact-row .field:nth-child(5){grid-column:1 / span 3;}
-#clientContacts .contact-row .remove-row{
-    grid-column:4;
-    width:100%;
-    height:46px;
-    min-height:46px;
-    align-self:end;
-    margin:0;
-}
-@media(min-width:1280px){
-    #clientContacts .contact-row{
-        grid-template-columns:minmax(160px,1fr) minmax(145px,.78fr) minmax(160px,.95fr) minmax(155px,.9fr) minmax(210px,1.2fr) minmax(104px,auto);
-    }
-    #clientContacts .contact-row .field:nth-child(5){grid-column:auto;}
-    #clientContacts .contact-row .remove-row{grid-column:auto;min-width:104px;}
-}
-@media(max-width:1050px){
-    #clientContacts .contact-row{grid-template-columns:1fr;}
-    #clientContacts .contact-row .field:nth-child(5),
-    #clientContacts .contact-row .remove-row{grid-column:auto;}
-    #clientContacts .contact-row .field label{min-height:auto;}
-}
-
-/* Final client contact row layout: keeps remove button aligned instead of wrapping under first field */
 #clientContacts .contact-row{
     display:grid!important;
-    grid-template-columns:repeat(4,minmax(0,1fr))!important;
-    grid-template-areas:"clientName clientType clientRole clientPhone" "clientMeta clientMeta clientMeta clientRemove"!important;
-    align-items:start!important;
+    grid-template-columns:minmax(0,1fr)!important;
     gap:16px 14px!important;
+    align-items:start!important;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
 }
-#clientContacts .contact-row>.field:nth-child(1){grid-area:clientName!important;}
-#clientContacts .contact-row>.field:nth-child(2){grid-area:clientType!important;}
-#clientContacts .contact-row>.field:nth-child(3){grid-area:clientRole!important;}
-#clientContacts .contact-row>.field:nth-child(4){grid-area:clientPhone!important;}
-#clientContacts .contact-row>.field:nth-child(5){grid-area:clientMeta!important;}
-#clientContacts .contact-row>.field label{min-height:44px;display:flex;align-items:flex-end;line-height:1.18;margin-bottom:8px;}
+#clientContacts .contact-row>.field,
 #clientContacts .contact-row>.remove-row{
-    grid-area:clientRemove!important;
+    grid-column:auto!important;
+    grid-row:auto!important;
+    grid-area:auto!important;
+    min-width:0!important;
+    max-width:100%!important;
+}
+#clientContacts .contact-row>.field label{
+    min-height:auto;
+    display:block;
+    line-height:1.25;
+    margin-bottom:8px;
+    overflow-wrap:anywhere;
+}
+#clientContacts .contact-row input,
+#clientContacts .contact-row select{
+    display:block;
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+}
+#clientContacts .contact-row>.remove-row{
     width:100%!important;
     min-height:46px!important;
     height:46px!important;
-    margin:52px 0 0!important;
-    align-self:start!important;
+    margin:0!important;
+    align-self:end!important;
 }
-@media(max-width:900px){
-    #clientContacts .contact-row{grid-template-columns:1fr!important;grid-template-areas:none!important;}
-    #clientContacts .contact-row>.field,
-    #clientContacts .contact-row>.remove-row{grid-area:auto!important;}
-    #clientContacts .contact-row>.field label{min-height:auto;}
-    #clientContacts .contact-row>.remove-row{margin:0!important;}
+
+@container client-contact-card (min-width:600px){
+    #clientContacts .contact-row{
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    }
+    #clientContacts .contact-row>.field label{
+        min-height:44px;
+        display:flex;
+        align-items:flex-end;
+    }
+}
+
+@container client-contact-card (min-width:900px){
+    #clientContacts .contact-row{
+        grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    }
+    #clientContacts .contact-row>.field:nth-child(5){
+        grid-column:1 / span 3!important;
+    }
+    #clientContacts .contact-row>.remove-row{
+        grid-column:4!important;
+    }
+}
+
+@container client-contact-card (min-width:1120px){
+    #clientContacts .contact-row{
+        grid-template-columns:minmax(160px,1fr) minmax(145px,.78fr) minmax(160px,.95fr) minmax(155px,.9fr) minmax(210px,1.2fr) minmax(104px,auto)!important;
+    }
+    #clientContacts .contact-row>.field:nth-child(5),
+    #clientContacts .contact-row>.remove-row{
+        grid-column:auto!important;
+    }
+}
+
+@media(max-width:640px){
+    .client-contact-card .section-head{
+        display:grid;
+        grid-template-columns:minmax(0,1fr);
+        align-items:stretch;
+    }
+    .client-contact-card .section-head>div{
+        min-width:0;
+    }
+    .client-contact-card .section-head .btn{
+        width:100%;
+        white-space:normal;
+    }
 }
 
 /* Contract page - prototype-matched dynamic layout */
@@ -466,3 +497,53 @@ td.contract-sticky-1,td.contract-sticky-2,td.contract-sticky-3{background:#fff;z
 /* Laravel-backed Payment Type master */
 .master-actions form{margin:0}
 a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;line-height:38px}
+
+/* Add Log: keep each time field with its own quick actions; status stays on the next row */
+#attendanceAddPage .attendance-time-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:16px;
+    align-items:end;
+}
+#attendanceAddPage .attendance-time-group{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto auto;
+    gap:10px;
+    align-items:end;
+    min-width:0;
+}
+#attendanceAddPage .attendance-time-group .field{min-width:0;}
+#attendanceAddPage .attendance-time-group .btn{min-width:104px;}
+#attendanceAddPage .attendance-status-row{margin-top:16px;}
+@media(max-width:1180px){
+    #attendanceAddPage .attendance-time-grid{grid-template-columns:1fr;}
+}
+@media(max-width:650px){
+    #attendanceAddPage .attendance-time-group{grid-template-columns:1fr 1fr;}
+    #attendanceAddPage .attendance-time-group .field{grid-column:1 / -1;}
+    #attendanceAddPage .attendance-time-group .btn{width:100%;min-width:0;}
+}
+
+/* Role creation and mobile sidebar scrolling */
+@media(max-width:1050px){
+    .sidebar{
+        height:100vh;
+        height:100dvh;
+        max-height:100vh;
+        max-height:100dvh;
+        min-height:0;
+        overflow-y:auto;
+        overflow-x:hidden;
+        -webkit-overflow-scrolling:touch;
+        touch-action:pan-y;
+    }
+    .sidebar .menu-nav{flex:0 0 auto;min-height:0;}
+    .sidebar .logout-form-bottom{
+        flex:0 0 auto;
+        margin-top:16px;
+        padding-bottom:calc(8px + env(safe-area-inset-bottom));
+    }
+}
+@media(max-width:760px){
+    .role-create-grid{grid-template-columns:1fr;}
+}

@@ -61,6 +61,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/vehicles', [VehicleController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':vehicles.view')
         ->name('vehicles');
+    Route::get('/vehicles/{code}', [VehicleController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':vehicles.view')
+        ->name('vehicles.show');
     Route::post('/vehicles/sync', [VehicleController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':vehicles.manage')
         ->name('vehicles.sync');
@@ -68,6 +71,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/fuel-prices', [FuelPriceController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':fuel_prices.view')
         ->name('fuel-prices');
+    Route::get('/fuel-prices/{code}', [FuelPriceController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':fuel_prices.view')
+        ->name('fuel-prices.show');
     Route::post('/fuel-prices/sync', [FuelPriceController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':fuel_prices.manage')
         ->name('fuel-prices.sync');
@@ -75,6 +81,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/fuel-recharge', [FuelRechargeController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':fuel_recharge.view')
         ->name('fuel-recharge');
+    Route::get('/fuel-recharge/{code}', [FuelRechargeController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':fuel_recharge.view')
+        ->name('fuel-recharge.show');
     Route::post('/fuel-recharge/sync', [FuelRechargeController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':fuel_recharge.manage')
         ->name('fuel-recharge.sync');
@@ -89,6 +98,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/vendors', [VendorPartyController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':vendors.view')
         ->name('vendors');
+    Route::get('/vendors/{code}', [VendorPartyController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':vendors.view')
+        ->name('vendors.show');
     Route::post('/vendors/sync', [VendorPartyController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':vendors.manage')
         ->name('vendors.sync');
@@ -99,6 +111,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/trips', [TripController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':trips.view')
         ->name('trips');
+    Route::get('/trips/{code}', [TripController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':trips.view')
+        ->name('trips.show');
     Route::post('/trips/sync', [TripController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':trips.manage')
         ->name('trips.sync');
@@ -106,6 +121,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/drivers', [DriverController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':drivers.view')
         ->name('drivers');
+    Route::get('/drivers/{code}', [DriverController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':drivers.view')
+        ->name('drivers.show');
     Route::post('/drivers/sync', [DriverController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':drivers.manage')
         ->name('drivers.sync');
@@ -113,6 +131,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/driver-attendance', [DriverAttendanceController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':driver_attendance.view')
         ->name('driver-attendance');
+    Route::get('/driver-attendance/{code}', [DriverAttendanceController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':driver_attendance.view')
+        ->name('driver-attendance.show');
     Route::post('/driver-attendance/sync', [DriverAttendanceController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':driver_attendance.manage')
         ->name('driver-attendance.sync');
@@ -120,6 +141,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/employees', [EmployeeController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':employees.view')
         ->name('employees');
+    Route::get('/employees/{code}', [EmployeeController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':employees.view')
+        ->name('employees.show');
     Route::post('/employees/sync', [EmployeeController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':employees.manage')
         ->name('employees.sync');
@@ -127,6 +151,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/contracts', [ContractController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':contracts.view')
         ->name('contracts');
+    Route::get('/contracts/{code}', [ContractController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':contracts.view')
+        ->name('contracts.show');
     Route::post('/contracts/sync', [ContractController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':contracts.manage')
         ->name('contracts.sync');
@@ -134,6 +161,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/clients', [ClientController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':clients.view')
         ->name('clients');
+    Route::get('/clients/{code}', [ClientController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':clients.view')
+        ->name('clients.show');
     Route::post('/clients/sync', [ClientController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':clients.manage')
         ->name('clients.sync');
@@ -210,6 +240,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/role-matrix', [RoleMatrixController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':role_matrix.view')
         ->name('role-matrix');
+    Route::post('/role-matrix/roles', [RoleMatrixController::class, 'storeRole'])
+        ->middleware(EnsureFleetPermission::class.':role_matrix.manage')
+        ->name('role-matrix.roles.store');
     Route::post('/role-matrix/users', [RoleMatrixController::class, 'storeUser'])
         ->middleware(EnsureFleetPermission::class.':users.manage')
         ->name('role-matrix.users.store');

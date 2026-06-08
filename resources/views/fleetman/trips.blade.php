@@ -26,23 +26,9 @@
                     </div>
 
                     <div class="grid" style="margin-top:16px">
-                        <div class="field searchable" id="tripVehicleField">
-                            <div class="search-label">
-                                <label for="tripVehicle">Vehicle <span class="req">*</span></label>
-                                <span class="search-tag">Searchable</span>
-                            </div>
-                            <input id="tripVehicle" list="tripVehicleList" placeholder="Type vehicle ID, name, or registration" autocomplete="off" required>
-                            <datalist id="tripVehicleList"></datalist>
-                        </div>
+                        <x-fleetman.input id="tripVehicle" label="Vehicle" placeholder="Enter vehicle" autocomplete="off" required />
 
-                        <div class="field searchable" id="tripDriverField">
-                            <div class="search-label">
-                                <label for="tripDriver">Driver <span class="req">*</span></label>
-                                <span class="search-tag">Searchable</span>
-                            </div>
-                            <input id="tripDriver" list="tripDriverList" placeholder="Type driver ID, name, or phone" autocomplete="off" required>
-                            <datalist id="tripDriverList"></datalist>
-                        </div>
+                        <x-fleetman.input id="tripDriver" label="Driver" placeholder="Enter driver" autocomplete="off" required />
                     </div>
 
                     <div class="grid" style="margin-top:18px">

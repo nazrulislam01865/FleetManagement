@@ -161,6 +161,8 @@ class FuelRechargeController extends FleetBaseController
                 continue;
             }
 
+            unset($row['submittedAt'], $row['submittedLocation']);
+
             // Versioned rows are created by the fuel-aware Add Fuel form. Old
             // saved rows remain readable and are not rejected during a full sync.
             $strictFuelRules = (int) ($row['stationFuelFilterVersion'] ?? 0) >= 1;
@@ -293,8 +295,8 @@ class FuelRechargeController extends FleetBaseController
         }
         if ($endKmRaw === null || $endKmRaw === '' || ! is_numeric($endKmRaw) || (float) $endKmRaw <= 0) {
             $errors["{$prefix}.endKm"] = 'End KM is required and must be greater than zero.';
-        } elseif (is_numeric($startKmRaw) && (float) $endKmRaw < (float) $startKmRaw) {
-            $errors["{$prefix}.endKm"] = 'End KM cannot be lower than Start KM.';
+        } elseif (is_numeric($startKmRaw) && (float) $endKmRaw <= (float) $startKmRaw) {
+            $errors["{$prefix}.endKm"] = 'Ending KM must be greater than Starting KM.';
         }
 
         if ($this->textLength((string) ($row['remarks'] ?? '')) > 2000) {
