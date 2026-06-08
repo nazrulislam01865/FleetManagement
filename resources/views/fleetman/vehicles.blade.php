@@ -64,7 +64,22 @@
                     </div>
                     <div class="grid" style="margin-top:16px">
                         <x-fleetman.select id="rentalType" label="Rental Type" :options="['With Driver', 'Without Driver']" placeholder="Select rental type" required />
-                        <x-fleetman.select id="driver" label="Driver" :options="$fleetman['options']['drivers']" placeholder="Select driver" required />
+                        <div class="field searchable">
+                            <div class="search-label">
+                                <label for="driver">Driver <span class="req">*</span></label>
+                                <span class="search-tag">Searchable</span>
+                            </div>
+                            <input id="driver" list="vehicleDriverList" placeholder="Type to search and select a driver" autocomplete="off" required aria-required="true">
+                            <datalist id="vehicleDriverList">
+                                @foreach ($fleetman['options']['drivers'] as $driverOptionValue => $driverOptionLabel)
+                                    @php
+                                        $driverValue = is_int($driverOptionValue) ? $driverOptionLabel : $driverOptionValue;
+                                        $driverLabel = is_array($driverOptionLabel) ? ($driverOptionLabel['label'] ?? $driverValue) : $driverOptionLabel;
+                                    @endphp
+                                    <option value="{{ $driverValue }}">{{ $driverLabel }}</option>
+                                @endforeach
+                            </datalist>
+                        </div>
                     </div>
                     <div id="driverPaymentFields" class="grid" style="margin-top:16px">
                         <x-fleetman.input id="driverPaymentAmount" label="Driver Payment Amount" type="number" min="0" step="0.01" placeholder="0.00" required />

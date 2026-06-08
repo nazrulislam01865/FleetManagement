@@ -445,7 +445,7 @@ abstract class FleetBaseController extends Controller
     {
         return [
             'vendors' => $this->uniqueValues($this->payloadColumn(FleetVendorParty::class, 'partyName')),
-            'vehicle_vendors' => $this->driverVendorValues(),
+            'vehicle_vendors' => $this->vehicleVendorValues(),
             'driver_vendors' => $this->driverVendorValues(),
             'drivers' => $this->uniqueValues($this->payloadColumn(FleetDriver::class, 'fullName')),
             'vehicle_categories' => $this->vehicleCategoryOptions(),
@@ -564,6 +564,56 @@ abstract class FleetBaseController extends Controller
         return count($values) > 0
             ? $values
             : config('fleetman.options.vendor_contractor_types', ['Car Related', 'Non-Car Related']);
+    }
+
+    protected function vehicleVendorValues(): array
+    {
+        if (! Schema::hasTable('fleet_vendor_parties')) {
+            return [];
+        }
+
+        return FleetVendorParty::query()
+            ->where('status', 'Active')
+            ->orderBy('name')
+            ->orderBy('code')
+            ->get()
+            ->map(fn (FleetVendorParty $party) => $party->payload ?? [])
+            ->filter(function (array $party): bool {
+                $partyType = strtolower(trim((string) ($party['partyType'] ?? '')));
+
+                if ($partyType === '') {
+                    return false;
+                }
+
+                $allowedPartyTypes = [
+                    'transport vendor',
+                    'driver supply vendor',
+                    'vehicle owner',
+                    'car owner',
+                    'vehicle service vendor',
+                    'car service vendor',
+                    'driver service vendor',
+                ];
+
+                if (in_array($partyType, $allowedPartyTypes, true)) {
+                    return true;
+                }
+
+                return str_contains($partyType, 'transport')
+                    || (str_contains($partyType, 'vehicle') && str_contains($partyType, 'owner'))
+                    || (str_contains($partyType, 'car') && str_contains($partyType, 'owner'))
+                    || (str_contains($partyType, 'vehicle') && str_contains($partyType, 'service'))
+                    || (str_contains($partyType, 'car') && str_contains($partyType, 'service'))
+                    || (str_contains($partyType, 'driver') && (
+                        str_contains($partyType, 'supply')
+                        || str_contains($partyType, 'service')
+                    ));
+            })
+            ->map(fn (array $party): string => trim((string) ($party['partyName'] ?? '')))
+            ->filter()
+            ->unique(fn (string $name): string => strtolower($name))
+            ->values()
+            ->all();
     }
 
     protected function driverVendorValues(): array

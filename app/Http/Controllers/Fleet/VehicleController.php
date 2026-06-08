@@ -232,7 +232,7 @@ class VehicleController extends FleetBaseController
     private function validateVehicleRows(array $rows, Request $request): void
     {
         $errors = [];
-        $vehicleVendors = $this->driverVendorValues();
+        $vehicleVendors = $this->vehicleVendorValues();
         $drivers = $this->optionsFromDatabase()['drivers'] ?? [];
         $categories = array_keys($this->vehicleCategoryOptions());
         $usageTypes = collect($this->choiceValues('usage_type'))->pluck('value')->filter()->values()->all();
@@ -267,7 +267,7 @@ class VehicleController extends FleetBaseController
                 'subCategory' => ['nullable', 'string', 'max:255'],
                 'usage' => ['required', Rule::in($usageTypes)],
                 'rentalType' => ['required', Rule::in(['With Driver', 'Without Driver'])],
-                'driver' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', Rule::in($drivers)],
+                'driver' => ['required', Rule::in($drivers)],
                 'driverPaymentAmount' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', 'numeric', 'min:0'],
                 'driverPaymentCycle' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', Rule::in($paymentCycles)],
                 'vehicleRentalAmount' => ['required', 'numeric', 'min:0'],
@@ -285,7 +285,7 @@ class VehicleController extends FleetBaseController
 
             $validator = Validator::make($row, $rules, [
                 'regNo.regex' => 'Registration Number must use the format ABC-AB-12-3456.',
-                'vendor.in' => 'Select an active car-related vendor.',
+                'vendor.in' => 'Select an active vehicle or driver service vendor / owner.',
                 'engineNo.regex' => 'Engine Number must contain exactly 17 letters or digits.',
                 'driver.in' => 'Select a valid driver.',
             ]);

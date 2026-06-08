@@ -940,11 +940,20 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function toggleRentalFields() {
             const withDriver = value('#rentalType') === 'With Driver';
-            const driverField = $('#driver')?.closest('.field');
+            const driver = $('#driver');
             const wrapper = $('#driverPaymentFields');
-            driverField?.classList.toggle('hidden', !withDriver);
+
+            // A vehicle must always have a selected driver, even when the
+            // rental agreement itself is marked as "Without Driver".
+            driver?.closest('.field')?.classList.remove('hidden');
+            if (driver) {
+                driver.required = true;
+                driver.setAttribute('aria-required', 'true');
+            }
+
+            // Only the driver's payment information depends on rental type.
             wrapper?.classList.toggle('hidden', !withDriver);
-            ['#driver', '#driverPaymentAmount', '#driverPaymentCycle'].forEach((selector) => {
+            ['#driverPaymentAmount', '#driverPaymentCycle'].forEach((selector) => {
                 const field = $(selector);
                 if (!field) return;
                 field.required = withDriver;
@@ -1276,6 +1285,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 ['#engineNo', 'Engine Number is required.'],
                 ['#category', 'Vehicle Category is required.'],
                 ['#rentalType', 'Rental Type is required.'],
+                ['#driver', 'Driver is required.'],
                 ['#vehicleRentalAmount', 'Vehicle Rental Amount is required.'],
                 ['#vehiclePaymentCycle', 'Vehicle Payment Cycle is required.'],
             ].forEach(([selector, message]) => {
@@ -1297,11 +1307,17 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 invalidate(engineInput, 'Engine Number must contain exactly 17 letters or digits.');
             }
 
+            const driver = $('#driver');
+            const validDriverValues = new Set(
+                $$('#vehicleDriverList option').map((option) => String(option.value || '').trim())
+            );
+            if (driver?.value && !validDriverValues.has(String(driver.value).trim())) {
+                invalidate(driver, 'Select a valid driver from the searchable list.');
+            }
+
             if (vehicle.rentalType === 'With Driver') {
-                const driver = $('#driver');
                 const amount = $('#driverPaymentAmount');
                 const cycle = $('#driverPaymentCycle');
-                if (!driver?.value) invalidate(driver, 'Driver is required.');
                 if (!String(amount?.value || '').trim()) invalidate(amount, 'Driver Payment Amount is required.');
                 else if (Number(amount.value) < 0) invalidate(amount, 'Driver Payment Amount cannot be negative.');
                 if (!cycle?.value) invalidate(cycle, 'Driver Payment Cycle is required.');
@@ -1976,6 +1992,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         let recharges = Array.isArray(records.fuel_recharges) ? records.fuel_recharges.slice() : [];
         let activeCameraKey = null;
         let activeStream = null;
+        let editingRechargeId = '';
+        let editingRechargeDate = '';
 
         function endpoint() {
             return resources?.fuel_recharges?.sync || null;
@@ -2842,9 +2860,47 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }]));
         }
 
+        function restoreRechargePhotos(row = {}) {
+            const savedPhotos = row.photos && typeof row.photos === 'object' ? row.photos : {};
+
+            Object.keys(photoState).forEach((key) => {
+                const saved = savedPhotos[key] && typeof savedPhotos[key] === 'object' ? savedPhotos[key] : {};
+                const nestedFile = saved.file && typeof saved.file === 'object' ? saved.file : {};
+                const fileData = Object.keys(nestedFile).length ? nestedFile : saved;
+                const hasFile = Boolean(fileData.tempToken || fileData.filePath || fileData.fileUrl || fileData.previewUrl || fileData.url);
+                const capturedAt = saved.capturedAt || saved.uploadedAt || '';
+                const preview = hasFile ? uploadManager.permanentUrl(fileData) : '';
+                const card = $(`.photo-card[data-key="${String(key).replace(/[^a-zA-Z0-9_-]/g, '')}"]`);
+                const hidden = $('.photoTempFile', card);
+
+                photoState[key] = {
+                    captured: hasFile,
+                    file: null,
+                    fileData: hasFile ? fileData : {},
+                    preview,
+                    capturedAt,
+                    displayTime: saved.time || (capturedAt ? new Date(capturedAt).toLocaleString() : ''),
+                    place: saved.place || saved.placeName || '',
+                };
+
+                uploadManager.writeHidden(hidden, hasFile ? fileData : {});
+                uploadManager.render({
+                    info: $('.photo-upload-info', card),
+                    progress: $('.photoUploadProgress', card),
+                    file: hasFile ? fileData : {},
+                    showPreview: false,
+                });
+                updatePhotoCard(key);
+            });
+
+            updateCounter();
+        }
+
         function resetFuelRechargeForm() {
             closeCamera();
             clearRechargeValidation();
+            editingRechargeId = '';
+            editingRechargeDate = '';
             setValue('#contractSelect', '');
             updateVehicles();
             Object.keys(photoState).forEach((key) => {
@@ -2873,7 +2929,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function collectRecharge(statusOverride, submitLocation = null) {
             const contract = selectedContract();
             const vehicle = selectedVehicle();
-            const rechargeId = nextRechargeId();
+            const rechargeId = editingRechargeId || nextRechargeId();
             const primaryName = value('#primaryFuelName') || vehicle?.primary || '';
             const secondaryEnabled = Boolean($('#hasSecondaryFuel')?.checked);
             const secondaryName = secondaryEnabled ? (value('#secondaryFuelName') || vehicle?.secondary || '') : '';
@@ -2893,7 +2949,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 rechargeId,
                 stationFuelFilterVersion: 1,
                 rechargeValidationVersion: 2,
-                date: new Date().toISOString().slice(0, 10),
+                date: editingRechargeDate || new Date().toISOString().slice(0, 10),
                 contractId: contract?.contractId || contract?.id || '',
                 contract: contract?.label || $('#contractSelect option:checked')?.textContent || '',
                 contractLabel: contract?.label || '',
@@ -2954,14 +3010,20 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             await uploadManager.waitForInputs($$('.photo-card'));
             const row = collectRecharge(statusOverride, submitLocation);
             const previousRows = JSON.parse(JSON.stringify(recharges || []));
-            recharges.unshift(row);
+            const existingIndex = editingRechargeId
+                ? recharges.findIndex((item) => item.rechargeId === editingRechargeId)
+                : -1;
+
+            if (existingIndex >= 0) recharges[existingIndex] = row;
+            else recharges.unshift(row);
+
             const result = await syncFuelRecharges(recharges);
             if (result?.syncFailed || result?.ok === false) {
                 recharges = previousRows;
                 return null;
             }
             if (Array.isArray(result?.rows)) recharges = result.rows;
-            return row;
+            return recharges.find((item) => item.rechargeId === row.rechargeId) || row;
         }
 
         function rechargeFieldContainer(element) {
@@ -3275,6 +3337,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const row = recharges.find((item) => item.rechargeId === id);
             if (!row) return;
             resetFuelRechargeForm();
+            editingRechargeId = row.rechargeId || '';
+            editingRechargeDate = row.date || '';
             setValue('#contractSelect', row.contractId || '');
             updateVehicles();
             setValue('#vehicleSelect', row.vehicleId || '');
@@ -3294,6 +3358,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#startKm', row.startKm ?? value('#startKm'));
             setValue('#endKm', row.endKm ?? '');
             setValue('#rechargeRemarks', row.remarks || '');
+            restoreRechargePhotos(row);
             recalculate();
             setVisible('rechargeAddPage');
         }
@@ -6190,23 +6255,27 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function driversFor(contract, vehicle = '') {
-            if (!contract) return [];
             const currentVehicle = normalize(vehicle);
-            const assignments = assignmentsFor(contract).filter((assignment) => !currentVehicle || vehicleLabel(assignment) === currentVehicle);
-            const fromAssignments = assignments.map(driverLabel);
-            const fromContract = currentVehicle ? [] : (contract.drivers || []).map(labelOf);
-            return unique([...fromAssignments, ...fromContract]);
+            if (!contract || !currentVehicle) return [];
+
+            return unique(
+                assignmentsFor(contract)
+                    .filter((assignment) => vehicleLabel(assignment) === currentVehicle)
+                    .map(driverLabel)
+            );
         }
 
         function selectedAssignment(contract = selectedContract()) {
             if (!contract) return null;
+
             const currentVehicle = normalize(value('#attendanceVehicle'));
             const currentDriver = normalize(value('#attendanceDriver'));
-            return assignmentsFor(contract).find((assignment) => {
-                const vehicleMatches = !currentVehicle || vehicleLabel(assignment) === currentVehicle;
-                const driverMatches = !currentDriver || driverLabel(assignment) === currentDriver;
-                return vehicleMatches && driverMatches;
-            }) || assignmentsFor(contract).find((assignment) => vehicleLabel(assignment) === currentVehicle) || null;
+            if (!currentVehicle || !currentDriver) return null;
+
+            return assignmentsFor(contract).find((assignment) => (
+                vehicleLabel(assignment) === currentVehicle
+                && driverLabel(assignment) === currentDriver
+            )) || null;
         }
 
         function populateBase() {
@@ -6215,7 +6284,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             fillDatalist('attendanceFilterContractList', contractLabels);
         }
 
-        function populateDriversBySelection() {
+        function populateDriversBySelection({ clearSelection = false } = {}) {
+            if (clearSelection) {
+                setValue('#attendanceDriver', '');
+            }
+
             const found = selectedContract();
             const drivers = driversFor(found, value('#attendanceVehicle'));
             fillDatalist('attendanceDriverList', drivers);
@@ -6223,17 +6296,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (value('#attendanceDriver') && !drivers.includes(value('#attendanceDriver'))) {
                 setValue('#attendanceDriver', '');
             }
-
-            const assigned = selectedAssignment(found);
-            const assignedDriver = assigned ? driverLabel(assigned) : '';
-            if (assignedDriver) {
-                setValue('#attendanceDriver', assignedDriver);
-            } else if (!value('#attendanceDriver') && drivers.length === 1) {
-                setValue('#attendanceDriver', drivers[0]);
-            }
         }
 
-        function populateByContract() {
+        function populateByContract({ clearSelection = false } = {}) {
+            if (clearSelection) {
+                setValue('#attendanceVehicle', '');
+                setValue('#attendanceDriver', '');
+            }
+
             const found = selectedContract();
             const vehicles = vehiclesFor(found);
             fillDatalist('attendanceVehicleList', vehicles);
@@ -6242,15 +6312,15 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 setValue('#attendanceVehicle', '');
             }
 
-            if (!value('#attendanceVehicle') && vehicles.length === 1) {
-                setValue('#attendanceVehicle', vehicles[0]);
-            }
+            populateDriversBySelection({ clearSelection });
+        }
 
-            populateDriversBySelection();
+        function onContractChange() {
+            populateByContract({ clearSelection: true });
         }
 
         function onVehicleChange() {
-            populateDriversBySelection();
+            populateDriversBySelection({ clearSelection: true });
         }
 
         function renderStatusChoices() {
@@ -6460,22 +6530,17 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function loadSample() {
             resetForm();
-            const firstContract = (masters.contracts || [])[0];
-            if (!firstContract) {
+            if (!(masters.contracts || []).length) {
                 toast('No saved contract assignment found. Please create a contract first.');
                 return;
             }
-            setValue('#attendanceContract', contractLabel(firstContract));
-            populateByContract();
-            const firstVehicle = vehiclesFor(firstContract)[0] || '';
-            if (firstVehicle) setValue('#attendanceVehicle', firstVehicle);
-            populateDriversBySelection();
+
             setTimeValue('#attendanceStartTime', '09:00');
             setTimeValue('#attendanceEndTime', '17:00');
             selectedStatus = 'Completed';
             renderStatusChoices();
             updateSummary();
-            toast('First saved contract assignment loaded.');
+            toast('Select the contract, vehicle, and driver from the searchable lists.');
         }
 
         function badgeClass(status) {
@@ -6558,8 +6623,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             exportCsv(rows, 'fleetman-driver-attendance-list.csv');
         }
 
-        $('#attendanceContract')?.addEventListener('change', populateByContract);
-        $('#attendanceContract')?.addEventListener('input', populateByContract);
+        $('#attendanceContract')?.addEventListener('change', onContractChange);
+        $('#attendanceContract')?.addEventListener('input', onContractChange);
         $('#attendanceVehicle')?.addEventListener('change', onVehicleChange);
         $('#attendanceVehicle')?.addEventListener('input', onVehicleChange);
         ['#attendanceStartTime', '#attendanceEndTime'].forEach((selector) => $(selector)?.addEventListener('input', updateSummary));
