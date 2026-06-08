@@ -13,10 +13,7 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Client Type Master']])]); ?>
-         <?php $__env->slot('actions', null, []); ?> 
-            <a href="<?php echo e(route('fleet.master-data.party-types')); ?>" class="btn secondary">Party Type Master</a>
-            <span class="badge soft">Database backed dropdown values</span>
-         <?php $__env->endSlot(); ?>
+
      <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b)): ?>
@@ -52,15 +49,15 @@
     <div class="master-overview-grid">
         <a class="master-overview-card master-overview-link" href="<?php echo e(route('fleet.master-data.party-types')); ?>">
             <div class="master-overview-icon">🤝</div>
-            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available for Vendor / Party dropdowns</span></div>
+            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available </span></div>
         </a>
         <a class="master-overview-card master-overview-link" href="<?php echo e(route('fleet.master-data.document-names')); ?>">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available for document dropdowns</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available </span></div>
         </a>
         <div class="master-overview-card">
             <div class="master-overview-icon">🏢</div>
-            <div><strong id="masterClientTypeCount">0</strong><span>Client types available for Client dropdowns</span></div>
+            <div><strong id="masterClientTypeCount">0</strong><span>Client types available </span></div>
         </div>
     </div>
 
@@ -68,7 +65,6 @@
         <div class="section-head">
             <div>
                 <h2>Client Type Master</h2>
-                <p>Add client types once and use them in client related dropdowns across the app.</p>
             </div>
             <button type="button" class="btn light" id="resetClientTypeMasterBtn">Reset</button>
         </div>
@@ -97,14 +93,14 @@
 <?php endif; ?>
             <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'clientTypeMasterCode','label' => 'Code','placeholder' => 'Example: CORPORATE','hint' => 'Code is auto-generated but can be edited before save.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'clientTypeMasterCode','label' => 'Code','placeholder' => 'Example: CORPORATE']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.input'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'clientTypeMasterCode','label' => 'Code','placeholder' => 'Example: CORPORATE','hint' => 'Code is auto-generated but can be edited before save.']); ?>
+<?php $component->withAttributes(['id' => 'clientTypeMasterCode','label' => 'Code','placeholder' => 'Example: CORPORATE']); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
@@ -184,7 +180,7 @@
         </form>
 
         <div class="master-table-title">
-            <div><b>Added Client Types</b><small>These rows are stored in the fleet_client_types table.</small></div>
+            <div><b>Added Client Types</b></div>
         </div>
         <div class="table-wrap master-table-wrap">
             <table>

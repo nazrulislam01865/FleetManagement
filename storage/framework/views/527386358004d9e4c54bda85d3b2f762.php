@@ -24,10 +24,6 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Payment Types']])]); ?>
-         <?php $__env->slot('actions', null, []); ?> 
-            <a href="<?php echo e(route('fleet.trips', ['action' => 'add'])); ?>" class="btn secondary">Open Add Trip</a>
-            <span class="badge soft">Saved directly by Laravel</span>
-         <?php $__env->endSlot(); ?>
      <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b)): ?>
@@ -73,7 +69,7 @@
     <div class="master-overview-grid">
         <div class="master-overview-card">
             <div class="master-overview-icon">💳</div>
-            <div><strong><?php echo e($paymentTypes->where('is_active', true)->count()); ?></strong><span>Active payment types available for Add Trip</span></div>
+            <div><strong><?php echo e($paymentTypes->where('is_active', true)->count()); ?></strong><span>Active payment types available</span></div>
         </div>
     </div>
 
@@ -81,7 +77,6 @@
         <div class="section-head">
             <div>
                 <h2><?php echo e($isEditing ? 'Edit Payment Type' : 'Add Payment Type'); ?></h2>
-                <p>These values are written directly to the Laravel database and are not rebuilt from browser JavaScript.</p>
             </div>
             <a href="<?php echo e(route('fleet.master-data.payment-types')); ?>" class="btn light"><?php echo e($isEditing ? 'Cancel Edit' : 'Reset'); ?></a>
         </div>
@@ -144,7 +139,6 @@ unset($__errorArgs, $__bag); ?>">
                     maxlength="120"
                     pattern="[A-Za-z0-9_]+"
                 >
-                <div class="hint">Leave empty to generate the code in Laravel from the payment type name.</div>
                 <?php $__errorArgs = ['code'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -239,7 +233,7 @@ unset($__errorArgs, $__bag); ?>
         </form>
 
         <div class="master-table-title">
-            <div><b>Added Payment Types</b><small>Only active rows appear in the Add Trip payment-method dropdown.</small></div>
+            <div><b>Added Payment Types</b></div>
         </div>
         <div class="table-wrap master-table-wrap">
             <table>

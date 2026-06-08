@@ -20,15 +20,15 @@
     <div class="master-overview-grid">
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.party-types') }}">
             <div class="master-overview-icon">🤝</div>
-            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available for Vendor / Party dropdowns</span></div>
+            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available</span></div>
         </a>
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.document-names') }}">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available for document dropdowns</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available</span></div>
         </a>
         <div class="master-overview-card">
             <div class="master-overview-icon">🪪</div>
-            <div><strong id="masterLicenceTypeCount">0</strong><span>Licence types available for Driver dropdowns</span></div>
+            <div><strong id="masterLicenceTypeCount">0</strong><span>Licence types available</span></div>
         </div>
     </div>
 
@@ -36,7 +36,6 @@
         <div class="section-head">
             <div>
                 <h2>Licence Type Master</h2>
-                <p>Add licence types once and use them in driver related dropdowns across the app.</p>
             </div>
             <button type="button" class="btn light" id="resetLicenceTypeMasterBtn">Reset</button>
         </div>
@@ -44,7 +43,7 @@
         <form id="licenceTypeMasterForm" class="master-form" autocomplete="off">
             <input type="hidden" id="licenceTypeEditingCode">
             <x-fleetman.input id="licenceTypeMasterName" label="Licence Type Name" placeholder="Example: Heavy" required />
-            <x-fleetman.input id="licenceTypeMasterCode" label="Code" placeholder="Example: HEAVY" hint="Code is auto-generated but can be edited before save." />
+            <x-fleetman.input id="licenceTypeMasterCode" label="Code" placeholder="Example: HEAVY"  />
             <x-fleetman.input id="licenceTypeMasterSort" label="Sort Order" type="number" value="0" min="0" />
             <x-fleetman.select id="licenceTypeMasterStatus" label="Status" :options="['Active', 'Inactive']" value="Active" />
             <div class="master-form-full">
@@ -57,7 +56,7 @@
         </form>
 
         <div class="master-table-title">
-            <div><b>Added Licence Types</b><small>These rows are stored in the fleet_licence_types table.</small></div>
+            <div><b>Added Licence Types</b></div>
         </div>
         <div class="table-wrap master-table-wrap">
             <table>

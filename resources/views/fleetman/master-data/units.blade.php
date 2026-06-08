@@ -6,10 +6,7 @@
 @section('content')
 <div class="page-section master-data-page">
     <x-fleetman.topbar :items="[['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Unit Master']]">
-        <x-slot:actions>
-            <a href="{{ route('fleet.master-data.party-types') }}" class="btn secondary">Party Type Master</a>
-            <span class="badge soft">Database backed dropdown values</span>
-        </x-slot:actions>
+
     </x-fleetman.topbar>
 
     <x-fleetman.title-card
@@ -20,15 +17,15 @@
     <div class="master-overview-grid">
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.party-types') }}">
             <div class="master-overview-icon">🤝</div>
-            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available for Vendor / Party dropdowns</span></div>
+            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available</span></div>
         </a>
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.document-names') }}">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available for document dropdowns</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available</span></div>
         </a>
         <div class="master-overview-card">
             <div class="master-overview-icon">🏢</div>
-            <div><strong id="masterUnitCount">0</strong><span>Units available for Client dropdowns</span></div>
+            <div><strong id="masterUnitCount">0</strong><span>Units available</span></div>
         </div>
     </div>
 
@@ -44,7 +41,7 @@
         <form id="unitMasterForm" class="master-form" autocomplete="off">
             <input type="hidden" id="unitEditingCode">
             <x-fleetman.input id="unitMasterName" label="Unit Name" placeholder="Example: Corporate" required />
-            <x-fleetman.input id="unitMasterCode" label="Code" placeholder="Example: CORPORATE" hint="Code is auto-generated but can be edited before save." />
+            <x-fleetman.input id="unitMasterCode" label="Code" placeholder="Example: CORPORATE" />
             <x-fleetman.input id="unitMasterSort" label="Sort Order" type="number" value="0" min="0" />
             <x-fleetman.select id="unitMasterStatus" label="Status" :options="['Active', 'Inactive']" value="Active" />
             <div class="master-form-full">
@@ -57,7 +54,7 @@
         </form>
 
         <div class="master-table-title">
-            <div><b>Added Units</b><small>These rows are stored in the fleet_units table.</small></div>
+            <div><b>Added Units</b></div>
         </div>
         <div class="table-wrap master-table-wrap">
             <table>

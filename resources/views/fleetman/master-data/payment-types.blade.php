@@ -17,10 +17,6 @@
 
 <div class="page-section master-data-page">
     <x-fleetman.topbar :items="[['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Payment Types']]">
-        <x-slot:actions>
-            <a href="{{ route('fleet.trips', ['action' => 'add']) }}" class="btn secondary">Open Add Trip</a>
-            <span class="badge soft">Saved directly by Laravel</span>
-        </x-slot:actions>
     </x-fleetman.topbar>
 
     <x-fleetman.title-card
@@ -41,7 +37,7 @@
     <div class="master-overview-grid">
         <div class="master-overview-card">
             <div class="master-overview-icon">💳</div>
-            <div><strong>{{ $paymentTypes->where('is_active', true)->count() }}</strong><span>Active payment types available for Add Trip</span></div>
+            <div><strong>{{ $paymentTypes->where('is_active', true)->count() }}</strong><span>Active payment types available</span></div>
         </div>
     </div>
 
@@ -49,7 +45,6 @@
         <div class="section-head">
             <div>
                 <h2>{{ $isEditing ? 'Edit Payment Type' : 'Add Payment Type' }}</h2>
-                <p>These values are written directly to the Laravel database and are not rebuilt from browser JavaScript.</p>
             </div>
             <a href="{{ route('fleet.master-data.payment-types') }}" class="btn light">{{ $isEditing ? 'Cancel Edit' : 'Reset' }}</a>
         </div>
@@ -91,7 +86,6 @@
                     maxlength="120"
                     pattern="[A-Za-z0-9_]+"
                 >
-                <div class="hint">Leave empty to generate the code in Laravel from the payment type name.</div>
                 @error('code')<div class="field-error">{{ $message }}</div>@enderror
             </div>
 
@@ -137,7 +131,7 @@
         </form>
 
         <div class="master-table-title">
-            <div><b>Added Payment Types</b><small>Only active rows appear in the Add Trip payment-method dropdown.</small></div>
+            <div><b>Added Payment Types</b></div>
         </div>
         <div class="table-wrap master-table-wrap">
             <table>

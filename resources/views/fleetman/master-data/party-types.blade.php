@@ -6,10 +6,6 @@
 @section('content')
 <div class="page-section master-data-page">
     <x-fleetman.topbar :items="[['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Party Type Master']]">
-        <x-slot:actions>
-            <a href="{{ route('fleet.master-data.document-names') }}" class="btn secondary">Document Name Master</a>
-            <span class="badge soft">Database backed dropdown values</span>
-        </x-slot:actions>
     </x-fleetman.topbar>
 
     <x-fleetman.title-card
@@ -20,15 +16,15 @@
     <div class="master-overview-grid">
         <div class="master-overview-card">
             <div class="master-overview-icon">🤝</div>
-            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available for Vendor / Party dropdowns</span></div>
+            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available</span></div>
         </div>
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.document-names') }}">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available for document dropdowns</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available</span></div>
         </a>
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.licence-types') }}">
             <div class="master-overview-icon">🪪</div>
-            <div><strong id="masterLicenceTypeCount">0</strong><span>Licence types available for Driver dropdowns</span></div>
+            <div><strong id="masterLicenceTypeCount">0</strong><span>Licence types available</span></div>
         </a>
     </div>
 
@@ -36,7 +32,7 @@
         <div class="section-head">
             <div>
                 <h2>Party Type Master</h2>
-                <p>Add party types once and use them in vendor / party related dropdowns across the app.</p>
+
             </div>
             <button type="button" class="btn light" id="resetPartyTypeMasterBtn">Reset</button>
         </div>
@@ -44,7 +40,7 @@
         <form id="partyTypeMasterForm" class="master-form" autocomplete="off">
             <input type="hidden" id="partyTypeEditingCode">
             <x-fleetman.input id="partyTypeMasterName" label="Party Type Name" placeholder="Example: Fuel Station" required />
-            <x-fleetman.input id="partyTypeMasterCode" label="Code" placeholder="Example: FUEL_STATION" hint="Code is auto-generated but can be edited before save." />
+            <x-fleetman.input id="partyTypeMasterCode" label="Code" placeholder="Example: FUEL_STATION" />
             <x-fleetman.input id="partyTypeMasterSort" label="Sort Order" type="number" value="0" min="0" />
             <x-fleetman.select id="partyTypeMasterStatus" label="Status" :options="['Active', 'Inactive']" value="Active" />
             <div class="master-form-full">
@@ -57,7 +53,7 @@
         </form>
 
         <div class="master-table-title">
-            <div><b>Added Party Types</b><small>These rows are stored in the fleet_party_types table.</small></div>
+            <div><b>Added Party Types</b></div>
         </div>
         <div class="table-wrap master-table-wrap">
             <table>

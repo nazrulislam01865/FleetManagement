@@ -280,7 +280,6 @@ return [
                         ['key' => 'master-data-contact-methods', 'label' => 'Contact Method', 'icon' => '↳', 'route' => 'fleet.master-data.contact-methods', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-fuel-types', 'label' => 'Fuel Type', 'icon' => '↳', 'route' => 'fleet.master-data.fuel-types', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-fuel-units', 'label' => 'Fuel Unit', 'icon' => '↳', 'route' => 'fleet.master-data.fuel-units', 'permission' => 'master_data.view'],
-                        ['key' => 'master-data-vendor-contractor-types', 'label' => 'Vendor / Contractor Type', 'icon' => '↳', 'route' => 'fleet.master-data.vendor-contractor-types', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-payment-types', 'label' => 'Payment Types', 'icon' => '↳', 'route' => 'fleet.master-data.payment-types', 'permission' => 'master_data.view'],
                     ],
                 ],

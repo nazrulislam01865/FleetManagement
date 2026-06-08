@@ -6,10 +6,7 @@
 @section('content')
 <div class="page-section master-data-page">
     <x-fleetman.topbar :items="[['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Document Name Master']]">
-        <x-slot:actions>
-            <a href="{{ route('fleet.master-data.party-types') }}" class="btn secondary">Party Type Master</a>
-            <span class="badge soft">Database backed dropdown values</span>
-        </x-slot:actions>
+
     </x-fleetman.topbar>
 
     <x-fleetman.title-card
@@ -20,15 +17,15 @@
     <div class="master-overview-grid">
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.party-types') }}">
             <div class="master-overview-icon">🤝</div>
-            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available for Vendor / Party dropdowns</span></div>
+            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available </span></div>
         </a>
         <div class="master-overview-card">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available for document dropdowns</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available</span></div>
         </div>
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.licence-types') }}">
             <div class="master-overview-icon">🪪</div>
-            <div><strong id="masterLicenceTypeCount">0</strong><span>Licence types available for Driver dropdowns</span></div>
+            <div><strong id="masterLicenceTypeCount">0</strong><span>Licence types available </span></div>
         </a>
     </div>
 
@@ -36,7 +33,6 @@
         <div class="section-head">
             <div>
                 <h2>Document Name Master</h2>
-                <p>Add document names once and reuse them in vehicle, party, driver, employee, client, and other document dropdowns.</p>
             </div>
             <button type="button" class="btn light" id="resetDocumentNameMasterBtn">Reset</button>
         </div>
@@ -58,7 +54,7 @@
         </form>
 
         <div class="master-table-title">
-            <div><b>Added Document Names</b><small>Active rows are stored in the fleet_document_names table and appear in document dropdowns across the system.</small></div>
+            <div><b>Added Document Names</b></div>
         </div>
         <div class="table-wrap master-table-wrap">
             <table>
