@@ -268,6 +268,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::post('/users', [UserManagementController::class, 'store'])
         ->middleware(EnsureFleetPermission::class.':users.manage')
         ->name('users.store');
+    Route::put('/users/{user}', [UserManagementController::class, 'update'])
+        ->middleware(EnsureFleetPermission::class.':users.manage')
+        ->name('users.update');
 
     Route::get('/role-matrix', [RoleMatrixController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':role_matrix.view')

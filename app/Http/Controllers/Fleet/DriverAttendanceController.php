@@ -126,7 +126,6 @@ class DriverAttendanceController extends FleetBaseController
                 'contract' => 'Contract',
                 'vehicle' => 'Vehicle',
                 'driver' => 'Driver',
-                'startTime' => 'Start time',
                 'status' => 'Status',
             ];
 
@@ -134,6 +133,11 @@ class DriverAttendanceController extends FleetBaseController
                 if (trim((string) ($row[$key] ?? '')) === '') {
                     $errors["rows.$index.$key"] = "$label is required.";
                 }
+            }
+
+            if (in_array($status, ['Running', 'Completed'], true)
+                && trim((string) ($row['startTime'] ?? '')) === '') {
+                $errors["rows.$index.startTime"] = 'Start time is required for a running or completed trip.';
             }
 
             $date = trim((string) ($row['date'] ?? ''));

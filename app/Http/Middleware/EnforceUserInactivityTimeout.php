@@ -14,7 +14,8 @@ class EnforceUserInactivityTimeout
     private const SESSION_KEY = 'fleetman.last_activity_at';
 
     /**
-     * Log authenticated users out after the configured period of inactivity.
+     * Log authenticated users out after the configured period of inactivity
+     * or as soon as an administrator changes their account to a non-active status.
      *
      * @param Closure(Request): Response $next
      */
@@ -22,6 +23,12 @@ class EnforceUserInactivityTimeout
     {
         if (! Auth::check()) {
             return $next($request);
+        }
+
+        $user = $request->user();
+
+        if ($user && method_exists($user, 'isAccountActive') && ! $user->isAccountActive()) {
+            return $this->expireDisabledAccount($request, $user->accountStatusLabel());
         }
 
         $now = now()->timestamp;
@@ -42,18 +49,33 @@ class EnforceUserInactivityTimeout
 
     private function expireSession(Request $request): JsonResponse|RedirectResponse
     {
+        return $this->logoutWithMessage(
+            $request,
+            'Your session expired after 15 minutes of inactivity. Please sign in again.',
+            'Your session expired after 15 minutes of inactivity.'
+        );
+    }
+
+    private function expireDisabledAccount(Request $request, string $statusLabel): JsonResponse|RedirectResponse
+    {
+        return $this->logoutWithMessage(
+            $request,
+            'Your account is currently '.$statusLabel.'. Contact a Super Admin to restore active access.',
+            'Your account is currently '.$statusLabel.'.'
+        );
+    }
+
+    private function logoutWithMessage(Request $request, string $flashMessage, string $jsonMessage): JsonResponse|RedirectResponse
+    {
         Auth::logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        $request->session()->flash(
-            'status',
-            'Your session expired after 15 minutes of inactivity. Please sign in again.'
-        );
+        $request->session()->flash('status', $flashMessage);
 
         if ($request->expectsJson()) {
             return response()->json([
-                'message' => 'Your session expired after 15 minutes of inactivity.',
+                'message' => $jsonMessage,
                 'redirect' => route('login'),
             ], 401);
         }

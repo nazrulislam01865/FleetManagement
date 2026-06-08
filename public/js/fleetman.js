@@ -747,6 +747,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         const extraHidden = (config.extraHidden || []).map((input) =>
             `<input type="hidden" class="${escapeHtml(input.className || '')}" value="${escapeHtml(input.value || '')}">`
         ).join('');
+        const reminderField = config.showReminder === false
+            ? `<input type="hidden" class="${escapeHtml(classes.reminder || '')}" value="${escapeHtml(row.reminder || '')}">`
+            : `<div class="field">
+                <label>Reminder</label>
+                <select class="${escapeHtml(classes.reminder || '')}">${reminderMarkup(config.reminders, row.reminder || '')}</select>
+            </div>`;
 
         element.innerHTML = `
             <div class="field">
@@ -758,10 +764,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 <label>Expiry Date</label>
                 <input class="${escapeHtml(classes.expiry || '')}" type="date" value="${escapeHtml(row.expiry || row.expiryDate || '')}">
             </div>
-            <div class="field">
-                <label>Reminder</label>
-                <select class="${escapeHtml(classes.reminder || '')}">${reminderMarkup(config.reminders, row.reminder || '')}</select>
-            </div>
+            ${reminderField}
             <div class="field">
                 <label>Upload Document <span class="req">*</span></label>
                 <input class="${escapeHtml(classes.file || '')}" type="file" accept="${ACCEPT}" ${config.fileAttributes || ''}>
@@ -2202,8 +2205,20 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return foundKey ? latestFuelRates[foundKey] : null;
         }
 
+        function contractSearchLabel(contract = {}) {
+            return String(contract.label || [contract.id || contract.contractId, contract.partyName || contract.name].filter(Boolean).join(' | ')).trim();
+        }
+
         function selectedContract() {
-            return contracts.find((contract) => String(contract.id) === value('#contractSelect')) || null;
+            const current = String(value('#contractSelect') || '').trim();
+            if (!current) return null;
+            const normalizedCurrent = current.toLowerCase();
+
+            return contracts.find((contract) => {
+                const id = String(contract.id || contract.contractId || '').trim();
+                const label = contractSearchLabel(contract);
+                return id === current || label.toLowerCase() === normalizedCurrent;
+            }) || null;
         }
 
         function vehicleSearchLabel(vehicle = {}) {
@@ -3017,8 +3032,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 rechargeValidationVersion: 2,
                 date: editingRechargeDate || new Date().toISOString().slice(0, 10),
                 contractId: contract?.contractId || contract?.id || '',
-                contract: contract?.label || $('#contractSelect option:checked')?.textContent || '',
-                contractLabel: contract?.label || '',
+                contract: contractSearchLabel(contract || {}),
+                contractLabel: contractSearchLabel(contract || {}),
                 vehicleId: vehicle?.id || '',
                 vehicle: vehicle?.label || vehicle?.name || value('#vehicleSelect') || '',
                 vehicleLabel: vehicle?.label || vehicle?.name || value('#vehicleSelect') || '',
@@ -3405,7 +3420,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             resetFuelRechargeForm();
             editingRechargeId = row.rechargeId || '';
             editingRechargeDate = row.date || '';
-            setValue('#contractSelect', row.contractId || '');
+            const editContract = contracts.find((contract) => String(contract.id || contract.contractId || '') === String(row.contractId || '')
+                || contractSearchLabel(contract).toLowerCase() === String(row.contract || row.contractLabel || '').trim().toLowerCase()) || null;
+            setValue('#contractSelect', editContract ? contractSearchLabel(editContract) : '');
             updateVehicles();
             const editVehicle = (selectedContract()?.vehicles || []).find((vehicle) => {
                 return String(vehicle.id || '') === String(row.vehicleId || '')
@@ -3491,6 +3508,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (control) clearRechargeFieldError(control);
         });
 
+        $('#contractSelect')?.addEventListener('input', updateVehicles);
         $('#contractSelect')?.addEventListener('change', updateVehicles);
         $('#vehicleSelect')?.addEventListener('input', () => {
             if (selectedVehicle()) {
@@ -5514,7 +5532,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const meta=row.whatsapp || row.email || '';
             const div=document.createElement('div');
             div.className='repeat-row contact-row';
-            div.innerHTML=`<div class="field"><label>Contact Person Name <span class="req">*</span></label><input class="clientContactName" required aria-required="true" placeholder="Example: Md. Karim" value="${escapeHtml(row.name||'')}"></div><div class="field"><label>Contact Type <span class="req">*</span></label><select class="clientContactType" required aria-required="true"><option value="">Select Contact Type</option>${((window.FLEETMAN.options||{}).client_contact_methods||[]).map(t => '<option value="'+escapeHtml(t)+'" '+(row.type===t?'selected':'')+'>'+escapeHtml(t)+'</option>').join('')}</select></div><div class="field"><label>Role / Designation <span class="req">*</span></label><input class="clientContactRole" required aria-required="true" placeholder="Example: Operations Manager" value="${escapeHtml(row.role||'')}"></div><div class="field"><label>Phone Number <span class="req">*</span></label><input class="clientContactPhone" type="tel" required aria-required="true" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="01XXXXXXXXX" value="${escapeHtml(row.phone||'')}"></div><div class="field"><label>WhatsApp / Email <span class="req">*</span></label><input class="clientContactMeta" required aria-required="true" placeholder="11-digit WhatsApp or valid email" value="${escapeHtml(meta)}"></div><button type="button" class="mini-btn danger remove-row">Remove</button>`;
+            div.innerHTML=`<div class="field"><label>Contact Person Name <span class="req">*</span></label><input class="clientContactName" required aria-required="true" placeholder="Example: Md. Karim" value="${escapeHtml(row.name||'')}"></div><div class="field"><label>Role / Designation <span class="req">*</span></label><input class="clientContactRole" required aria-required="true" placeholder="Example: Operations Manager" value="${escapeHtml(row.role||'')}"></div><div class="field"><label>Phone Number <span class="req">*</span></label><input class="clientContactPhone" type="tel" required aria-required="true" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" placeholder="01XXXXXXXXX" value="${escapeHtml(row.phone||'')}"></div><div class="field"><label>WhatsApp / Email <span class="req">*</span></label><input class="clientContactMeta" required aria-required="true" placeholder="11-digit WhatsApp or valid email" value="${escapeHtml(meta)}"></div><button type="button" class="mini-btn danger remove-row">Remove</button>`;
             wrapper.appendChild(div);
         }
         function resetForm(){
@@ -5530,8 +5548,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function collect(statusOverride){
             const contacts=$$('#clientContacts .contact-row').map((row)=>{
                 const meta=$('.clientContactMeta',row)?.value.trim()||'';
-                return {name:$('.clientContactName',row)?.value.trim()||'',type:$('.clientContactType',row)?.value||'',role:$('.clientContactRole',row)?.value.trim()||'',phone:$('.clientContactPhone',row)?.value.trim()||'',whatsapp:meta.includes('@')?'':meta,email:meta.includes('@')?meta:''};
-            }).filter((c)=>c.name||c.phone||c.role||c.whatsapp||c.email||c.type);
+                return {name:$('.clientContactName',row)?.value.trim()||'',role:$('.clientContactRole',row)?.value.trim()||'',phone:$('.clientContactPhone',row)?.value.trim()||'',whatsapp:meta.includes('@')?'':meta,email:meta.includes('@')?meta:''};
+            }).filter((c)=>c.name||c.phone||c.role||c.whatsapp||c.email);
             return {clientValidationVersion:1,clientId:value('#clientId').trim(),clientName:value('#clientName').trim(),email:value('#clientEmail').trim(),phone:value('#clientPhone').trim(),whatsapp:value('#clientWhatsapp').trim(),reference:value('#clientReference').trim(),clientType:value('#clientType'),status:statusOverride||value('#clientStatus'),contactMethod:value('#clientContactMethod'),address:value('#clientAddress').trim(),about:value('#clientAbout').trim(),contacts};
         }
         function validate(row){
@@ -5563,13 +5581,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
             contactRows.forEach((contactRow,index)=>{
                 const name=$('.clientContactName',contactRow);
-                const type=$('.clientContactType',contactRow);
                 const role=$('.clientContactRole',contactRow);
                 const phone=$('.clientContactPhone',contactRow);
                 const meta=$('.clientContactMeta',contactRow);
                 const label=`Contact person ${index+1}`;
                 if(!name?.value.trim()) invalidate(name,`${label} name is required.`);
-                if(!type?.value) invalidate(type,`${label} contact type is required.`);
                 if(!role?.value.trim()) invalidate(role,`${label} role / designation is required.`);
                 if(!phone?.value.trim()) invalidate(phone,`${label} phone number is required.`);
                 else if(!phonePattern.test(phone.value.trim())) invalidate(phone,`${label} phone number must be exactly 11 digits.`);
@@ -5607,7 +5623,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setTimeout(()=>{renderList();setVisible('clientListPage');},450);
         }
         function loadSample(){ resetForm(); const row=(samples.clients||[])[0]; if(!row) return; const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); toast('Sample client data added.'); }
-        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b> <span class="badge soft" style="font-size:10px">${escapeHtml(main.type||'')}</span><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
+        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
         function renderList(){ const q=value('#clientSearch').toLowerCase(), status=value('#clientFilterStatus'), type=value('#clientFilterType'), method=value('#clientFilterMethod'); const rows=clients.filter((row)=>{ const people=(row.contacts||[]).map((person)=>[person.name,person.phone,person.role,person.whatsapp,person.email].join(' ')).join(' '); return (!q||[row.clientName,row.phone,row.email,row.clientId,row.reference,people].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!type||row.clientType===type)&&(!method||row.contactMethod===method); }); $('#clientTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="8" class="empty">No client found. Click “Add Client” to create one.</td></tr>'; $('#clientKpiTotal').textContent=clients.length; $('#clientKpiActive').textContent=clients.filter((c)=>c.status==='Active').length; $('#clientKpiEmail').textContent=clients.filter((c)=>c.email).length; }
         function editClient(id){ const row=clients.find((r)=>r.clientId===id); if(!row) return; resetForm(); const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); setVisible('clientAddPage'); }
         function viewClient(id){ const row=clients.find((r)=>r.clientId===id); if(row) window.FleetmanDetailViewer?.show('Client Details', row); }
@@ -5790,6 +5806,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 rowClass: 'emp-document-row employee-document-row',
                 names: docTemplates,
                 reminders: docReminders,
+                showReminder: false,
                 namePlaceholder: 'Select document',
                 dataset: { docIdx: rowIdx },
                 fileAttributes: `data-doc-idx="${rowIdx}"`,
@@ -6226,6 +6243,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         let logs = Array.isArray(records.driver_attendance) ? records.driver_attendance : (samples.driver_attendance || []);
         const masters = data.attendanceMasters || { contracts: [], vehicle_driver_map: {}, drivers: [] };
         let selectedStatus = 'Completed';
+        const transitioningLogs = new Set();
 
         const normalize = (text) => String(text || '').trim();
 
@@ -6292,7 +6310,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         });
 
         function saveStore() {
-            syncResource('driver_attendance', logs);
+            return syncResource('driver_attendance', logs);
         }
 
         function genId() {
@@ -6410,6 +6428,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function setNow(fieldId) {
             setTimeValue('#' + fieldId, new Date());
             clearFieldError(document.getElementById(fieldId));
+            if (fieldId === 'attendanceEndTime') {
+                selectedStatus = 'Completed';
+                clearFieldError($('#attendanceStatusChoices'));
+                renderStatusChoices();
+            }
             updateSummary();
         }
 
@@ -6507,7 +6530,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 ['#attendanceContract', 'Contract is required.'],
                 ['#attendanceVehicle', 'Vehicle is required.'],
                 ['#attendanceDriver', 'Driver is required.'],
-                ['#attendanceStartTime', 'Start time is required.'],
             ];
 
             required.forEach(([selector, message]) => {
@@ -6517,6 +6539,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     errors.push(element);
                 }
             });
+
+            if (['Running', 'Completed'].includes(row.status) && !row.startTime) {
+                const startTime = $('#attendanceStartTime');
+                markInvalid(startTime, 'Start time is required for a running or completed trip.');
+                errors.push(startTime);
+            }
 
             const statusChoices = $('#attendanceStatusChoices');
             if (!row.status) {
@@ -6636,7 +6664,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 <td><b>${escapeHtml(row.driver || '-')}</b></td>
                 <td>${escapeHtml(row.hours || '0h 0m')}</td>
                 <td><span class="badge ${cls}">${escapeHtml(row.status || '-')}</span></td>
-                <td><button type="button" class="mini-btn view-attendance" data-id="${escapeHtml(row.logId)}">View</button><button type="button" class="mini-btn edit-attendance" data-id="${escapeHtml(row.logId)}">Edit</button><button type="button" class="mini-btn danger delete-attendance" data-id="${escapeHtml(row.logId)}">Delete</button></td>
+                <td>${row.status === 'Initiated' ? `<button type="button" class="mini-btn edit-start-attendance" data-id="${escapeHtml(row.logId)}">Start</button>` : ''}${row.status === 'Running' ? `<button type="button" class="mini-btn edit-end-attendance" data-id="${escapeHtml(row.logId)}">End Trip</button>` : ''}<button type="button" class="mini-btn view-attendance" data-id="${escapeHtml(row.logId)}">View</button><button type="button" class="mini-btn edit-attendance" data-id="${escapeHtml(row.logId)}">Edit</button><button type="button" class="mini-btn danger delete-attendance" data-id="${escapeHtml(row.logId)}">Delete</button></td>
             </tr>`;
         }
 
@@ -6659,6 +6687,73 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if ($('#attendanceKpiCompleted')) $('#attendanceKpiCompleted').textContent = logs.filter((row) => row.status === 'Completed').length;
             if ($('#attendanceKpiRunning')) $('#attendanceKpiRunning').textContent = logs.filter((row) => row.status === 'Running').length;
             if ($('#attendanceKpiHours')) $('#attendanceKpiHours').textContent = (logs.reduce((sum, row) => sum + hoursToMinutes(row.hours), 0) / 60).toFixed(1);
+        }
+
+        async function transitionLog(id, action, triggerButton = null) {
+            if (transitioningLogs.has(id)) return;
+
+            const index = logs.findIndex((item) => item.logId === id);
+            if (index < 0) return;
+
+            const current = logs[index];
+            if (action === 'start' && current.status !== 'Initiated') {
+                toast('Only an initiated log can be started.');
+                renderList();
+                return;
+            }
+            if (action === 'end' && current.status !== 'Running') {
+                toast('Only a running trip can be ended.');
+                renderList();
+                return;
+            }
+            if (action === 'end' && !normalizeTimeValue(current.startTime)) {
+                toast('Start time is missing. Edit the log and add a valid start time first.');
+                return;
+            }
+
+            transitioningLogs.add(id);
+            const originalText = triggerButton?.textContent || '';
+            if (triggerButton) {
+                triggerButton.disabled = true;
+                triggerButton.textContent = action === 'start' ? 'Starting...' : 'Ending...';
+            }
+
+            const previousLogs = JSON.parse(JSON.stringify(logs));
+            const now = normalizeTimeValue(new Date());
+            const updated = { ...current, savedAt: new Date().toISOString() };
+
+            if (action === 'start') {
+                updated.startTime = now;
+                updated.endTime = '';
+                updated.status = 'Running';
+                updated.hours = '0h 0m';
+                updated.startedAt = new Date().toISOString();
+            } else {
+                updated.endTime = now;
+                updated.status = 'Completed';
+                updated.hours = calcHours(updated.startTime, updated.endTime);
+                updated.endedAt = new Date().toISOString();
+            }
+
+            logs[index] = updated;
+
+            const result = await saveStore();
+            if (result?.syncFailed || result?.ok === false) {
+                logs = previousLogs;
+                transitioningLogs.delete(id);
+                renderList();
+                return;
+            }
+
+            if (Array.isArray(result?.rows)) logs = result.rows;
+            transitioningLogs.delete(id);
+            renderList();
+            toast(action === 'start' ? `Trip started at ${now}.` : `Trip completed at ${now}.`);
+
+            if (triggerButton) {
+                triggerButton.disabled = false;
+                triggerButton.textContent = originalText;
+            }
         }
 
         function editLog(id) {
@@ -6740,6 +6835,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 clearFieldError(document.getElementById(clear.dataset.clearField));
                 updateSummary();
             }
+            const startTrip = event.target.closest('.edit-start-attendance');
+            if (startTrip) transitionLog(startTrip.dataset.id, 'start', startTrip);
+            const endTrip = event.target.closest('.edit-end-attendance');
+            if (endTrip) transitionLog(endTrip.dataset.id, 'end', endTrip);
             const view = event.target.closest('.view-attendance');
             if (view) viewLog(view.dataset.id);
             const edit = event.target.closest('.edit-attendance');

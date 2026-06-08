@@ -158,7 +158,7 @@
             </div>
         </x-fleetman.section-card>
 
-        <x-fleetman.section-card title="Recent Parties" class="dashboard-panel">
+        <x-fleetman.section-card title="Recent Clients" class="dashboard-panel">
             <div class="compact-list">
                 @if(!($access['clients'] ?? false))
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>

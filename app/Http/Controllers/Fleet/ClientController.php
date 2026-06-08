@@ -60,7 +60,6 @@ class ClientController extends FleetBaseController
                     'about' => ['required', 'string', 'max:2000'],
                     'contacts' => ['required', 'array', 'min:1'],
                     'contacts.*.name' => ['required', 'string', 'max:255'],
-                    'contacts.*.type' => ['required', 'string', 'max:100'],
                     'contacts.*.role' => ['required', 'string', 'max:255'],
                     'contacts.*.phone' => ['required', 'regex:/^\d{11}$/'],
                 ], [

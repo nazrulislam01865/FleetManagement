@@ -69,7 +69,7 @@
 
                     <div class="trip-payment-head">
                         <div>
-                            <h3>Payment Methods</h3>
+                            <h3>Payment Status</h3>
                         </div>
                         <button type="button" class="btn secondary" id="addTripPaymentBtn">+ Add Payment</button>
                     </div>

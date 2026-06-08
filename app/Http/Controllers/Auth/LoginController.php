@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use App\Support\FleetBrand;
 use App\Support\FleetRbac;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class LoginController extends Controller
@@ -36,19 +39,35 @@ class LoginController extends Controller
         ]);
 
         $remember = $request->boolean('remember');
+        $attemptCredentials = $credentials;
 
-        if (Auth::attempt($credentials, $remember)) {
+        if (Schema::hasTable('users') && Schema::hasColumn('users', 'account_status')) {
+            $attemptCredentials['account_status'] = User::ACCOUNT_STATUS_ACTIVE;
+        }
+
+        if (Auth::attempt($attemptCredentials, $remember)) {
             $request->session()->regenerate();
             $request->session()->put('fleetman.last_activity_at', now()->timestamp);
 
             return redirect()->route(FleetRbac::firstAllowedRoute($request->user()));
         }
 
+        if (Schema::hasTable('users') && Schema::hasColumn('users', 'account_status')) {
+            $user = User::query()->where('email', $credentials['email'])->first();
+
+            if ($user && Hash::check($credentials['password'], $user->password) && ! $user->isAccountActive()) {
+                return back()
+                    ->withErrors([
+                        'email' => 'This account is currently '.$user->accountStatusLabel().'. Contact a Super Admin to restore active access.',
+                    ])
+                    ->onlyInput('email');
+            }
+        }
+
         return back()
             ->withErrors(['email' => 'The provided email or password is incorrect.'])
             ->onlyInput('email');
     }
-
 
     public function keepAlive(Request $request): JsonResponse
     {

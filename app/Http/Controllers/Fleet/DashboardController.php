@@ -9,7 +9,6 @@ use App\Models\Fleet\FleetEmployee;
 use App\Models\Fleet\FleetFuelPrice;
 use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
-use App\Models\Fleet\FleetVendorParty;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\View\View;
@@ -42,7 +41,6 @@ class DashboardController extends FleetBaseController
         $trips = $can('trips.view') ? $this->rows(FleetTrip::class) : [];
         $fuelPrices = $can('fuel_prices.view') ? $this->rows(FleetFuelPrice::class) : [];
         $clients = $can('clients.view') ? $this->rows(FleetClient::class) : [];
-        $vendors = $can('vendors.view') ? $this->rows(FleetVendorParty::class) : [];
         $attendance = $can('driver_attendance.view') ? $this->rows(FleetDriverAttendance::class) : [];
         $employees = $can('employees.view') ? $this->rows(FleetEmployee::class) : [];
 
@@ -76,6 +74,9 @@ class DashboardController extends FleetBaseController
         })->count();
 
         $totalAttendanceKm = collect($attendance)->sum(fn (array $row) => (float) ($row['distance'] ?? 0));
+        $activeClientCount = collect($clients)->filter(
+            fn (array $row): bool => strcasecmp(trim((string) ($row['status'] ?? '')), 'Active') === 0
+        )->count();
 
         return [
             'stats' => [
@@ -106,7 +107,7 @@ class DashboardController extends FleetBaseController
                 [
                     'label' => 'Clients',
                     'value' => count($clients),
-                    'helper' => count($vendors).' vendors / parties',
+                    'helper' => $activeClientCount.' active client'.($activeClientCount === 1 ? '' : 's'),
                     'icon' => '🏢',
                     'route' => 'fleet.clients',
                     'permission' => 'clients.view',

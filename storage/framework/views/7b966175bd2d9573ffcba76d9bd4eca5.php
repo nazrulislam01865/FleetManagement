@@ -57,14 +57,24 @@
     <section class="step-card">
         <div class="step-head"><div class="step-no">1</div><div><h2>Select contract and vehicle</h2></div></div>
         <div class="grid">
-            <div class="field">
-                <label for="contractSelect">Contract <span class="req">*</span></label>
-                <select id="contractSelect" required aria-required="true">
-                    <option value="">- Select contract -</option>
+            <div class="field searchable">
+                <div class="search-label">
+                    <label for="contractSelect">Contract <span class="req">*</span></label>
+                    <span class="search-tag">Searchable</span>
+                </div>
+                <input
+                    id="contractSelect"
+                    list="contractSelectList"
+                    placeholder="Type to search contract"
+                    autocomplete="off"
+                    required
+                    aria-required="true"
+                >
+                <datalist id="contractSelectList">
                     <?php $__currentLoopData = ($fleetman['contracts'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $contract): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                        <option value="<?php echo e($contract['id']); ?>"><?php echo e($contract['label']); ?></option>
+                        <option value="<?php echo e($contract['label']); ?>" label="<?php echo e($contract['id']); ?>"></option>
                     <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-                </select>
+                </datalist>
             </div>
             <div class="field searchable">
                 <div class="search-label">

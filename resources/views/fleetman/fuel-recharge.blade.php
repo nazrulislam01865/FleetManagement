@@ -26,14 +26,24 @@
     <section class="step-card">
         <div class="step-head"><div class="step-no">1</div><div><h2>Select contract and vehicle</h2></div></div>
         <div class="grid">
-            <div class="field">
-                <label for="contractSelect">Contract <span class="req">*</span></label>
-                <select id="contractSelect" required aria-required="true">
-                    <option value="">- Select contract -</option>
+            <div class="field searchable">
+                <div class="search-label">
+                    <label for="contractSelect">Contract <span class="req">*</span></label>
+                    <span class="search-tag">Searchable</span>
+                </div>
+                <input
+                    id="contractSelect"
+                    list="contractSelectList"
+                    placeholder="Type to search contract"
+                    autocomplete="off"
+                    required
+                    aria-required="true"
+                >
+                <datalist id="contractSelectList">
                     @foreach (($fleetman['contracts'] ?? []) as $contract)
-                        <option value="{{ $contract['id'] }}">{{ $contract['label'] }}</option>
+                        <option value="{{ $contract['label'] }}" label="{{ $contract['id'] }}"></option>
                     @endforeach
-                </select>
+                </datalist>
             </div>
             <div class="field searchable">
                 <div class="search-label">
