@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetContract;
 use App\Services\FleetTemporaryUploadService;
+use App\Support\FleetDocumentUploadPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -69,8 +71,8 @@ class ContractController extends FleetBaseController
                             $file,
                             $userId,
                             'fleet/contracts/'.$contractId.'/documents',
-                            ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx'],
-                            4096
+                            FleetDocumentUploadPolicy::EXTENSIONS,
+                            FleetDocumentUploadPolicy::MAX_KILOBYTES
                         );
                         $document['file'] = $payload;
                         $storedPaths[] = $payload['filePath'];
@@ -94,7 +96,8 @@ class ContractController extends FleetBaseController
 
                     $validator = Validator::make(
                         ['document' => $file],
-                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx', 'max:4096']]
+                        ['document' => FleetDocumentUploadPolicy::rules()],
+                        FleetDocumentUploadPolicy::messages('document')
                     );
 
                     if ($validator->fails()) {
@@ -141,6 +144,7 @@ class ContractController extends FleetBaseController
     private function validateContractRows(array $rows, Request $request, string $validateContractId): void
     {
         $errors = [];
+        $documentReminders = $this->values('document_reminder');
 
         $matchedValidationTarget = $validateContractId === '';
 
@@ -177,7 +181,8 @@ class ContractController extends FleetBaseController
                 'assignments.*.duty' => ['required', 'numeric', 'gt:0'],
                 'documents' => ['required', 'array', 'min:1'],
                 'documents.*.name' => ['required', 'string', 'max:255'],
-                'documents.*.expiry' => ['required', 'date'],
+                'documents.*.expiry' => ['nullable', 'date'],
+                'documents.*.reminder' => ['nullable', Rule::in($documentReminders)],
                 'documents.*.file' => ['nullable', 'array'],
             ], [
                 'contractEnd.after_or_equal' => 'Contract End cannot be earlier than Contract Start.',

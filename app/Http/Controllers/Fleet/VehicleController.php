@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetVehicle;
 use App\Services\FleetTemporaryUploadService;
+use App\Support\FleetDocumentUploadPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -79,8 +80,8 @@ class VehicleController extends FleetBaseController
                             $file,
                             $userId,
                             'fleet/vehicles/'.$vehicleId.'/documents',
-                            ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-                            4096
+                            FleetDocumentUploadPolicy::EXTENSIONS,
+                            FleetDocumentUploadPolicy::MAX_KILOBYTES
                         );
                         $storedPaths[] = $vehicle['docs'][$documentIndex]['file']['filePath'];
                     }
@@ -127,8 +128,8 @@ class VehicleController extends FleetBaseController
 
                     $validator = Validator::make(
                         ['document' => $file],
-                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096']],
-                        ['document.max' => 'Each vehicle document must not exceed 4 MB.']
+                        ['document' => FleetDocumentUploadPolicy::rules()],
+                        FleetDocumentUploadPolicy::messages('document')
                     );
                     if ($validator->fails()) {
                         throw new ValidationException($validator);

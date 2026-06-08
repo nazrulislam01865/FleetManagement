@@ -42,6 +42,13 @@ Route::middleware('guest')->group(function () {
         ->name('password.update');
 });
 
+Route::post('/session/keep-alive', [LoginController::class, 'keepAlive'])
+    ->middleware('auth')
+    ->name('session.keep-alive');
+
+Route::post('/session/timeout', [LoginController::class, 'timeout'])
+    ->name('session.timeout');
+
 Route::post('/logout', [LoginController::class, 'logout'])
     ->middleware('auth')
     ->name('logout');
@@ -50,6 +57,9 @@ Route::redirect('/', '/fleet/dashboard');
 
 Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::post('/uploads/temp', [TemporaryUploadController::class, 'store'])->name('uploads.store');
+    Route::post('/uploads/temp/chunks', [TemporaryUploadController::class, 'storeChunk'])->name('uploads.chunks.store');
+    Route::post('/uploads/temp/chunks/complete', [TemporaryUploadController::class, 'completeChunk'])->name('uploads.chunks.complete');
+    Route::delete('/uploads/temp/chunks/{uploadId}', [TemporaryUploadController::class, 'destroyChunk'])->name('uploads.chunks.destroy');
     Route::get('/uploads/temp/{token}', [TemporaryUploadController::class, 'preview'])->name('uploads.preview');
     Route::delete('/uploads/temp/{token}', [TemporaryUploadController::class, 'destroy'])->name('uploads.destroy');
     Route::get('/files/{path}', [FleetFileController::class, 'show'])->where('path', '.*')->name('files.show');

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetVendorParty;
 use App\Services\FleetTemporaryUploadService;
+use App\Support\FleetDocumentUploadPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,8 +66,8 @@ class VendorPartyController extends FleetBaseController
                             $file,
                             $userId,
                             'fleet/vendor-party-documents/'.$partyId.'/'.now()->format('Y/m'),
-                            ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-                            4096
+                            FleetDocumentUploadPolicy::EXTENSIONS,
+                            FleetDocumentUploadPolicy::MAX_KILOBYTES
                         );
                         $storedPaths[] = $party['documents'][$documentIndex]['file']['filePath'];
                     }
@@ -86,7 +87,8 @@ class VendorPartyController extends FleetBaseController
 
                     $validator = Validator::make(
                         ['document' => $file],
-                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096']]
+                        ['document' => FleetDocumentUploadPolicy::rules()],
+                        FleetDocumentUploadPolicy::messages('document')
                     );
 
                     if ($validator->fails()) {
@@ -138,6 +140,7 @@ class VendorPartyController extends FleetBaseController
         $paymentTerms = $this->values('payment_term');
         $vendorContractorTypes = $this->vendorContractorTypeValues();
         $documentNames = $this->documentNameValues(['Vendors', 'Vendors & Parties'], 'party_document_template');
+        $documentReminders = $this->values('document_reminder');
 
         foreach ($rows as $index => $row) {
             if (! is_array($row)) {
@@ -176,6 +179,7 @@ class VendorPartyController extends FleetBaseController
                 'documents.*.name' => ['required', Rule::in($documentNames)],
                 'documents.*.number' => ['nullable', 'string', 'max:255'],
                 'documents.*.expiry' => ['nullable', 'date'],
+                'documents.*.reminder' => ['nullable', Rule::in($documentReminders)],
             ], [
                 'phone.regex' => 'Phone Number must be exactly 11 digits.',
                 'whatsapp.regex' => 'WhatsApp Number must be exactly 11 digits.',
@@ -265,10 +269,10 @@ class VendorPartyController extends FleetBaseController
     public function uploadDocument(Request $request, FleetTemporaryUploadService $uploads): JsonResponse
     {
         $validated = $request->validate([
-            'document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096'],
+            'document' => FleetDocumentUploadPolicy::rules(),
             'party_id' => ['nullable', 'string', 'max:80'],
             'document_name' => ['nullable', 'string', 'max:160'],
-        ]);
+        ], FleetDocumentUploadPolicy::messages('document'));
 
         $file = $validated['document'];
         $partyId = Str::slug($validated['party_id'] ?? 'new-party') ?: 'new-party';

@@ -95,6 +95,14 @@ foreach ($fuelRechargeDates as $dateIndex => $date) {
 }
 
 return [
+    'inactivity_timeout_minutes' => 15,
+
+    'uploads' => [
+        'documents' => [
+            'chunk_bytes' => 262144,
+        ],
+    ],
+
     'brand' => [
         'name' => 'FleetMan',
         'tagline' => 'Fleet Management System',
@@ -153,12 +161,12 @@ return [
                 ],
                 [
                     'key' => 'fuel-recharge',
-                    'label' => 'Fuel Recharge',
+                    'label' => 'Fuel',
                     'icon' => '⛽',
                     'route' => 'fleet.fuel-recharge',
                     'permission' => 'fuel_recharge.view',
                     'children' => [
-                        ['key' => 'recharge-add', 'label' => 'Add Recharge', 'icon' => '↳', 'route' => 'fleet.fuel-recharge', 'routeParams' => ['action' => 'add'], 'permission' => 'fuel_recharge.view'],
+                        ['key' => 'recharge-add', 'label' => 'Add Fuel', 'icon' => '↳', 'route' => 'fleet.fuel-recharge', 'routeParams' => ['action' => 'add'], 'permission' => 'fuel_recharge.view'],
                         ['key' => 'recharge-list', 'label' => 'Recharge List', 'icon' => '↳', 'route' => 'fleet.fuel-recharge', 'routeParams' => ['action' => 'list'], 'permission' => 'fuel_recharge.view'],
                     ]
                 ],

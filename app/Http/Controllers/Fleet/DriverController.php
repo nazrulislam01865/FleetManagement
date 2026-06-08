@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetDriver;
 use App\Services\FleetTemporaryUploadService;
+use App\Support\FleetDocumentUploadPolicy;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,8 +70,8 @@ class DriverController extends FleetBaseController
                             $file,
                             $userId,
                             "fleet/drivers/{$driverId}/documents",
-                            ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-                            4096
+                            FleetDocumentUploadPolicy::EXTENSIONS,
+                            FleetDocumentUploadPolicy::MAX_KILOBYTES
                         );
                         $storedPaths[] = $driver['documents'][$documentIndex]['file']['filePath'];
                     }
@@ -115,8 +116,8 @@ class DriverController extends FleetBaseController
 
                     $validator = Validator::make(
                         ['document' => $file],
-                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096']],
-                        ['document.max' => 'Each driver document must not exceed 4 MB.']
+                        ['document' => FleetDocumentUploadPolicy::rules()],
+                        FleetDocumentUploadPolicy::messages('document')
                     );
                     if ($validator->fails()) {
                         throw new ValidationException($validator);
@@ -214,8 +215,8 @@ class DriverController extends FleetBaseController
                 'contacts.*.phone' => ['required', 'regex:/^\d{11}$/'],
                 'documents' => ['required', 'array', 'min:1'],
                 'documents.*.name' => ['required', Rule::in($driverDocuments)],
-                'documents.*.expiry' => ['required', 'date'],
-                'documents.*.reminder' => ['required', Rule::in($reminders)],
+                'documents.*.expiry' => ['nullable', 'date'],
+                'documents.*.reminder' => ['nullable', Rule::in($reminders)],
                 'photo' => ['required', 'array'],
             ], [
                 'whatsapp.regex' => 'WhatsApp Number must be exactly 11 digits.',

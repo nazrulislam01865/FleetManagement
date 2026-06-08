@@ -388,7 +388,7 @@
 <?php endif; ?>
 <?php $component->withAttributes(['title' => '3. Documents']); ?>
                      <?php $__env->slot('action', null, []); ?> 
-                        <button type="button" class="btn light" id="addPartyDocumentBtn">＋ Add Document</button>
+                        <button type="button" class="btn secondary" id="addPartyDocumentBtn">+ Add document</button>
                      <?php $__env->endSlot(); ?>
                     <div id="partyDocuments"></div>
                  <?php echo $__env->renderComponent(); ?>

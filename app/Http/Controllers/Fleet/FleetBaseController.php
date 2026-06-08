@@ -427,9 +427,16 @@ abstract class FleetBaseController extends Controller
             'master_data' => Route::has('fleet.master-data.sync') ? ['sync' => route('fleet.master-data.sync')] : [],
             'uploads' => [
                 'store' => route('fleet.uploads.store'),
+                'chunk_store' => Route::has('fleet.uploads.chunks.store') ? route('fleet.uploads.chunks.store') : null,
+                'chunk_complete' => Route::has('fleet.uploads.chunks.complete') ? route('fleet.uploads.chunks.complete') : null,
+                'chunk_destroy_template' => Route::has('fleet.uploads.chunks.destroy') ? route('fleet.uploads.chunks.destroy', ['uploadId' => '__UPLOAD_ID__']) : null,
                 'preview_template' => route('fleet.uploads.preview', ['token' => '__TOKEN__']),
                 'destroy_template' => route('fleet.uploads.destroy', ['token' => '__TOKEN__']),
                 'file_template' => route('fleet.files.show', ['path' => '__PATH__']),
+                'document_extensions' => \App\Support\FleetDocumentUploadPolicy::EXTENSIONS,
+                'document_max_bytes' => \App\Support\FleetDocumentUploadPolicy::MAX_BYTES,
+                'document_accept' => \App\Support\FleetDocumentUploadPolicy::ACCEPT,
+                'chunk_bytes' => (int) config('fleetman.uploads.documents.chunk_bytes', 262144),
             ],
         ];
     }

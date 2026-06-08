@@ -123,50 +123,21 @@ h1{font-size:24px;margin:0 0 5px}.subtitle{color:var(--muted);margin:0;line-heig
 #vehicleFuelRows .fuel-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(160px,.75fr) minmax(220px,1fr) auto;}
 #vehicleFuelRows .fuel-row .fuelRateHint{min-height:20px;}
 
-#vehicleDocRows .doc-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;grid-template-areas:"doc expiry reminder remove" "upload upload upload remove";}
-#vehicleDocRows .doc-row>.field:nth-child(1){grid-area:doc;}
-#vehicleDocRows .doc-row>.field:nth-child(2){grid-area:expiry;}
-#vehicleDocRows .doc-row>.field:nth-child(3){grid-area:reminder;}
-#vehicleDocRows .doc-row>.field:nth-child(4){grid-area:upload;}
-#vehicleDocRows .doc-row>.remove-row{grid-area:remove;}
-
-.vendor-party-page .document-row{display:grid!important;grid-template-columns:minmax(190px,1fr) minmax(170px,.85fr) minmax(170px,.85fr) auto!important;grid-template-areas:"doc ref expiry remove" "upload upload upload remove";align-items:start!important;gap:16px!important;}
-.vendor-party-page .document-row>.field:nth-child(1){grid-area:doc;}
-.vendor-party-page .document-row>.field:nth-child(2){grid-area:ref;}
-.vendor-party-page .document-row>.field:nth-child(3){grid-area:expiry;}
-.vendor-party-page .document-row>.field:nth-child(4){grid-area:upload;}
-.vendor-party-page .document-row>.remove-row{grid-area:remove;width:auto!important;}
-.vendor-party-page .document-row .partyDocFile{min-height:48px!important;padding:10px 12px!important;border-radius:12px!important;}
-
-#employeeDocuments .emp-document-row{display:grid;grid-template-columns:minmax(200px,1fr) minmax(200px,1fr) auto;grid-template-areas:"doctype docref remove" "upload upload remove";align-items:start;}
-#employeeDocuments .emp-document-row>.field:nth-child(1){grid-area:doctype;}
-#employeeDocuments .emp-document-row>.field:nth-child(2){grid-area:docref;}
-#employeeDocuments .emp-document-row>.field:nth-child(3){grid-area:upload;}
-#employeeDocuments .emp-document-row>.remove-row{grid-area:remove;}
-
-#driverDocuments .driver-document-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;grid-template-areas:"doc upload reference remove" "expiry reminder reminder remove";align-items:start;}
-#driverDocuments .driver-document-row>.field:nth-child(1){grid-area:doc;}
-#driverDocuments .driver-document-row>.field:nth-child(2){grid-area:upload;}
-#driverDocuments .driver-document-row>.field:nth-child(3){grid-area:reference;}
-#driverDocuments .driver-document-row>.field:nth-child(4){grid-area:expiry;}
-#driverDocuments .driver-document-row>.field:nth-child(5){grid-area:reminder;}
-#driverDocuments .driver-document-row>.remove-row{grid-area:remove;}
+/* Every document section uses the exact vehicle-page row layout. */
+.fleet-document-row{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr)) auto!important;grid-template-areas:"doc expiry reminder remove" "upload upload upload remove"!important;align-items:start!important;gap:16px!important;padding:16px!important;border:1px dashed #cfd8e7!important;border-radius:18px!important;background:#fbfdff!important;margin-bottom:10px!important;}
+.fleet-document-row>.field:nth-child(1){grid-area:doc!important;}
+.fleet-document-row>.field:nth-child(2){grid-area:expiry!important;}
+.fleet-document-row>.field:nth-child(3){grid-area:reminder!important;}
+.fleet-document-row>.field:nth-child(4){grid-area:upload!important;}
+.fleet-document-row>.remove-row{grid-area:remove!important;width:auto!important;align-self:start!important;margin-top:30px!important;}
+.contract-doc-card.fleet-document-row{box-shadow:none!important;}
 
 @media(max-width:900px){
     #vehicleFuelRows .fuel-row,
-    #vehicleDocRows .doc-row,
-    .vendor-party-page .document-row,
-    #employeeDocuments .emp-document-row,
-    #driverDocuments .driver-document-row{grid-template-columns:1fr!important;grid-template-areas:none!important;}
-    #vehicleDocRows .doc-row>.field,
-    .vendor-party-page .document-row>.field,
-    #employeeDocuments .emp-document-row>.field,
-    #driverDocuments .driver-document-row>.field,
-    #vehicleDocRows .doc-row>.remove-row,
-    .vendor-party-page .document-row>.remove-row,
-    #employeeDocuments .emp-document-row>.remove-row,
-    #driverDocuments .driver-document-row>.remove-row{grid-area:auto!important;}
-    .repeat-row .remove-row{width:100%!important;margin-top:0!important;}
+    .fleet-document-row{grid-template-columns:1fr!important;grid-template-areas:none!important;}
+    .fleet-document-row>.field,
+    .fleet-document-row>.remove-row{grid-area:auto!important;}
+    .fleet-document-row>.remove-row{width:100%!important;margin-top:0!important;}
 }
 
 /* Client page contact-person responsive layout */
@@ -546,4 +517,32 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
 }
 @media(max-width:760px){
     .role-create-grid{grid-template-columns:1fr;}
+}
+
+/* Final document-row normalization: overrides older module-specific upload styling. */
+.fleet-document-row input[type="file"]{
+    display:block!important;
+    width:100%!important;
+    min-height:48px!important;
+    padding:10px 12px!important;
+    line-height:1.45!important;
+    background:#fff!important;
+    border:1px solid var(--line)!important;
+    border-radius:12px!important;
+    color:#172033!important;
+    font-size:15px!important;
+}
+.fleet-document-row input[type="file"]::file-selector-button{
+    margin-right:12px!important;
+    border:1px solid #98a2b3!important;
+    background:#fff!important;
+    border-radius:8px!important;
+    padding:6px 10px!important;
+    font-weight:800!important;
+    color:#172033!important;
+    cursor:pointer!important;
+}
+.fleet-document-row>.remove-row{
+    min-height:48px!important;
+    margin-bottom:0!important;
 }

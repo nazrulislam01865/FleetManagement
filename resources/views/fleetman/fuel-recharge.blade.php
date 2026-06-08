@@ -1,6 +1,6 @@
 @extends('layouts.fleetman')
 
-@section('title', 'Fuel Recharge | FleetMan')
+@section('title', 'Add Fuel | FleetMan')
 @section('mobile-title', 'Fuel Entry')
 
 @section('content')
@@ -18,7 +18,7 @@
 
     <div class="help-card">
         <div>
-            <h1>Fuel Recharge Entry</h1>
+            <h1>Fuel Entry</h1>
         </div>
         <div class="capture-counter"><small>Photo Status</small><div id="photoCount">0 / 3 required</div></div>
     </div>

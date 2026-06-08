@@ -535,8 +535,8 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => '6. Documents']); ?>
+                     <?php $__env->slot('action', null, []); ?> <button type="button" class="btn secondary" id="addEmployeeDocumentBtn">+ Add document</button> <?php $__env->endSlot(); ?>
                     <div id="employeeDocuments"></div>
-                    <button type="button" class="btn secondary" id="addEmployeeDocumentBtn" style="margin-top:10px">＋ Add Document</button>
                  <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408)): ?>

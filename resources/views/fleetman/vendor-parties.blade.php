@@ -90,7 +90,7 @@
                     title="3. Documents"
                 >
                     <x-slot:action>
-                        <button type="button" class="btn light" id="addPartyDocumentBtn">＋ Add Document</button>
+                        <button type="button" class="btn secondary" id="addPartyDocumentBtn">+ Add document</button>
                     </x-slot:action>
                     <div id="partyDocuments"></div>
                 </x-fleetman.section-card>

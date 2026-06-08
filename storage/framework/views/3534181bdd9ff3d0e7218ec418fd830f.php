@@ -9,6 +9,7 @@
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
         $fleetJsVersion = filemtime(public_path('js/fleetman.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
+        $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
     ?>
     <link rel="stylesheet" href="<?php echo e(asset('css/fleetman.css')); ?>?v=<?php echo e($fleetCssVersion); ?>">
 </head>
@@ -126,6 +127,15 @@
     </script>
     <script src="<?php echo e(asset('js/fleetman.js')); ?>?v=<?php echo e($fleetJsVersion); ?>"></script>
     <script src="<?php echo e(asset('js/fleetman-navigation.js')); ?>?v=<?php echo e($fleetNavigationJsVersion); ?>"></script>
+    <script>
+        window.FLEETMAN_SESSION = {
+            timeoutMs: <?php echo e((int) config('fleetman.inactivity_timeout_minutes', 15) * 60 * 1000); ?>,
+            keepAliveUrl: <?php echo json_encode(route('session.keep-alive'), 15, 512) ?>,
+            timeoutUrl: <?php echo json_encode(route('session.timeout'), 15, 512) ?>,
+            loginUrl: <?php echo json_encode(route('login'), 15, 512) ?>
+        };
+    </script>
+    <script src="<?php echo e(asset('js/fleetman-session-timeout.js')); ?>?v=<?php echo e($fleetSessionJsVersion); ?>"></script>
     <?php echo $__env->yieldPushContent('scripts'); ?>
 </body>
 </html>

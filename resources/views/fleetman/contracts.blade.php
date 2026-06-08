@@ -91,7 +91,7 @@
                 <div>
                     <h2>Documents</h2>
                 </div>
-                <button class="btn secondary small" type="button" id="addContractDocumentBtn">+ Add Document</button>
+                <button class="btn secondary" type="button" id="addContractDocumentBtn">+ Add document</button>
             </div>
             <div id="contractDocuments"></div>
         </section>

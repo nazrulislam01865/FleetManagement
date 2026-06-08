@@ -9,6 +9,7 @@
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
         $fleetJsVersion = filemtime(public_path('js/fleetman.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
+        $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
     @endphp
     <link rel="stylesheet" href="{{ asset('css/fleetman.css') }}?v={{ $fleetCssVersion }}">
 </head>
@@ -93,6 +94,15 @@
     </script>
     <script src="{{ asset('js/fleetman.js') }}?v={{ $fleetJsVersion }}"></script>
     <script src="{{ asset('js/fleetman-navigation.js') }}?v={{ $fleetNavigationJsVersion }}"></script>
+    <script>
+        window.FLEETMAN_SESSION = {
+            timeoutMs: {{ (int) config('fleetman.inactivity_timeout_minutes', 15) * 60 * 1000 }},
+            keepAliveUrl: @json(route('session.keep-alive')),
+            timeoutUrl: @json(route('session.timeout')),
+            loginUrl: @json(route('login'))
+        };
+    </script>
+    <script src="{{ asset('js/fleetman-session-timeout.js') }}?v={{ $fleetSessionJsVersion }}"></script>
     @stack('scripts')
 </body>
 </html>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetEmployee;
 use App\Services\FleetTemporaryUploadService;
+use App\Support\FleetDocumentUploadPolicy;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,8 +70,8 @@ class EmployeeController extends FleetBaseController
                             $file,
                             $userId,
                             "fleet/employees/{$employeeId}/documents",
-                            ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-                            4096
+                            FleetDocumentUploadPolicy::EXTENSIONS,
+                            FleetDocumentUploadPolicy::MAX_KILOBYTES
                         );
                         $storedPaths[] = $employee['documents'][$documentIndex]['file']['filePath'];
                     }
@@ -115,8 +116,8 @@ class EmployeeController extends FleetBaseController
 
                     $validator = Validator::make(
                         ['document' => $file],
-                        ['document' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:4096']],
-                        ['document.max' => 'Each employee document must not exceed 4 MB.']
+                        ['document' => FleetDocumentUploadPolicy::rules()],
+                        FleetDocumentUploadPolicy::messages('document')
                     );
                     if ($validator->fails()) {
                         throw new ValidationException($validator);
@@ -151,6 +152,7 @@ class EmployeeController extends FleetBaseController
         $seenNids = [];
         $contactTypes = ['Office', 'Home', 'Relative', 'Other'];
         $employeeDocuments = $this->documentNameValues('Employees', 'employee_document_template');
+        $documentReminders = $this->values('document_reminder');
         $salaryTenures = $this->values('employee_salary_tenure');
         $statuses = $this->values('employee_status');
 
@@ -194,6 +196,8 @@ class EmployeeController extends FleetBaseController
                 'documents' => ['required', 'array', 'min:1'],
                 'documents.*.name' => ['required', Rule::in($employeeDocuments)],
                 'documents.*.reference' => ['nullable', 'string', 'max:255'],
+                'documents.*.expiry' => ['nullable', 'date'],
+                'documents.*.reminder' => ['nullable', Rule::in($documentReminders)],
                 'photo' => ['required', 'array'],
             ], [
                 'nid.regex' => 'NID must contain digits only and cannot exceed 17 digits.',

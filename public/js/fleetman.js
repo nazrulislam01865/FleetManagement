@@ -431,12 +431,35 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         info.innerHTML = `<div class="temp-upload-file">${link}<span>${escapeHtml(size)}</span></div>${preview}`;
     }
 
+    function documentPolicy() {
+        const configuredExtensions = resources().document_extensions;
+        return {
+            extensions: Array.isArray(configuredExtensions) && configuredExtensions.length
+                ? configuredExtensions.map((item) => String(item).toLowerCase())
+                : ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+            maxBytes: Number(resources().document_max_bytes || 4 * 1024 * 1024),
+            accept: String(resources().document_accept || '.pdf,.doc,.docx,.xls,.xlsx'),
+        };
+    }
+
+    function documentOptions(options = {}) {
+        const policy = documentPolicy();
+        return {
+            kind: 'document',
+            extensions: policy.extensions,
+            maxBytes: policy.maxBytes,
+            showPreview: false,
+            ...options,
+        };
+    }
+
     function validationMessage(file, options = {}) {
         if (!file) return 'Choose a file.';
         const extension = String(file.name || '').split('.').pop().toLowerCase();
         const allowed = (options.extensions || []).map((item) => String(item).toLowerCase());
         if (allowed.length && !allowed.includes(extension)) {
-            return `Allowed file types: ${allowed.map((item) => item.toUpperCase()).join(', ')}.`;
+            const suffix = options.kind === 'document' ? ' Images are not allowed.' : '';
+            return `Allowed file types: ${allowed.map((item) => item.toUpperCase()).join(', ')}.${suffix}`;
         }
         if (options.imageOnly && !String(file.type || '').toLowerCase().startsWith('image/')) {
             return 'Please choose an image file.';
@@ -445,6 +468,143 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             return `${file.name} is ${formatSize(file.size)}. Maximum allowed size is ${formatSize(options.maxBytes)}.`;
         }
         return '';
+    }
+
+    function responseMessage(response, fallback) {
+        if (!response || typeof response !== 'object') return fallback;
+        return response.message || Object.values(response.errors || {}).flat().join(' ') || fallback;
+    }
+
+    function randomUploadId() {
+        if (window.crypto?.randomUUID) return window.crypto.randomUUID().toLowerCase();
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`.toLowerCase();
+    }
+
+    function requestChunk(formData, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', resources().chunk_store, true);
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken());
+            xhr.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable) onProgress?.(event.loaded, event.total);
+            });
+            xhr.addEventListener('load', () => {
+                let response = {};
+                try { response = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
+                if (xhr.status >= 200 && xhr.status < 300 && response.ok) {
+                    resolve(response);
+                    return;
+                }
+                reject(new Error(responseMessage(response, 'A part of the document could not be uploaded.')));
+            });
+            xhr.addEventListener('error', () => reject(new Error('The upload failed because the server could not be reached.')));
+            xhr.send(formData);
+        });
+    }
+
+    async function cleanupChunk(uploadId) {
+        const template = String(resources().chunk_destroy_template || '');
+        if (!template || !uploadId) return;
+        try {
+            await fetch(template.replace('__UPLOAD_ID__', encodeURIComponent(uploadId)), {
+                method: 'DELETE',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+            });
+        } catch (_) {}
+    }
+
+    async function uploadInChunks(file, options, payload) {
+        const uploadId = randomUploadId();
+        const configuredSize = Number(resources().chunk_bytes || 256 * 1024);
+        const chunkSize = Math.max(64 * 1024, Math.min(512 * 1024, configuredSize));
+        const totalChunks = Math.ceil(file.size / chunkSize);
+
+        try {
+            for (let index = 0; index < totalChunks; index += 1) {
+                const start = index * chunkSize;
+                const end = Math.min(file.size, start + chunkSize);
+                const chunk = file.slice(start, end);
+                const formData = new FormData();
+                formData.append('upload_id', uploadId);
+                formData.append('chunk_index', String(index));
+                formData.append('total_chunks', String(totalChunks));
+                formData.append('original_name', file.name);
+                formData.append('mime_type', file.type || 'application/octet-stream');
+                formData.append('file_size', String(file.size));
+                formData.append('upload_kind', 'document');
+                formData.append('chunk', chunk, `${file.name}.part${index}`);
+
+                let lastError = null;
+                for (let attempt = 0; attempt < 2; attempt += 1) {
+                    try {
+                        await requestChunk(formData, (loaded) => {
+                            payload.progress = ((start + loaded) / file.size) * 100;
+                            render({ info: options.info, progress: options.progress, file: payload });
+                        });
+                        lastError = null;
+                        break;
+                    } catch (error) {
+                        lastError = error;
+                        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+                    }
+                }
+                if (lastError) throw lastError;
+
+                payload.progress = (end / file.size) * 100;
+                render({ info: options.info, progress: options.progress, file: payload });
+            }
+
+            const completion = await fetch(resources().chunk_complete, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+                body: JSON.stringify({ upload_id: uploadId }),
+            });
+            let response = {};
+            try { response = await completion.json(); } catch (_) {}
+            if (!completion.ok || !response.file) {
+                throw new Error(responseMessage(response, 'The uploaded document could not be finalized.'));
+            }
+            return response.file;
+        } catch (error) {
+            await cleanupChunk(uploadId);
+            throw error;
+        }
+    }
+
+    function uploadSingle(file, options, payload) {
+        const endpoint = resources().store;
+        if (!endpoint) return Promise.reject(new Error('Temporary upload service is unavailable.'));
+
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', endpoint, true);
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken());
+            xhr.upload.addEventListener('progress', (event) => {
+                if (!event.lengthComputable) return;
+                payload.progress = (event.loaded / event.total) * 100;
+                render({ info: options.info, progress: options.progress, file: payload });
+            });
+            xhr.addEventListener('load', () => {
+                let response = {};
+                try { response = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
+                if (xhr.status < 200 || xhr.status >= 300 || !response.file) {
+                    reject(new Error(responseMessage(response, 'The file could not be uploaded.')));
+                    return;
+                }
+                resolve(response.file);
+            });
+            xhr.addEventListener('error', () => reject(new Error('The upload failed because the server could not be reached.')));
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_kind', options.kind || 'generic');
+            xhr.send(formData);
+        });
     }
 
     function upload(input, options = {}) {
@@ -461,58 +621,40 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             return Promise.resolve(null);
         }
 
-        const endpoint = resources().store;
-        if (!endpoint) {
-            const message = 'Temporary upload service is unavailable.';
-            render({ info, progress, message, error: true });
-            options.onError?.(message);
-            return Promise.resolve(null);
-        }
+        const sequence = input ? Number(input._fleetUploadSequence || 0) + 1 : 1;
+        if (input) input._fleetUploadSequence = sequence;
 
         const previous = readHidden(hidden);
         if (previous.tempToken) destroy(previous.tempToken).catch(() => {});
 
-        const xhr = new XMLHttpRequest();
         const payload = { uploading: true, progress: 0 };
         render({ info, progress, file: payload, message: `Preparing ${file.name}...` });
 
-        const promise = new Promise((resolve) => {
-            xhr.open('POST', endpoint, true);
-            xhr.setRequestHeader('Accept', 'application/json');
-            xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken());
-            xhr.upload.addEventListener('progress', (event) => {
-                if (!event.lengthComputable) return;
-                payload.progress = (event.loaded / event.total) * 100;
-                render({ info, progress, file: payload, message: '' });
-            });
-            xhr.addEventListener('load', () => {
-                let response = {};
-                try { response = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
-                if (xhr.status < 200 || xhr.status >= 300 || !response.file) {
-                    const message = response.message || Object.values(response.errors || {}).flat().join(' ') || 'The file could not be uploaded.';
-                    writeHidden(hidden, {});
-                    render({ info, progress, message, error: true });
-                    options.onError?.(message);
-                    resolve(null);
-                    return;
+        const useChunkedDocumentUpload = options.kind === 'document'
+            && Boolean(resources().chunk_store)
+            && Boolean(resources().chunk_complete);
+
+        const promise = (useChunkedDocumentUpload
+            ? uploadInChunks(file, options, payload)
+            : uploadSingle(file, options, payload))
+            .then((uploaded) => {
+                if (input && input._fleetUploadSequence !== sequence) {
+                    if (uploaded?.tempToken) destroy(uploaded.tempToken).catch(() => {});
+                    return null;
                 }
-                const uploaded = response.file;
                 writeHidden(hidden, uploaded);
                 render({ info, progress, file: uploaded, showPreview: options.showPreview !== false });
                 options.onSuccess?.(uploaded);
-                resolve(uploaded);
-            });
-            xhr.addEventListener('error', () => {
-                const message = 'The upload failed because the server could not be reached.';
+                return uploaded;
+            })
+            .catch((error) => {
+                if (input && input._fleetUploadSequence !== sequence) return null;
+                const message = error?.message || 'The file could not be uploaded.';
                 writeHidden(hidden, {});
                 render({ info, progress, message, error: true });
                 options.onError?.(message);
-                resolve(null);
+                return null;
             });
-            const formData = new FormData();
-            formData.append('file', file);
-            xhr.send(formData);
-        });
 
         if (input) {
             input.value = '';
@@ -541,7 +683,93 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         return '<div class="temp-upload-progress hidden"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>';
     }
 
-    return { upload, render, readHidden, writeHidden, permanentUrl, formatSize, waitForInputs, destroy, progressMarkup, isImage };
+    return {
+        upload,
+        render,
+        readHidden,
+        writeHidden,
+        permanentUrl,
+        formatSize,
+        waitForInputs,
+        destroy,
+        progressMarkup,
+        isImage,
+        documentPolicy,
+        documentOptions,
+    };
+})();
+
+/* One shared renderer keeps every document section identical to the vehicle page. */
+window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
+    'use strict';
+
+    const ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+    }[character]));
+
+    function jsonValue(value = {}) {
+        try { return JSON.stringify(value || {}); } catch (_) { return '{}'; }
+    }
+
+    function optionMarkup(values = [], selected = '', placeholder = '') {
+        const normalized = Array.from(new Set((values || [])
+            .map((value) => typeof value === 'string' ? value : (value?.value || value?.id || value?.name || value?.label || ''))
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)));
+        return [`<option value="">${escapeHtml(placeholder)}</option>`]
+            .concat(normalized.map((value) => `<option value="${escapeHtml(value)}" ${String(selected || '') === value ? 'selected' : ''}>${escapeHtml(value)}</option>`))
+            .join('');
+    }
+
+    function reminderMarkup(values = [], selected = '') {
+        const normalized = Array.from(new Set((values || [])
+            .map((value) => typeof value === 'string' ? value : (value?.value || value?.id || value?.name || value?.label || ''))
+            .map((value) => String(value || '').trim())
+            .filter(Boolean)));
+        return normalized.map((value, index) => `<option value="${escapeHtml(value)}" ${(String(selected || '') === value || (!selected && index === 0)) ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
+    }
+
+    function create(config = {}) {
+        const row = config.row || {};
+        const fileData = config.fileData || ((row.file && typeof row.file === 'object') ? row.file : {});
+        const element = document.createElement('div');
+        element.className = ['repeat-row', 'doc-row', 'fleet-document-row', config.rowClass || ''].filter(Boolean).join(' ');
+        Object.entries(config.dataset || {}).forEach(([key, value]) => { element.dataset[key] = String(value); });
+
+        const classes = config.classes || {};
+        const extraHidden = (config.extraHidden || []).map((input) =>
+            `<input type="hidden" class="${escapeHtml(input.className || '')}" value="${escapeHtml(input.value || '')}">`
+        ).join('');
+
+        element.innerHTML = `
+            <div class="field">
+                <label>Document Name <span class="req">*</span></label>
+                <select class="${escapeHtml(classes.name || '')}" required aria-required="true">${optionMarkup(config.names, row.name || '', config.namePlaceholder || 'Select document')}</select>
+                ${extraHidden}
+            </div>
+            <div class="field">
+                <label>Expiry Date</label>
+                <input class="${escapeHtml(classes.expiry || '')}" type="date" value="${escapeHtml(row.expiry || row.expiryDate || '')}">
+            </div>
+            <div class="field">
+                <label>Reminder</label>
+                <select class="${escapeHtml(classes.reminder || '')}">${reminderMarkup(config.reminders, row.reminder || '')}</select>
+            </div>
+            <div class="field">
+                <label>Upload Document <span class="req">*</span></label>
+                <input class="${escapeHtml(classes.file || '')}" type="file" accept="${ACCEPT}" ${config.fileAttributes || ''}>
+                <input class="${escapeHtml(classes.hidden || '')}" type="hidden" value="${escapeHtml(jsonValue(fileData))}">
+                <div class="temp-upload-progress hidden ${escapeHtml(classes.progress || '')}"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
+                <div class="upload-meta ${escapeHtml(classes.info || '')}"></div>
+                <div class="hint">Allowed: PDF, DOC, DOCX, XLS or XLSX. Maximum size: 4 MB. Images are not allowed.</div>
+            </div>
+            <button type="button" class="mini-btn remove-row ${escapeHtml(config.removeClass || '')}">Remove</button>`;
+
+        return { element, fileData };
+    }
+
+    return { create };
 })();
 
 
@@ -777,7 +1005,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 info: $('.docUploadInfo', row),
                 progress: $('.docUploadProgress', row),
                 file: fileData,
-                showPreview: true,
+                showPreview: false,
             });
         }
 
@@ -853,35 +1081,21 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         function addDocRow(row = {}) {
             const wrapper = $('#vehicleDocRows');
             if (!wrapper) return;
-            const div = document.createElement('div');
-            div.className = 'repeat-row doc-row';
-            const defaultDocOptions = [''].concat(docTemplates);
             const fileData = normalizeFileData(row.file || row);
-            div.innerHTML = `
-                <div class="field">
-                    <label>Document Name <span class="req">*</span></label>
-                    <select class="docName" required>
-                        ${defaultDocOptions.map((name) => `<option value="${escapeHtml(name)}" ${row.name === name ? 'selected' : ''}>${escapeHtml(name || 'Select document')}</option>`).join('')}
-                    </select>
-                </div>
-                <div class="field">
-                    <label>Expiry Date</label>
-                    <input class="docExpiry" type="date" value="${escapeHtml(row.expiry || '')}">
-                </div>
-                <div class="field">
-                    <label>Reminder</label>
-                    <select class="docReminder">${docReminders.map((reminder) => `<option value="${escapeHtml(reminder)}" ${row.reminder === reminder ? 'selected' : ''}>${escapeHtml(reminder)}</option>`).join('')}</select>
-                </div>
-                <div class="field">
-                    <label>Upload Picture / File <span class="req">*</span></label>
-                    <input class="docFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/*,application/pdf">
-                    <input class="docFileData" type="hidden" value="${escapeHtml(JSON.stringify(fileData || {}))}">
-                    <div class="temp-upload-progress hidden docUploadProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
-                    <div class="upload-meta docUploadInfo"></div>
-                </div>
-                <button type="button" class="mini-btn remove-row">Remove</button>`;
-            wrapper.appendChild(div);
-            renderDocFileInfo(div, fileData);
+            const rendered = window.FleetmanDocumentRows.create({
+                row,
+                fileData,
+                rowClass: 'vehicle-document-row',
+                names: docTemplates,
+                reminders: docReminders,
+                namePlaceholder: 'Select document',
+                classes: {
+                    name: 'docName', expiry: 'docExpiry', reminder: 'docReminder',
+                    file: 'docFile', hidden: 'docFileData', progress: 'docUploadProgress', info: 'docUploadInfo'
+                }
+            });
+            wrapper.appendChild(rendered.element);
+            renderDocFileInfo(rendered.element, fileData);
             refreshVehicleDocumentOptions();
         }
 
@@ -901,8 +1115,8 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             for (const file of Object.values(documentFiles || {})) {
                 if (!file) continue;
                 const ext = String(file.name || '').split('.').pop().toLowerCase();
-                if (!['jpg', 'jpeg', 'png', 'webp', 'pdf'].includes(ext)) {
-                    toast('Vehicle documents must be JPG, JPEG, PNG, WEBP or PDF.');
+                if (!uploadManager.documentPolicy().extensions.includes(ext)) {
+                    toast('Vehicle documents must be PDF, DOC, DOCX, XLS or XLSX. Images are not allowed.');
                     return false;
                 }
                 if (file.size > 4 * 1024 * 1024) {
@@ -1412,14 +1626,11 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (docFile) {
                 const row = docFile.closest('.doc-row');
                 if (row) {
-                    uploadManager.upload(docFile, {
+                    uploadManager.upload(docFile, uploadManager.documentOptions({
                         hidden: $('.docFileData', row),
                         info: $('.docUploadInfo', row),
                         progress: $('.docUploadProgress', row),
-                        extensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-                        maxBytes: 4 * 1024 * 1024,
-                        showPreview: true,
-                    });
+                    }));
                 }
             }
 
@@ -3294,6 +3505,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
     function initVendors() {
         let parties = Array.isArray(records.parties) ? records.parties : (samples.parties || []);
         const partyDocumentTemplates = options.party_document_templates || [];
+        const documentReminders = options.document_reminders || [];
         const documentSelects = window.FleetmanUniqueDocumentSelects;
         const uploadManager = window.FleetmanTemporaryUploads;
         const partyPhonePattern = /^\d{11}$/;
@@ -3376,12 +3588,12 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
 
         function validatePendingFiles(documentFiles = {}) {
-            const allowed = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+            const allowed = uploadManager.documentPolicy().extensions;
             for (const file of Object.values(documentFiles || {})) {
                 if (!file) continue;
                 const ext = String(file.name || '').split('.').pop().toLowerCase();
                 if (!allowed.includes(ext)) {
-                    toast('Only JPG, JPEG, PNG, WEBP or PDF documents are allowed.');
+                    toast('Only PDF, DOC, DOCX, XLS or XLSX documents are allowed. Images are not allowed.');
                     return false;
                 }
                 if (file.size > 4 * 1024 * 1024) {
@@ -3490,7 +3702,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 info: $('.partyDocUploadInfo', row),
                 progress: $('.partyDocUploadProgress', row),
                 file: fileData,
-                showPreview: true,
+                showPreview: false,
             });
         }
 
@@ -3501,18 +3713,22 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         function addDocument(row = {}) {
             const wrapper = $('#partyDocuments');
             if (!wrapper) return;
-            const div = document.createElement('div');
-            div.className = 'repeat-row document-row';
-            const docOptions = [''].concat(partyDocumentTemplates);
             const fileData = normalizeDocumentFile(row);
-            div.innerHTML = `
-                <div class="field"><label>Document Name <span class="req">*</span></label><select class="partyDocName" required aria-required="true">${docOptions.map((doc) => `<option value="${escapeHtml(doc)}" ${row.name === doc ? 'selected' : ''}>${escapeHtml(doc || 'Select vendor document')}</option>`).join('')}</select></div>
-                <div class="field"><label>Reference No.</label><input class="partyDocNumber" placeholder="Optional" value="${escapeHtml(row.number || '')}"></div>
-                <div class="field"><label>Expiry Date</label><input class="partyDocExpiry" type="date" value="${escapeHtml(row.expiry || '')}"></div>
-                <div class="field"><label>Upload Picture / File <span class="req">*</span></label><input class="partyDocFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"><input class="partyDocFileData" type="hidden" value="${escapeHtml(JSON.stringify(fileData || {}))}"><div class="temp-upload-progress hidden partyDocUploadProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta partyDocUploadInfo"></div><div class="hint">Allowed: JPG, JPEG, PNG, WEBP or PDF. Maximum size: 4 MB.</div></div>
-                <button type="button" class="mini-btn danger remove-row">Remove</button>`;
-            wrapper.appendChild(div);
-            renderDocumentFileInfo(div, fileData);
+            const rendered = window.FleetmanDocumentRows.create({
+                row,
+                fileData,
+                rowClass: 'document-row party-document-row',
+                names: partyDocumentTemplates,
+                reminders: documentReminders,
+                namePlaceholder: 'Select document',
+                classes: {
+                    name: 'partyDocName', expiry: 'partyDocExpiry', reminder: 'partyDocReminder',
+                    file: 'partyDocFile', hidden: 'partyDocFileData', progress: 'partyDocUploadProgress', info: 'partyDocUploadInfo'
+                },
+                extraHidden: [{ className: 'partyDocNumber', value: row.number || row.reference || '' }]
+            });
+            wrapper.appendChild(rendered.element);
+            renderDocumentFileInfo(rendered.element, fileData);
             refreshPartyDocumentOptions();
         }
 
@@ -3555,10 +3771,11 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     name: $('.partyDocName', row)?.value.trim() || '',
                     number: $('.partyDocNumber', row)?.value.trim() || '',
                     expiry: $('.partyDocExpiry', row)?.value || '',
+                    reminder: $('.partyDocReminder', row)?.value || '',
                     file: existingFile,
                 };
 
-                if (doc.name || doc.number || doc.expiry || doc.file?.filePath || doc.file?.fileUrl || pendingFile) {
+                if (doc.name || doc.number || doc.expiry || doc.reminder || doc.file?.filePath || doc.file?.fileUrl || pendingFile) {
                     const documentIndex = documents.length;
                     documents.push(doc);
                     if (pendingFile) documentFiles[documentIndex] = pendingFile;
@@ -3679,7 +3896,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 }
 
                 if (!hasPartyUploadedFile(file) && !pending) {
-                    invalidate(fileInput, 'Upload Picture / File is required.');
+                    invalidate(fileInput, 'Upload Document is required.');
                 }
 
                 const fileSize = Number(pending?.size || file?.sizeBytes || 0);
@@ -3914,14 +4131,11 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (!input) return;
             const row = input.closest('.document-row');
             if (row) {
-                uploadManager.upload(input, {
+                uploadManager.upload(input, uploadManager.documentOptions({
                     hidden: $('.partyDocFileData', row),
                     info: $('.partyDocUploadInfo', row),
                     progress: $('.partyDocUploadProgress', row),
-                    extensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-                    maxBytes: 4 * 1024 * 1024,
-                    showPreview: true,
-                });
+                }));
             }
         });
         document.addEventListener('click', (event) => {
@@ -4602,7 +4816,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 info: container?.querySelector('.upload-meta'),
                 progress: container?.querySelector('.driverDocProgress'),
                 file: fileData,
-                showPreview: true,
+                showPreview: false,
             });
         }
 
@@ -4693,41 +4907,23 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (!wrapper) return;
             const rowIdx = docRowCounter++;
             const existingFile = (row.file && typeof row.file === 'object') ? row.file : {};
-            const div = document.createElement('div');
-            div.className = 'repeat-row driver-document-row';
-            div.dataset.docIdx = rowIdx;
-            const docOptions = [''].concat(docTemplates);
-            const reminderOptions = [''].concat(docReminders);
-
-            div.innerHTML = `
-                <div class="field">
-                    <label>Document Name <span class="req">*</span></label>
-                    <select class="driverDocName" required aria-required="true">${docOptions.map((doc) => `<option value="${escapeHtml(doc)}" ${row.name === doc ? 'selected' : ''}>${escapeHtml(doc || 'Select driver document')}</option>`).join('')}</select>
-                </div>
-                <div class="field">
-                    <label>Upload File <span class="req">*</span></label>
-                    <input type="file" class="driverDocFile" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" data-doc-idx="${rowIdx}">
-                    <input type="hidden" class="driverDocFileData" value="${escapeHtml(JSON.stringify(existingFile || {}))}">
-                    <div class="temp-upload-progress hidden driverDocProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
-                    <div class="upload-meta"></div>
-                    <div class="hint">Allowed: JPG, JPEG, PNG, WEBP or PDF. Maximum size: 4 MB.</div>
-                </div>
-                <div class="field">
-                    <label>Document No./Reference</label>
-                    <input class="driverDocNumber" placeholder="Optional" value="${escapeHtml(row.number || '')}">
-                </div>
-                <div class="field">
-                    <label>Expiry Date <span class="req">*</span></label>
-                    <input class="driverDocExpiry" type="date" required aria-required="true" value="${escapeHtml(row.expiry || '')}">
-                </div>
-                <div class="field">
-                    <label>Reminder <span class="req">*</span></label>
-                    <select class="driverDocReminder" required aria-required="true">${reminderOptions.map((reminder) => `<option value="${escapeHtml(reminder)}" ${row.reminder === reminder ? 'selected' : ''}>${escapeHtml(reminder || 'Select reminder')}</option>`).join('')}</select>
-                </div>
-                <button type="button" class="mini-btn danger remove-row" style="align-self:flex-end">Remove</button>
-            `;
-            wrapper.appendChild(div);
-            renderDocFileInfo(div, existingFile);
+            const rendered = window.FleetmanDocumentRows.create({
+                row,
+                fileData: existingFile,
+                rowClass: 'driver-document-row',
+                names: docTemplates,
+                reminders: docReminders,
+                namePlaceholder: 'Select document',
+                dataset: { docIdx: rowIdx },
+                fileAttributes: `data-doc-idx="${rowIdx}"`,
+                classes: {
+                    name: 'driverDocName', expiry: 'driverDocExpiry', reminder: 'driverDocReminder',
+                    file: 'driverDocFile', hidden: 'driverDocFileData', progress: 'driverDocProgress', info: 'driverDocUploadInfo'
+                },
+                extraHidden: [{ className: 'driverDocNumber', value: row.number || row.reference || '' }]
+            });
+            wrapper.appendChild(rendered.element);
+            renderDocFileInfo(rendered.element, existingFile);
             refreshDriverDocumentOptions();
         }
 
@@ -4945,14 +5141,6 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                     markDriverInvalid(fileInput, 'The document must be 4 MB or smaller.');
                     valid = false;
                 }
-                if (!expiry?.value) {
-                    markDriverInvalid(expiry, 'Expiry Date is required.');
-                    valid = false;
-                }
-                if (!reminder?.value) {
-                    markDriverInvalid(reminder, 'Reminder is required.');
-                    valid = false;
-                }
             });
             if (documentSelects.hasDuplicates('#driverDocuments', '.driverDocName')) {
                 $$('#driverDocuments .driverDocName').forEach((select) => {
@@ -5095,15 +5283,12 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const fileInput = event.target.closest('#driverDocuments .driverDocFile');
             if (fileInput) {
                 const row = fileInput.closest('.driver-document-row');
-                if (row) uploadManager.upload(fileInput, {
+                if (row) uploadManager.upload(fileInput, uploadManager.documentOptions({
                     hidden: $('.driverDocFileData', row),
                     info: $('.upload-meta', row),
                     progress: $('.driverDocProgress', row),
-                    extensions: ['jpg','jpeg','png','webp','pdf'],
-                    maxBytes: 4 * 1024 * 1024,
-                    showPreview: true,
                     onSuccess: () => clearDriverFieldError(fileInput),
-                });
+                }));
             }
             if (event.target.matches('#driverPhoto')) {
                 uploadManager.upload(event.target, {
@@ -5323,6 +5508,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
     function initEmployees() {
         let employees = Array.isArray(records.employees) ? records.employees : (samples.employees || []);
         const docTemplates = (window.FLEETMAN_EMPLOYEE_DOC_TEMPLATES || options.employee_document_templates || []);
+        const docReminders = options.document_reminders || [];
         const documentSelects = window.FleetmanUniqueDocumentSelects;
         const uploadManager = window.FleetmanTemporaryUploads;
         const CONTACT_TYPES = ['Office', 'Home', 'Relative', 'Other'];
@@ -5389,7 +5575,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 info: $('.emp-upload-info', wrapper),
                 progress: $('.empDocProgress', wrapper),
                 file: fileData,
-                showPreview: true,
+                showPreview: false,
             });
         }
 
@@ -5456,32 +5642,23 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             if (!wrapper) return;
             const rowIdx = docRowCounter++;
             const existingFile = (row.file && typeof row.file === 'object') ? row.file : {};
-            const div = document.createElement('div');
-            div.className = 'repeat-row emp-document-row';
-            div.dataset.docIdx = rowIdx;
-            const docOptions = [''].concat(docTemplates).map((doc) =>
-                `<option value="${escapeHtml(doc)}" ${row.name === doc ? 'selected' : ''}>${escapeHtml(doc || 'Select employee document')}</option>`
-            ).join('');
-            div.innerHTML = `
-                <div class="field">
-                    <label>Document Type <span class="req">*</span></label>
-                    <select class="empDocName" required aria-required="true">${docOptions}</select>
-                </div>
-                <div class="field">
-                    <label>Reference / Number</label>
-                    <input class="empDocRef" placeholder="Optional reference" value="${escapeHtml(row.reference || row.number || '')}">
-                </div>
-                <div class="field">
-                    <label>Upload File <span class="req">*</span></label>
-                    <input class="empDocFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" data-doc-idx="${rowIdx}">
-                    <input class="empDocFileData" type="hidden" value="${escapeHtml(JSON.stringify(existingFile || {}))}">
-                    <div class="temp-upload-progress hidden empDocProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
-                    <div class="emp-upload-info upload-meta"></div>
-                    <div class="hint">Allowed: JPG, JPEG, PNG, WEBP or PDF. Maximum size: 4 MB.</div>
-                </div>
-                <button type="button" class="mini-btn danger remove-row" style="align-self:flex-end">Remove</button>`;
-            wrapper.appendChild(div);
-            renderDocFileInfo(div, existingFile);
+            const rendered = window.FleetmanDocumentRows.create({
+                row,
+                fileData: existingFile,
+                rowClass: 'emp-document-row employee-document-row',
+                names: docTemplates,
+                reminders: docReminders,
+                namePlaceholder: 'Select document',
+                dataset: { docIdx: rowIdx },
+                fileAttributes: `data-doc-idx="${rowIdx}"`,
+                classes: {
+                    name: 'empDocName', expiry: 'empDocExpiry', reminder: 'empDocReminder',
+                    file: 'empDocFile', hidden: 'empDocFileData', progress: 'empDocProgress', info: 'emp-upload-info'
+                },
+                extraHidden: [{ className: 'empDocRef', value: row.reference || row.number || '' }]
+            });
+            wrapper.appendChild(rendered.element);
+            renderDocFileInfo(rendered.element, existingFile);
             refreshEmployeeDocumentOptions();
         }
 
@@ -5514,8 +5691,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const documents = $$('#employeeDocuments .emp-document-row').map((domRow) => ({
                 name: $('.empDocName', domRow)?.value.trim() || '',
                 reference: $('.empDocRef', domRow)?.value.trim() || '',
+                expiry: $('.empDocExpiry', domRow)?.value || '',
+                reminder: $('.empDocReminder', domRow)?.value || '',
                 file: parseEmployeeUpload($('.empDocFileData', domRow)),
-            })).filter((documentRow) => documentRow.name || documentRow.reference || hasUploadedFile(documentRow.file));
+            })).filter((documentRow) => documentRow.name || documentRow.reference || documentRow.expiry || documentRow.reminder || hasUploadedFile(documentRow.file));
 
             const photo = parseEmployeeUpload($('#employeePhotoData'));
             return {
@@ -5639,7 +5818,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 const fileInput = $('.empDocFile', row);
                 const fileData = parseEmployeeUpload($('.empDocFileData', row));
                 if (!name?.value) {
-                    markEmployeeInvalid(name, 'Document Type is required.');
+                    markEmployeeInvalid(name, 'Document Name is required.');
                     valid = false;
                 }
                 if (!hasUploadedFile(fileData)) {
@@ -5869,15 +6048,12 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const docFile = event.target.closest('#employeeDocuments .empDocFile');
             if (docFile) {
                 const row = docFile.closest('.emp-document-row');
-                if (row) uploadManager.upload(docFile, {
+                if (row) uploadManager.upload(docFile, uploadManager.documentOptions({
                     hidden: $('.empDocFileData', row),
                     info: $('.emp-upload-info', row),
                     progress: $('.empDocProgress', row),
-                    extensions: ['jpg','jpeg','png','webp','pdf'],
-                    maxBytes: 4 * 1024 * 1024,
-                    showPreview: true,
                     onSuccess: () => clearEmployeeFieldError(docFile),
-                });
+                }));
             }
             if (event.target.closest('#employeeAddPage')) clearEmployeeFieldError(event.target);
         });
@@ -7585,6 +7761,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         let assignmentCounter = 0;
         let documentCounter = 0;
         const documentNames = options.contract_document_templates || options.document_templates || [];
+        const documentReminders = options.document_reminders || [];
         const documentSelects = window.FleetmanUniqueDocumentSelects;
         const uploadManager = window.FleetmanTemporaryUploads;
 
@@ -7674,6 +7851,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 file: parseHiddenFile($('.contractDocExistingFile', row)),
                 message,
                 error,
+                showPreview: false,
             });
         }
 
@@ -7784,37 +7962,22 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             documentCounter += 1;
             const wrapper = $('#contractDocuments');
             if (!wrapper) return;
-            const card = document.createElement('div');
-            card.className = 'contract-doc-card';
-            const documentNameOptions = normalizedContractDocumentNames().map((name) => ({ id: name, label: name }));
-            card.innerHTML = `
-                <div class="contract-card-head">
-                    <div>
-                        <div class="contract-card-title">Document ${documentCounter}</div>
-                        <div class="contract-card-hint">Name the document before attaching a file.</div>
-                    </div>
-                    <button class="btn light small remove-contract-card" type="button">Remove</button>
-                </div>
-                <div class="contract-grid">
-                    <div class="field contract-col-4">
-                        <label>Document Name <span class="req">*</span></label>
-                        <select class="contractDocName" required aria-required="true">${optionHtml(documentNameOptions, row.name || '', 'Select document name')}</select>
-                    </div>
-                    <div class="field contract-col-3">
-                        <label>Expiry Date <span class="req">*</span></label>
-                        <input class="contractDocExpiry" type="date" value="${escapeHtml(row.expiry || row.expiryDate || '')}" required aria-required="true">
-                    </div>
-                    <div class="field contract-col-5">
-                        <label>Attach File <span class="req">*</span></label>
-                        <input class="contractDocFile" type="file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx" aria-required="true">
-                        <input class="contractDocExistingFile" type="hidden" value="${escapeHtml(hiddenFileValue(row.file || {}))}">
-                        <div class="temp-upload-progress hidden contractDocProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
-                        <div class="contract-upload-info"></div>
-                        <div class="hint">Allowed: JPG, JPEG, PNG, WEBP, PDF, DOC, DOCX, XLS or XLSX. Maximum size: 4 MB.</div>
-                    </div>
-                </div>`;
-            wrapper.appendChild(card);
-            renderFileInfo(card);
+            const fileData = (row.file && typeof row.file === 'object') ? row.file : {};
+            const rendered = window.FleetmanDocumentRows.create({
+                row,
+                fileData,
+                rowClass: 'contract-doc-card contract-document-row',
+                names: normalizedContractDocumentNames(),
+                reminders: documentReminders,
+                namePlaceholder: 'Select document',
+                classes: {
+                    name: 'contractDocName', expiry: 'contractDocExpiry', reminder: 'contractDocReminder',
+                    file: 'contractDocFile', hidden: 'contractDocExistingFile', progress: 'contractDocProgress', info: 'contract-upload-info'
+                },
+                removeClass: 'remove-contract-card'
+            });
+            wrapper.appendChild(rendered.element);
+            renderFileInfo(rendered.element);
             refreshContractDocumentOptions();
         }
 
@@ -7863,6 +8026,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             return $$('.contract-doc-card').map((card) => ({
                 name: $('.contractDocName', card)?.value || '',
                 expiry: $('.contractDocExpiry', card)?.value || '',
+                reminder: $('.contractDocReminder', card)?.value || '',
                 file: parseHiddenFile($('.contractDocExistingFile', card)),
             }));
         }
@@ -7983,7 +8147,6 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 } else {
                     seenDocumentNames.set(normalizedName, name);
                 }
-                if (!expiry?.value) invalidate(expiry, 'Expiry Date is required.');
                 if (!hasUploadedContractFile(fileData)) invalidate(fileInput, 'Please upload the document before submitting.');
                 if (Number(fileData.sizeBytes || 0) > 4 * 1024 * 1024) invalidate(fileInput, 'The document must be 4 MB or smaller.');
             });
@@ -8265,16 +8428,13 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             const file = event.target.closest('.contractDocFile');
             if (file) {
                 const card = file.closest('.contract-doc-card');
-                uploadManager.upload(file, {
+                uploadManager.upload(file, uploadManager.documentOptions({
                     hidden: $('.contractDocExistingFile', card),
                     info: $('.contract-upload-info', card),
                     progress: $('.contractDocProgress', card),
-                    extensions: ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx'],
-                    maxBytes: 4 * 1024 * 1024,
-                    showPreview: true,
                     onSuccess: () => clearContractFieldError(file),
                     onError: (message) => invalidateContractField(file, message),
-                });
+                }));
             }
         });
 
