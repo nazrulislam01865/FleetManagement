@@ -66,11 +66,21 @@
                     <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                 </select>
             </div>
-            <div class="field">
-                <label for="vehicleSelect">Vehicle <span class="req">*</span></label>
-                <select id="vehicleSelect" required aria-required="true">
-                    <option value="">- Select contract first -</option>
-                </select>
+            <div class="field searchable">
+                <div class="search-label">
+                    <label for="vehicleSelect">Vehicle <span class="req">*</span></label>
+                    <span class="search-tag">Searchable &amp; Filtered</span>
+                </div>
+                <input
+                    id="vehicleSelect"
+                    list="vehicleSelectList"
+                    placeholder="Select contract first"
+                    autocomplete="off"
+                    required
+                    aria-required="true"
+                    disabled
+                >
+                <datalist id="vehicleSelectList"></datalist>
             </div>
         </div>
         <div class="vehicle-note" id="vehicleSetupNote">Select a contract first. Vehicle, driver, fuel setup and latest ODO will load from saved records.</div>

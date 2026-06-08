@@ -2206,10 +2206,23 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return contracts.find((contract) => String(contract.id) === value('#contractSelect')) || null;
         }
 
+        function vehicleSearchLabel(vehicle = {}) {
+            return String(vehicle.label || vehicle.name || vehicle.id || '').trim();
+        }
+
         function selectedVehicle() {
             const contract = selectedContract();
             if (!contract) return null;
-            return (contract.vehicles || []).find((vehicle) => String(vehicle.id) === value('#vehicleSelect')) || null;
+
+            const current = String(value('#vehicleSelect') || '').trim();
+            if (!current) return null;
+            const normalizedCurrent = current.toLowerCase();
+
+            return (contract.vehicles || []).find((vehicle) => {
+                const id = String(vehicle.id || '').trim();
+                const label = vehicleSearchLabel(vehicle);
+                return id === current || label.toLowerCase() === normalizedCurrent;
+            }) || null;
         }
 
         function setFuelEntryMode(prefix, fuelName, rateInfo = null) {
@@ -2258,45 +2271,37 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function updateVehicles() {
             const contract = selectedContract();
-            const select = $('#vehicleSelect');
-            if (!select) return;
-            select.innerHTML = '';
+            const input = $('#vehicleSelect');
+            const list = $('#vehicleSelectList');
+            if (!input || !list) return;
+
+            input.value = '';
+            input.disabled = true;
+            input.placeholder = 'Select contract first';
+            list.innerHTML = '';
 
             if (!contract) {
-                const option = document.createElement('option');
-                option.value = '';
-                option.textContent = '- Select vehicle -';
-                select.appendChild(option);
                 clearVehicleSetup('Select a contract first. Vehicle list will load from that contract.');
                 return;
             }
 
             const vehicles = contract.vehicles || [];
             if (!vehicles.length) {
-                const option = document.createElement('option');
-                option.value = '';
-                option.textContent = 'No vehicle assigned in this contract';
-                select.appendChild(option);
+                input.placeholder = 'No vehicle assigned in this contract';
                 clearVehicleSetup('This contract has no vehicle assignment. Add a vehicle assignment in the Contract page first.');
                 return;
             }
 
-            if (vehicles.length > 1) {
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = '- Select vehicle from contract -';
-                select.appendChild(placeholder);
-            }
-
             vehicles.forEach((vehicle) => {
                 const option = document.createElement('option');
-                option.value = vehicle.id;
-                option.textContent = vehicle.label || vehicle.name || vehicle.id;
-                select.appendChild(option);
+                option.value = vehicleSearchLabel(vehicle);
+                option.label = String(vehicle.id || '');
+                list.appendChild(option);
             });
 
-            if (vehicles.length === 1) select.value = vehicles[0].id;
-            updateVehicleSetup();
+            input.disabled = false;
+            input.placeholder = 'Search and select vehicle from contract';
+            clearVehicleSetup(`${vehicles.length} vehicle${vehicles.length === 1 ? '' : 's'} available for this contract. Search and select the required vehicle.`);
         }
 
         function clearVehicleSetup(note) {
@@ -3014,10 +3019,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 contractId: contract?.contractId || contract?.id || '',
                 contract: contract?.label || $('#contractSelect option:checked')?.textContent || '',
                 contractLabel: contract?.label || '',
-                vehicleId: vehicle?.id || value('#vehicleSelect'),
-                vehicle: vehicle?.label || vehicle?.name || $('#vehicleSelect option:checked')?.textContent || '',
-                vehicleLabel: vehicle?.label || '',
-                car: vehicle?.label || vehicle?.name || '',
+                vehicleId: vehicle?.id || '',
+                vehicle: vehicle?.label || vehicle?.name || value('#vehicleSelect') || '',
+                vehicleLabel: vehicle?.label || vehicle?.name || value('#vehicleSelect') || '',
+                car: vehicle?.label || vehicle?.name || value('#vehicleSelect') || '',
                 driverId: vehicle?.driverId || '',
                 driver: vehicle?.driver || 'Assigned Driver',
                 driverName: vehicle?.driver || '',
@@ -3402,7 +3407,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             editingRechargeDate = row.date || '';
             setValue('#contractSelect', row.contractId || '');
             updateVehicles();
-            setValue('#vehicleSelect', row.vehicleId || '');
+            const editVehicle = (selectedContract()?.vehicles || []).find((vehicle) => {
+                return String(vehicle.id || '') === String(row.vehicleId || '')
+                    || vehicleSearchLabel(vehicle).toLowerCase() === String(row.vehicle || row.vehicleLabel || '').trim().toLowerCase();
+            }) || null;
+            setValue('#vehicleSelect', editVehicle ? vehicleSearchLabel(editVehicle) : '');
             updateVehicleSetup();
 
             setValue('#primaryStation', row.primaryStation || '');
@@ -3483,6 +3492,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         });
 
         $('#contractSelect')?.addEventListener('change', updateVehicles);
+        $('#vehicleSelect')?.addEventListener('input', () => {
+            if (selectedVehicle()) {
+                updateVehicleSetup();
+            } else {
+                clearVehicleSetup('Search and select a valid vehicle assigned to the selected contract.');
+            }
+        });
         $('#vehicleSelect')?.addEventListener('change', updateVehicleSetup);
         $('#primaryQty')?.addEventListener('input', recalculate);
         $('#secondaryQty')?.addEventListener('input', recalculate);
