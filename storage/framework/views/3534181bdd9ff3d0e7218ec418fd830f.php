@@ -11,13 +11,20 @@
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
         $fleetRbacJsVersion = filemtime(public_path('js/fleetman-rbac.js'));
         $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
+        $fleetNotificationsJsVersion = filemtime(public_path('js/fleetman-notifications.js'));
+        $pusherEnabled = filled(config('services.pusher.key'))
+            && filled(config('services.pusher.secret'))
+            && filled(config('services.pusher.app_id'))
+            && filled(config('services.pusher.cluster'));
     ?>
     <link rel="stylesheet" href="<?php echo e(asset('css/fleetman.css')); ?>?v=<?php echo e($fleetCssVersion); ?>">
 </head>
 <body class="preload" data-page="<?php echo e($fleetman['page'] ?? ''); ?>">
     <div class="mobile-top">
         <button type="button" id="menuBtn">☰ Menu</button>
-        <b><?php echo e($brand['name'] ?? 'FleetMan'); ?></b>
+        <a href="<?php echo e(route('fleet.dashboard')); ?>" class="mobile-brand-link" aria-label="Go to Dashboard">
+            <b><?php echo e($brand['name'] ?? 'FleetMan'); ?></b>
+        </a>
         <span><?php echo $__env->yieldContent('mobile-title', 'Fleet'); ?></span>
     </div>
     <div class="drawer-backdrop" id="backdrop"></div>
@@ -95,6 +102,29 @@
         </script>
 
         <main class="main-content">
+            <div class="fleet-notification-slot" aria-label="Notification controls">
+                <?php if (isset($component)) { $__componentOriginal5e01f85f0f00ef042f7779f4f47d8fd5 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal5e01f85f0f00ef042f7779f4f47d8fd5 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.notification-bell','data' => []] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.notification-bell'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes([]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal5e01f85f0f00ef042f7779f4f47d8fd5)): ?>
+<?php $attributes = $__attributesOriginal5e01f85f0f00ef042f7779f4f47d8fd5; ?>
+<?php unset($__attributesOriginal5e01f85f0f00ef042f7779f4f47d8fd5); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal5e01f85f0f00ef042f7779f4f47d8fd5)): ?>
+<?php $component = $__componentOriginal5e01f85f0f00ef042f7779f4f47d8fd5; ?>
+<?php unset($__componentOriginal5e01f85f0f00ef042f7779f4f47d8fd5); ?>
+<?php endif; ?>
+            </div>
+
             <div class="fleet-main-body">
                 <?php echo $__env->yieldContent('content'); ?>
             </div>
@@ -129,6 +159,23 @@
     <script src="<?php echo e(asset('js/fleetman.js')); ?>?v=<?php echo e($fleetJsVersion); ?>"></script>
     <script src="<?php echo e(asset('js/fleetman-navigation.js')); ?>?v=<?php echo e($fleetNavigationJsVersion); ?>"></script>
     <script src="<?php echo e(asset('js/fleetman-rbac.js')); ?>?v=<?php echo e($fleetRbacJsVersion); ?>"></script>
+    <script>
+        window.FLEETMAN_NOTIFICATIONS = {
+            userId: <?php echo e((int) auth()->id()); ?>,
+            feedUrl: <?php echo json_encode(route('fleet.notifications.feed'), 15, 512) ?>,
+            readAllUrl: <?php echo json_encode(route('fleet.notifications.read-all'), 15, 512) ?>,
+            readUrlTemplate: <?php echo json_encode(route('fleet.notifications.read', ['notification' => '__ID__']), 512) ?>,
+            pusherAuthUrl: <?php echo json_encode(route('fleet.notifications.pusher-auth'), 15, 512) ?>,
+            pusherEnabled: <?php echo json_encode($pusherEnabled, 15, 512) ?>,
+            pusherKey: <?php echo json_encode(config('services.pusher.key'), 15, 512) ?>,
+            pusherCluster: <?php echo json_encode(config('services.pusher.cluster'), 15, 512) ?>,
+            pollIntervalMs: 60000
+        };
+    </script>
+    <?php if($pusherEnabled): ?>
+        <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+    <?php endif; ?>
+    <script src="<?php echo e(asset('js/fleetman-notifications.js')); ?>?v=<?php echo e($fleetNotificationsJsVersion); ?>"></script>
     <script>
         window.FLEETMAN_SESSION = {
             timeoutMs: <?php echo e((int) config('fleetman.inactivity_timeout_minutes', 15) * 60 * 1000); ?>,

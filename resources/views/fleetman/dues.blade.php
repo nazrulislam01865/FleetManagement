@@ -12,7 +12,7 @@
             </x-slot:actions>
         </x-fleetman.topbar>
 
-        <x-fleetman.title-card title="Accounts Payable & Dues" subtitle="Review and process all pending dues for driver salaries, employee salaries, and fuel recharges.">
+        <x-fleetman.title-card title="Accounts Payable & Dues" subtitle="Review and process driver salaries, employee salaries, vehicle rents, fuel recharges, and unpaid trip balances.">
             <x-slot:action><button type="button" class="btn secondary" id="exportDuesBtn">Export CSV</button></x-slot:action>
         </x-fleetman.title-card>
 
@@ -31,6 +31,8 @@
                     <option value="Fuel Recharge">Fuel Recharge</option>
                     <option value="Driver Salary">Driver Salary</option>
                     <option value="Employee Salary">Employee Salary</option>
+                    <option value="Vehicle Rent">Vehicle Rent</option>
+                    <option value="Trip Payment Balance">Trip Payment Balance</option>
                 </select>
                 <select id="dueFilterStatus" class="form-control" style="width:200px">
                     <option value="">All Statuses</option>

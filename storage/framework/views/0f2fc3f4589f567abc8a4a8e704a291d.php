@@ -13,10 +13,6 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Licence Type Master']])]); ?>
-         <?php $__env->slot('actions', null, []); ?> 
-            <a href="<?php echo e(route('fleet.master-data.party-types')); ?>" class="btn secondary">Party Type Master</a>
-            <span class="badge soft">Database backed dropdown values</span>
-         <?php $__env->endSlot(); ?>
      <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b)): ?>

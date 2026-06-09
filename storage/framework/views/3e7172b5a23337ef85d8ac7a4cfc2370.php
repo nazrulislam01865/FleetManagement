@@ -1,5 +1,5 @@
 <aside class="sidebar" id="fleetSidebar">
-    <div class="logo-card">
+    <a href="<?php echo e(route('fleet.dashboard')); ?>" class="logo-card logo-card-link" aria-label="Go to Dashboard">
         <div class="logo-mark">
             <?php if(!empty($brand['logo_url'])): ?>
                 <img src="<?php echo e($brand['logo_url']); ?>" alt="<?php echo e($brand['name'] ?? 'FleetMan Logo'); ?>" style="max-height: 96px; max-width: 100%; object-fit: contain;">
@@ -9,7 +9,7 @@
                 <small><?php echo e($brand['tagline'] ?? 'Fleet Management System'); ?></small>
             <?php endif; ?>
         </div>
-    </div>
+    </a>
 
     <div class="account-card">
         <div class="avatar"><?php echo e($account['avatar'] ?? '👤'); ?></div>

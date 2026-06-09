@@ -14,6 +14,7 @@ use App\Http\Controllers\Fleet\FuelRechargeController;
 use App\Http\Controllers\Fleet\FleetFileController;
 use App\Http\Controllers\Fleet\TemporaryUploadController;
 use App\Http\Controllers\Fleet\MasterDataController;
+use App\Http\Controllers\Fleet\NotificationController;
 use App\Http\Controllers\Fleet\ReportController;
 use App\Http\Controllers\Fleet\RoleMatrixController;
 use App\Http\Controllers\Fleet\TripController;
@@ -63,6 +64,11 @@ Route::get('/', function () {
 });
 
 Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::get('/notifications/feed', [NotificationController::class, 'feed'])->name('notifications.feed');
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
+    Route::post('/notifications/pusher/auth', [NotificationController::class, 'pusherAuth'])->name('notifications.pusher-auth');
     Route::post('/uploads/temp', [TemporaryUploadController::class, 'store'])
         ->middleware(EnsureFleetManageAccess::class)
         ->name('uploads.store');

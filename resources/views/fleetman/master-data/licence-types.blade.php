@@ -6,10 +6,6 @@
 @section('content')
 <div class="page-section master-data-page">
     <x-fleetman.topbar :items="[['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Licence Type Master']]">
-        <x-slot:actions>
-            <a href="{{ route('fleet.master-data.party-types') }}" class="btn secondary">Party Type Master</a>
-            <span class="badge soft">Database backed dropdown values</span>
-        </x-slot:actions>
     </x-fleetman.topbar>
 
     <x-fleetman.title-card

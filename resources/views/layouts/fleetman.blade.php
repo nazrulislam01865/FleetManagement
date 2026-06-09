@@ -11,13 +11,20 @@
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
         $fleetRbacJsVersion = filemtime(public_path('js/fleetman-rbac.js'));
         $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
+        $fleetNotificationsJsVersion = filemtime(public_path('js/fleetman-notifications.js'));
+        $pusherEnabled = filled(config('services.pusher.key'))
+            && filled(config('services.pusher.secret'))
+            && filled(config('services.pusher.app_id'))
+            && filled(config('services.pusher.cluster'));
     @endphp
     <link rel="stylesheet" href="{{ asset('css/fleetman.css') }}?v={{ $fleetCssVersion }}">
 </head>
 <body class="preload" data-page="{{ $fleetman['page'] ?? '' }}">
     <div class="mobile-top">
         <button type="button" id="menuBtn">☰ Menu</button>
-        <b>{{ $brand['name'] ?? 'FleetMan' }}</b>
+        <a href="{{ route('fleet.dashboard') }}" class="mobile-brand-link" aria-label="Go to Dashboard">
+            <b>{{ $brand['name'] ?? 'FleetMan' }}</b>
+        </a>
         <span>@yield('mobile-title', 'Fleet')</span>
     </div>
     <div class="drawer-backdrop" id="backdrop"></div>
@@ -81,6 +88,10 @@
         </script>
 
         <main class="main-content">
+            <div class="fleet-notification-slot" aria-label="Notification controls">
+                <x-fleetman.notification-bell />
+            </div>
+
             <div class="fleet-main-body">
                 @yield('content')
             </div>
@@ -96,6 +107,23 @@
     <script src="{{ asset('js/fleetman.js') }}?v={{ $fleetJsVersion }}"></script>
     <script src="{{ asset('js/fleetman-navigation.js') }}?v={{ $fleetNavigationJsVersion }}"></script>
     <script src="{{ asset('js/fleetman-rbac.js') }}?v={{ $fleetRbacJsVersion }}"></script>
+    <script>
+        window.FLEETMAN_NOTIFICATIONS = {
+            userId: {{ (int) auth()->id() }},
+            feedUrl: @json(route('fleet.notifications.feed')),
+            readAllUrl: @json(route('fleet.notifications.read-all')),
+            readUrlTemplate: @json(route('fleet.notifications.read', ['notification' => '__ID__'])),
+            pusherAuthUrl: @json(route('fleet.notifications.pusher-auth')),
+            pusherEnabled: @json($pusherEnabled),
+            pusherKey: @json(config('services.pusher.key')),
+            pusherCluster: @json(config('services.pusher.cluster')),
+            pollIntervalMs: 60000
+        };
+    </script>
+    @if($pusherEnabled)
+        <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+    @endif
+    <script src="{{ asset('js/fleetman-notifications.js') }}?v={{ $fleetNotificationsJsVersion }}"></script>
     <script>
         window.FLEETMAN_SESSION = {
             timeoutMs: {{ (int) config('fleetman.inactivity_timeout_minutes', 15) * 60 * 1000 }},

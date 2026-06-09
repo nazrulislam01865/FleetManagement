@@ -30,14 +30,14 @@
 
         <?php if (isset($component)) { $__componentOriginal33f656cc9906d43d1f23d50a43b5f3b3 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal33f656cc9906d43d1f23d50a43b5f3b3 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.title-card','data' => ['title' => 'Accounts Payable & Dues','subtitle' => 'Review and process all pending dues for driver salaries, employee salaries, and fuel recharges.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.title-card','data' => ['title' => 'Accounts Payable & Dues','subtitle' => 'Review and process driver salaries, employee salaries, vehicle rents, fuel recharges, and unpaid trip balances.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.title-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Accounts Payable & Dues','subtitle' => 'Review and process all pending dues for driver salaries, employee salaries, and fuel recharges.']); ?>
+<?php $component->withAttributes(['title' => 'Accounts Payable & Dues','subtitle' => 'Review and process driver salaries, employee salaries, vehicle rents, fuel recharges, and unpaid trip balances.']); ?>
              <?php $__env->slot('action', null, []); ?> <button type="button" class="btn secondary" id="exportDuesBtn">Export CSV</button> <?php $__env->endSlot(); ?>
          <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
@@ -141,6 +141,8 @@
                     <option value="Fuel Recharge">Fuel Recharge</option>
                     <option value="Driver Salary">Driver Salary</option>
                     <option value="Employee Salary">Employee Salary</option>
+                    <option value="Vehicle Rent">Vehicle Rent</option>
+                    <option value="Trip Payment Balance">Trip Payment Balance</option>
                 </select>
                 <select id="dueFilterStatus" class="form-control" style="width:200px">
                     <option value="">All Statuses</option>

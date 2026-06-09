@@ -1,5 +1,5 @@
 <aside class="sidebar" id="fleetSidebar">
-    <div class="logo-card">
+    <a href="{{ route('fleet.dashboard') }}" class="logo-card logo-card-link" aria-label="Go to Dashboard">
         <div class="logo-mark">
             @if(!empty($brand['logo_url']))
                 <img src="{{ $brand['logo_url'] }}" alt="{{ $brand['name'] ?? 'FleetMan Logo' }}" style="max-height: 96px; max-width: 100%; object-fit: contain;">
@@ -8,7 +8,7 @@
                 <small>{{ $brand['tagline'] ?? 'Fleet Management System' }}</small>
             @endif
         </div>
-    </div>
+    </a>
 
     <div class="account-card">
         <div class="avatar">{{ $account['avatar'] ?? '👤' }}</div>

@@ -6316,6 +6316,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         let logs = Array.isArray(records.driver_attendance) ? records.driver_attendance : (samples.driver_attendance || []);
         const masters = data.attendanceMasters || { contracts: [], vehicle_driver_map: {}, drivers: [] };
         let selectedStatus = 'Completed';
+        let savingLog = false;
         const transitioningLogs = new Set();
 
         const normalize = (text) => String(text || '').trim();
@@ -6686,24 +6687,45 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return true;
         }
 
-        function upsert(row) {
-            const idx = logs.findIndex((item) => item.logId === row.logId);
-            if (idx >= 0) logs[idx] = row;
-            else logs.unshift(row);
-            saveStore();
+        function rowsWithUpsertedLog(row) {
+            const nextRows = logs.map((item) => ({ ...item }));
+            const idx = nextRows.findIndex((item) => item.logId === row.logId);
+            if (idx >= 0) nextRows[idx] = row;
+            else nextRows.unshift(row);
+            return nextRows;
         }
 
-        function saveLog(statusOverride) {
+        async function saveLog(statusOverride) {
+            if (savingLog) return;
+
             const isDraft = statusOverride === 'Draft';
             const row = collect(isDraft ? 'Draft' : statusOverride);
             if (isDraft) row.status = 'Draft';
             if (!isDraft && !validate(row)) return;
-            upsert(row);
-            toast(isDraft ? 'Draft saved.' : 'Attendance saved. Redirecting to list.');
-            setTimeout(() => {
+
+            const nextRows = rowsWithUpsertedLog(row);
+            const saveButton = $('#saveAttendanceBtn');
+            const draftButton = $('#saveAttendanceDraftBtn');
+            const activeButton = isDraft ? draftButton : saveButton;
+            const originalText = activeButton?.textContent || '';
+
+            savingLog = true;
+            [saveButton, draftButton].filter(Boolean).forEach((button) => { button.disabled = true; });
+            if (activeButton) activeButton.textContent = isDraft ? 'Saving Draft...' : 'Saving...';
+
+            try {
+                const result = await syncResource('driver_attendance', nextRows);
+                if (result?.syncFailed || result?.ok === false) return;
+
+                logs = Array.isArray(result?.rows) ? result.rows : nextRows;
                 renderList();
                 setVisible('attendanceListPage');
-            }, 450);
+                toast(isDraft ? 'Draft saved.' : 'Attendance saved successfully.');
+            } finally {
+                savingLog = false;
+                [saveButton, draftButton].filter(Boolean).forEach((button) => { button.disabled = false; });
+                if (activeButton) activeButton.textContent = originalText;
+            }
         }
 
         function loadSample() {
@@ -6854,10 +6876,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (row) window.FleetmanDetailViewer?.show('Driver Attendance Details', row);
         }
 
-        function deleteLog(id) {
+        async function deleteLog(id) {
             if (!confirm('Delete this attendance record?')) return;
-            logs = logs.filter((row) => row.logId !== id);
-            saveStore();
+            const nextRows = logs.filter((row) => row.logId !== id);
+            const result = await syncResource('driver_attendance', nextRows);
+            if (result?.syncFailed || result?.ok === false) return;
+
+            logs = Array.isArray(result?.rows) ? result.rows : nextRows;
             renderList();
             toast('Attendance deleted.');
         }
