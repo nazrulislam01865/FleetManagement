@@ -1332,7 +1332,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 ['#vehicleId', 'Vehicle ID is required.'],
                 ['#vehicleName', 'Vehicle Name is required.'],
                 ['#regNo', 'Registration Number is required.'],
-                ['#vendor', 'Select a car-related vendor.'],
                 ['#model', 'Model is required.'],
                 ['#engineNo', 'Engine Number is required.'],
                 ['#category', 'Vehicle Category is required.'],
@@ -7149,6 +7148,45 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 .catch((error) => toast(error.message || 'Could not save master data to database.'));
         }
 
+        async function saveDocumentName(row, editingCode = '') {
+            const endpoint = resources?.document_names?.save;
+            if (!endpoint) {
+                throw new Error('Document Type save route is missing. Please check routes/web.php.');
+            }
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+                body: JSON.stringify({ document: row, editingCode }),
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const validationMessage = payload?.errors
+                    ? Object.values(payload.errors).flat().filter(Boolean)[0]
+                    : '';
+                throw new Error(validationMessage || payload.message || 'Document type could not be saved.');
+            }
+
+            if (!Array.isArray(payload.documentNames)) {
+                throw new Error('Document type was saved, but the updated table could not be loaded.');
+            }
+
+            documentNames = payload.documentNames.map((savedRow) => {
+                const savedTypes = normalizeDocumentTypes(savedRow.documentTypes, savedRow.documentType);
+                return {
+                    ...savedRow,
+                    documentTypes: savedTypes,
+                    documentType: savedTypes.includes('All Modules') ? 'All Modules' : savedTypes[0],
+                };
+            });
+            renderDocumentNames();
+        }
+
         function resetVehicleCategoryForm() {
             setValue('#vehicleCategoryEditingCode', '');
             setValue('#vehicleCategoryMasterName', '');
@@ -7813,15 +7851,33 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             toast('Party type saved to database.');
         });
 
-        $('#documentNameMasterForm')?.addEventListener('submit', (event) => {
+        $('#documentNameMasterForm')?.addEventListener('submit', async (event) => {
             event.preventDefault();
             const row = collectDocumentName();
             if (!row) return;
-            documentNames = upsertRow(documentNames, row, value('#documentNameEditingCode'));
-            resetDocumentNameForm();
-            renderAll();
-            saveStore();
-            toast('Document type saved to database.');
+
+            const editingCode = value('#documentNameEditingCode');
+            const previousRows = documentNames.slice();
+            const nextRows = upsertRow(documentNames, row, editingCode);
+            if (nextRows === documentNames) return;
+
+            documentNames = nextRows;
+            renderDocumentNames();
+
+            const saveButton = $('#saveDocumentNameMasterBtn');
+            if (saveButton) saveButton.disabled = true;
+
+            try {
+                await saveDocumentName(row, editingCode);
+                resetDocumentNameForm();
+                toast('Document type saved to database.');
+            } catch (error) {
+                documentNames = previousRows;
+                renderDocumentNames();
+                toast(error.message || 'Document type could not be saved.');
+            } finally {
+                if (saveButton) saveButton.disabled = false;
+            }
         });
 
         $('#licenceTypeMasterForm')?.addEventListener('submit', (event) => {

@@ -237,6 +237,71 @@ class MasterDataController extends FleetBaseController
             ->with('success', 'Payment type deleted successfully.');
     }
 
+    public function saveDocumentName(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'document' => ['required', 'array'],
+            'document.name' => ['required', 'string', 'max:255'],
+            'document.code' => ['nullable', 'string', 'max:255'],
+            'document.documentTypes' => ['required', 'array', 'min:1'],
+            'document.documentTypes.*' => [Rule::in(['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'])],
+            'document.documentType' => ['nullable', 'string', 'max:100'],
+            'document.description' => ['nullable', 'string'],
+            'document.sortOrder' => ['nullable', 'integer', 'min:0'],
+            'document.status' => [Rule::in(['Active', 'Inactive'])],
+            'editingCode' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $row = $this->cleanMasterRow($validated['document']);
+        if ($row === null) {
+            return response()->json(['message' => 'Document Name is required.'], 422);
+        }
+
+        $documentTypes = $this->normalizeDocumentTypes(
+            $validated['document']['documentTypes'] ?? null,
+            $validated['document']['documentType'] ?? null
+        );
+        $documentType = in_array('All Modules', $documentTypes, true)
+            ? 'All Modules'
+            : ($documentTypes[0] ?? 'All Modules');
+        $editingCode = filled($validated['editingCode'] ?? null)
+            ? $this->codeFrom((string) $validated['editingCode'])
+            : null;
+
+        DB::transaction(function () use ($row, $documentTypes, $documentType, $editingCode): void {
+            $attributes = [
+                'name' => $row['name'],
+                'description' => $row['description'],
+                'sort_order' => $row['sortOrder'],
+                'is_active' => $row['status'] === 'Active',
+            ];
+
+            if (Schema::hasColumn('fleet_document_names', 'document_type')) {
+                $attributes['document_type'] = $documentType;
+            }
+
+            if (Schema::hasColumn('fleet_document_names', 'document_types')) {
+                $attributes['document_types'] = $documentTypes;
+            }
+
+            FleetDocumentName::query()->updateOrCreate(
+                ['code' => $row['code']],
+                $attributes
+            );
+
+            if ($editingCode !== null && $editingCode !== $row['code']) {
+                FleetDocumentName::query()
+                    ->where('code', $editingCode)
+                    ->delete();
+            }
+        });
+
+        return response()->json([
+            'ok' => true,
+            'documentNames' => $this->masterRows(FleetDocumentName::class),
+        ]);
+    }
+
     public function sync(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -290,6 +355,7 @@ class MasterDataController extends FleetBaseController
             'masterData' => $this->masterDataPayload(),
             'resources' => array_merge($this->resourceUrls(), [
                 'master_data' => ['sync' => route('fleet.master-data.sync')],
+                'document_names' => ['save' => route('fleet.master-data.document-names.save')],
             ]),
         ], $pageData));
     }

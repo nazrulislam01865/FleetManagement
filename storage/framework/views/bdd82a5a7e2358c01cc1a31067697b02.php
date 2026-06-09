@@ -64,14 +64,14 @@
                         <div class="field"><label for="regNo">Registration Number <span class="req">*</span></label><input id="regNo" maxlength="14" pattern="[A-Za-z]{3}-[A-Za-z]{2}-[0-9]{2}-[0-9]{4}" placeholder="Example: DHA-AB-12-3456" required></div>
                         <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4b244ece64768724078120db372595a2 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'vendor','label' => 'Vendor / Owner','options' => $fleetman['options']['vehicle_vendors'],'placeholder' => 'Select vendor/owner','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'vendor','label' => 'Vendor / Owner','options' => $fleetman['options']['vehicle_vendors'],'placeholder' => 'Select vendor/owner']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.select'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'vendor','label' => 'Vendor / Owner','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($fleetman['options']['vehicle_vendors']),'placeholder' => 'Select vendor/owner','required' => true]); ?>
+<?php $component->withAttributes(['id' => 'vendor','label' => 'Vendor / Owner','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($fleetman['options']['vehicle_vendors']),'placeholder' => 'Select vendor/owner']); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal4b244ece64768724078120db372595a2)): ?>

@@ -280,6 +280,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::delete('/master-data/payment-types/{paymentType}', [MasterDataController::class, 'destroyPaymentType'])
         ->middleware(EnsureFleetPermission::class.':master_data.manage')
         ->name('master-data.payment-types.destroy');
+    Route::post('/master-data/document-names/save', [MasterDataController::class, 'saveDocumentName'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.document-names.save');
     Route::post('/master-data/sync', [MasterDataController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':master_data.manage')
         ->name('master-data.sync');

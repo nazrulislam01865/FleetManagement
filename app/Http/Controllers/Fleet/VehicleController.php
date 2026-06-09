@@ -257,7 +257,7 @@ class VehicleController extends FleetBaseController
                 'id' => ['required', 'string', 'max:100'],
                 'name' => ['required', 'string', 'max:255'],
                 'regNo' => ['required', 'regex:/^[A-Z]{3}-[A-Z]{2}-\d{2}-\d{4}$/'],
-                'vendor' => ['required', Rule::in($vehicleVendors)],
+                'vendor' => ['nullable', Rule::in($vehicleVendors)],
                 'model' => ['required', 'string', 'max:255'],
                 'color' => ['nullable', 'string', 'max:100'],
                 'engineNo' => ['required', 'regex:/^[A-Z0-9]{17}$/'],
