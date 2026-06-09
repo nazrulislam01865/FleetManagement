@@ -123,27 +123,50 @@ class ReportController extends FleetBaseController
         ];
     }
 
+    // private function fuelRechargeRecords(): Collection
+    // {
+    //     $databaseRows = collect();
+
+    //     if (Schema::hasTable('fleet_fuel_recharges')) {
+    //         $databaseRows = FleetFuelRecharge::query()
+    //             ->orderBy('id')
+    //             ->get()
+    //             ->map(fn (FleetFuelRecharge $row) => $this->normalizeRecharge($row->payload ?? [], $row->code, $row->status));
+    //     }
+
+    //     $records = $databaseRows->isNotEmpty()
+    //         ? $databaseRows
+    //         : collect(config('fleetman.samples.fuel_recharges', []))
+    //             ->map(fn (array $row, int $index) => $this->normalizeRecharge($row, $row['rechargeId'] ?? ('FR-SAMPLE-' . ($index + 1)), $row['status'] ?? 'Submitted'));
+
+    //     $reportableRecords = $records
+    //         ->reject(fn (array $record): bool => strcasecmp(trim((string) ($record['status'] ?? '')), 'Draft') === 0)
+    //         ->values();
+
+    //     return $this->enrichReportRecords($reportableRecords);
+    // }
     private function fuelRechargeRecords(): Collection
     {
-        $databaseRows = collect();
-
-        if (Schema::hasTable('fleet_fuel_recharges')) {
-            $databaseRows = FleetFuelRecharge::query()
-                ->orderBy('id')
-                ->get()
-                ->map(fn (FleetFuelRecharge $row) => $this->normalizeRecharge($row->payload ?? [], $row->code, $row->status));
+        /*
+        * Reports must use only real fuel recharge records stored in the
+        * database. Do not load sample/demo data when the table is empty.
+        */
+        if (! Schema::hasTable('fleet_fuel_recharges')) {
+            return collect();
         }
 
-        $records = $databaseRows->isNotEmpty()
-            ? $databaseRows
-            : collect(config('fleetman.samples.fuel_recharges', []))
-                ->map(fn (array $row, int $index) => $this->normalizeRecharge($row, $row['rechargeId'] ?? ('FR-SAMPLE-' . ($index + 1)), $row['status'] ?? 'Submitted'));
+        $records = FleetFuelRecharge::query()
+            ->orderBy('id')
+            ->get()
+            ->map(function (FleetFuelRecharge $row): array {
+                return $this->normalizeRecharge(
+                    is_array($row->payload) ? $row->payload : [],
+                    $row->code,
+                    $row->status
+                );
+            });
 
-        $reportableRecords = $records
-            ->reject(fn (array $record): bool => strcasecmp(trim((string) ($record['status'] ?? '')), 'Draft') === 0)
-            ->values();
-
-        return $this->enrichReportRecords($reportableRecords);
+        return $this->enrichReportRecords($records);
     }
 
     private function enrichReportRecords(Collection $records): Collection
