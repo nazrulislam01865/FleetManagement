@@ -156,6 +156,102 @@
     <div class="dashboard-grid dashboard-grid-wide">
         <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Notifications','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.section-card'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['title' => 'Recent Notifications','class' => 'dashboard-panel']); ?>
+            <div class="compact-list">
+                <?php $__empty_1 = true; $__currentLoopData = ($recent['notifications'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $notification): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                    <a href="<?php echo e($notification['url'] ?: route('fleet.notifications.index')); ?>" class="compact-row">
+                        <div class="compact-icon"><?php echo e($notification['icon'] ?? '🔔'); ?></div>
+                        <div>
+                            <b><?php echo e($notification['title'] ?? 'FleetMan Notification'); ?></b>
+                            <span>
+                                <?php echo e(\Illuminate\Support\Str::limit($notification['message'] ?? '', 72)); ?>
+
+                                <?php if(!empty($notification['created_at'])): ?>
+                                    · <?php echo e($notification['created_at']); ?>
+
+                                <?php endif; ?>
+                            </span>
+                        </div>
+                        <span class="badge <?php echo e(($notification['is_unread'] ?? false) ? 'soft' : 'ok'); ?>">
+                            <?php echo e(($notification['is_unread'] ?? false) ? 'New' : 'Read'); ?>
+
+                        </span>
+                    </a>
+                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                    <div class="empty compact-empty">No notifications found.</div>
+                <?php endif; ?>
+            </div>
+         <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $attributes = $__attributesOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $component = $__componentOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__componentOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+
+        <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Fuel Recharge','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.section-card'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['title' => 'Recent Fuel Recharge','class' => 'dashboard-panel']); ?>
+            <div class="compact-list">
+                <?php if(!($access['fuelRecharge'] ?? false)): ?>
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                <?php else: ?>
+                <?php $__empty_1 = true; $__currentLoopData = ($recent['fuel_recharges'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $recharge): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                    <?php ($rechargeStatus = $recharge['status'] ?? 'Draft'); ?>
+                    <a href="<?php echo e(route('fleet.fuel-recharge')); ?>" class="compact-row">
+                        <div class="compact-icon">⛽</div>
+                        <div>
+                            <b><?php echo e($recharge['rechargeId'] ?? '-'); ?> · <?php echo e($recharge['vehicle'] ?? 'Vehicle'); ?></b>
+                            <span>
+                                <?php echo e($recharge['fuelType'] ?? ($recharge['primaryFuelName'] ?? 'Fuel')); ?>
+
+                                <?php if(!empty($recharge['date'])): ?>
+                                    · <?php echo e($recharge['date']); ?>
+
+                                <?php endif; ?>
+                                · ৳<?php echo e(number_format((float) ($recharge['totalAmount'] ?? 0), 2)); ?>
+
+                            </span>
+                        </div>
+                        <span class="badge <?php echo e($rechargeStatus === 'Submitted' ? 'ok' : 'warn'); ?>"><?php echo e($rechargeStatus); ?></span>
+                    </a>
+                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                    <div class="empty compact-empty">No fuel recharge entries found.</div>
+                <?php endif; ?>
+                <?php endif; ?>
+            </div>
+         <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $attributes = $__attributesOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $component = $__componentOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__componentOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+    </div>
+
+    <div class="dashboard-grid dashboard-grid-wide">
+        <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Trips','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>

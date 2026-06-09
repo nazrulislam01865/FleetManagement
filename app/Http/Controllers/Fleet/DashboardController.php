@@ -7,10 +7,12 @@ use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetDriverAttendance;
 use App\Models\Fleet\FleetEmployee;
 use App\Models\Fleet\FleetFuelPrice;
+use App\Models\Fleet\FleetFuelRecharge;
 use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
 class DashboardController extends FleetBaseController
@@ -40,9 +42,33 @@ class DashboardController extends FleetBaseController
         $drivers = $can('drivers.view') ? $this->rows(FleetDriver::class) : [];
         $trips = $can('trips.view') ? $this->rows(FleetTrip::class) : [];
         $fuelPrices = $can('fuel_prices.view') ? $this->rows(FleetFuelPrice::class) : [];
+        $fuelRecharges = $can('fuel_recharge.view') ? $this->rows(FleetFuelRecharge::class) : [];
         $clients = $can('clients.view') ? $this->rows(FleetClient::class) : [];
         $attendance = $can('driver_attendance.view') ? $this->rows(FleetDriverAttendance::class) : [];
         $employees = $can('employees.view') ? $this->rows(FleetEmployee::class) : [];
+        $notifications = $user && Schema::hasTable('notifications')
+            ? $user->notifications()
+                ->latest()
+                ->limit(5)
+                ->get()
+                ->map(function ($notification): array {
+                    $data = is_array($notification->data) ? $notification->data : [];
+
+                    return [
+                        'id' => (string) $notification->id,
+                        'title' => trim((string) ($data['title'] ?? 'FleetMan Notification')),
+                        'message' => trim((string) ($data['message'] ?? '')),
+                        'icon' => trim((string) ($data['icon'] ?? '🔔')) ?: '🔔',
+                        'url' => trim((string) ($data['url'] ?? '')),
+                        'is_unread' => $notification->read_at === null,
+                        'created_at' => optional($notification->created_at)
+                            ->timezone('Asia/Dhaka')
+                            ->format('d M Y, h:i A'),
+                    ];
+                })
+                ->values()
+                ->all()
+            : [];
 
         $activeVehicleCount = collect($vehicles)->filter(function (array $row) {
             return in_array($row['status'] ?? 'Active', ['Active', 'Needs document review'], true);
@@ -122,6 +148,8 @@ class DashboardController extends FleetBaseController
                 'attendance_km' => $totalAttendanceKm,
             ],
             'recent' => [
+                'notifications' => $notifications,
+                'fuel_recharges' => array_slice($fuelRecharges, 0, 5),
                 'vehicles' => array_slice($vehicles, 0, 5),
                 'trips' => array_slice($trips, 0, 5),
                 'drivers' => array_slice($drivers, 0, 5),
@@ -135,6 +163,7 @@ class DashboardController extends FleetBaseController
                 'vendors' => $can('vendors.view'),
                 'attendance' => $can('driver_attendance.view'),
                 'fuelPrices' => $can('fuel_prices.view'),
+                'fuelRecharge' => $can('fuel_recharge.view'),
                 'employees' => $can('employees.view'),
             ],
             'warnings' => [

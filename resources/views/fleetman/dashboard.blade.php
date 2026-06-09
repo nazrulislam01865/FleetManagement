@@ -101,6 +101,60 @@
     </div>
 
     <div class="dashboard-grid dashboard-grid-wide">
+        <x-fleetman.section-card title="Recent Notifications" class="dashboard-panel">
+            <div class="compact-list">
+                @forelse(($recent['notifications'] ?? []) as $notification)
+                    <a href="{{ $notification['url'] ?: route('fleet.notifications.index') }}" class="compact-row">
+                        <div class="compact-icon">{{ $notification['icon'] ?? '🔔' }}</div>
+                        <div>
+                            <b>{{ $notification['title'] ?? 'FleetMan Notification' }}</b>
+                            <span>
+                                {{ \Illuminate\Support\Str::limit($notification['message'] ?? '', 72) }}
+                                @if(!empty($notification['created_at']))
+                                    · {{ $notification['created_at'] }}
+                                @endif
+                            </span>
+                        </div>
+                        <span class="badge {{ ($notification['is_unread'] ?? false) ? 'soft' : 'ok' }}">
+                            {{ ($notification['is_unread'] ?? false) ? 'New' : 'Read' }}
+                        </span>
+                    </a>
+                @empty
+                    <div class="empty compact-empty">No notifications found.</div>
+                @endforelse
+            </div>
+        </x-fleetman.section-card>
+
+        <x-fleetman.section-card title="Recent Fuel Recharge" class="dashboard-panel">
+            <div class="compact-list">
+                @if(!($access['fuelRecharge'] ?? false))
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                @else
+                @forelse(($recent['fuel_recharges'] ?? []) as $recharge)
+                    @php($rechargeStatus = $recharge['status'] ?? 'Draft')
+                    <a href="{{ route('fleet.fuel-recharge') }}" class="compact-row">
+                        <div class="compact-icon">⛽</div>
+                        <div>
+                            <b>{{ $recharge['rechargeId'] ?? '-' }} · {{ $recharge['vehicle'] ?? 'Vehicle' }}</b>
+                            <span>
+                                {{ $recharge['fuelType'] ?? ($recharge['primaryFuelName'] ?? 'Fuel') }}
+                                @if(!empty($recharge['date']))
+                                    · {{ $recharge['date'] }}
+                                @endif
+                                · ৳{{ number_format((float) ($recharge['totalAmount'] ?? 0), 2) }}
+                            </span>
+                        </div>
+                        <span class="badge {{ $rechargeStatus === 'Submitted' ? 'ok' : 'warn' }}">{{ $rechargeStatus }}</span>
+                    </a>
+                @empty
+                    <div class="empty compact-empty">No fuel recharge entries found.</div>
+                @endforelse
+                @endif
+            </div>
+        </x-fleetman.section-card>
+    </div>
+
+    <div class="dashboard-grid dashboard-grid-wide">
         <x-fleetman.section-card title="Recent Trips" class="dashboard-panel">
             <div class="compact-list">
                 @if(!($access['trips'] ?? false))
