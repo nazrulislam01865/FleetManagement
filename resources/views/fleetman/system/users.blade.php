@@ -4,7 +4,7 @@
 @section('mobile-title', 'Users')
 
 @section('content')
-<div class="page-section role-matrix-page">
+<div class="page-section role-matrix-page fleet-list-page">
     <x-fleetman.topbar :items="[['label' => 'System'], ['label' => 'Users']]">
         <x-slot:actions>
             <span class="badge soft">Admin User + Super Admin only</span>
@@ -89,6 +89,7 @@
             <table class="role-user-table">
                 <thead>
                     <tr>
+                        <th>Created At</th>
                         <th>User</th>
                         <th>Email</th>
                         <th>Role</th>
@@ -111,6 +112,7 @@
                                 && ($canAssignSuperAdmin || $user->fleetRole?->slug !== 'super_admin');
                         @endphp
                         <tr>
+                            <td>{{ optional($user->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</td>
                             <td>
                                 <b>{{ $user->name }}</b>
                                 @if(auth()->id() === $user->id)
@@ -164,7 +166,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="empty">No users found.</td></tr>
+                        <tr><td colspan="7" class="empty">No users found.</td></tr>
                     @endforelse
                 </tbody>
             </table>

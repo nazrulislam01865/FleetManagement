@@ -89,7 +89,7 @@
             </div>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Fuel Price</th><th>Fuel Type</th><th>Price</th><th>Unit</th><th>Effective Date</th><th>Reference</th><th>Status</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Created At</th><th>Fuel Price</th><th>Fuel Type</th><th>Price</th><th>Unit</th><th>Effective Date</th><th>Reference</th><th>Status</th><th>Actions</th></tr></thead>
                     <tbody id="fuelPriceTbody"></tbody>
                 </table>
             </div>

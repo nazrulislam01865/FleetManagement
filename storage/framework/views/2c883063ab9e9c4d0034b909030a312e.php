@@ -613,7 +613,7 @@
             </div>
             <div class="table-wrap wide-table">
                 <table>
-                    <thead><tr><th>Vendor / Party</th><th>Type</th><th>Phone</th><th>Contact Person</th><th>Payment Terms</th><th>Documents</th><th>Status</th><th>Address</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Created At</th><th>Vendor / Party</th><th>Type</th><th>Phone</th><th>Contact Person</th><th>Payment Terms</th><th>Documents</th><th>Status</th><th>Address</th><th>Actions</th></tr></thead>
                     <tbody id="partyTbody"></tbody>
                 </table>
             </div>

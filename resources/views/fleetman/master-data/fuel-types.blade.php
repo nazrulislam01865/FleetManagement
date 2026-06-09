@@ -55,7 +55,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Fuel Type</th>
+                        <th>Created At</th><th>Fuel Type</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>

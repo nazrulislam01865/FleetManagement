@@ -208,21 +208,12 @@ class EmployeeController extends FleetBaseController
             foreach ($validator->errors()->messages() as $key => $messages) {
                 $errors["rows.{$index}.{$key}"] = $messages;
             }
-
-            $selectedContactTypes = [];
             foreach ((array) ($row['contacts'] ?? []) as $contactIndex => $contact) {
                 if (! is_array($contact)) {
                     continue;
                 }
 
                 $type = trim((string) ($contact['type'] ?? ''));
-                $normalized = strtolower($type);
-                if ($type !== '' && isset($selectedContactTypes[$normalized])) {
-                    $errors["rows.{$index}.contacts.{$contactIndex}.type"] = 'Each contact type can be selected only once for an employee.';
-                }
-                if ($type !== '') {
-                    $selectedContactTypes[$normalized] = true;
-                }
                 if (strcasecmp($type, 'Relative') === 0 && trim((string) ($contact['relationship'] ?? '')) === '') {
                     $errors["rows.{$index}.contacts.{$contactIndex}.relationship"] = 'Relationship is required for a Relative contact.';
                 }

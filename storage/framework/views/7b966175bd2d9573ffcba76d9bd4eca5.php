@@ -174,7 +174,7 @@
     </section>
     </div>
 
-    <div id="rechargeListPage" class="hidden" style="max-width: 100%; padding: 0 10px;">
+    <div id="rechargeListPage" class="hidden" style="padding: 0 10px;">
         <?php if (isset($component)) { $__componentOriginal9c1bf3ca5b4372ced6ff0d503060f43b = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.topbar','data' => ['items' => [['label' => 'Recharge List']]]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -337,6 +337,7 @@
                 <table>
                     <thead style="position: sticky; top: 0; z-index: 10; background: #f8fafc; outline: 1px solid #edf0f5; outline-offset: -1px;">
                         <tr>
+                            <th>Created At</th>
                             <th>Entry</th>
                             <th>Date</th>
                             <th>Contract</th>

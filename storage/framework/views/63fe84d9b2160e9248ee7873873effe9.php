@@ -342,6 +342,7 @@
                 <table>
                     <thead>
                         <tr>
+                            <th>Created At</th>
                             <th>Contract ID</th>
                             <th>Party</th>
                             <th>Contract With</th>

@@ -59,7 +59,7 @@
                 <x-fleetman.select id="clientFilterMethod" label="" :options="$fleetman['options']['client_contact_methods']" placeholder="All Contact Methods" />
                 <div style="display:flex;gap:10px"><button type="button" class="btn secondary" id="applyClientFiltersBtn">Apply</button><button type="button" class="btn light" id="clearClientFiltersBtn">Clear</button></div>
             </div>
-            <div class="table-wrap client-table"><table><thead><tr><th>Client</th><th>Main Phone</th><th>Contact Person(s)</th><th>Type</th><th>Status</th><th>Preferred Contact</th><th>Address</th><th>Actions</th></tr></thead><tbody id="clientTbody"></tbody></table></div>
+            <div class="table-wrap client-table"><table><thead><tr><th>Created At</th><th>Client</th><th>Main Phone</th><th>Contact Person(s)</th><th>Type</th><th>Status</th><th>Preferred Contact</th><th>Address</th><th>Actions</th></tr></thead><tbody id="clientTbody"></tbody></table></div>
         </div>
     </div>
 </div>

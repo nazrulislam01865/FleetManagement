@@ -1,5 +1,23 @@
 /* Shared record details modal for FleetMan entities. */
 document.addEventListener('DOMContentLoaded', () => document.body.classList.remove('preload'), { once: true });
+window.FleetmanFormatCreatedAt = window.FleetmanFormatCreatedAt || ((value) => {
+    if (!value) return '—';
+    const raw = String(value).trim();
+    const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(raw)
+        ? raw.replace(' ', 'T') + 'Z'
+        : raw;
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    return new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Dhaka',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+    }).format(parsed);
+});
 window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
     'use strict';
 
@@ -1631,6 +1649,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 const imageLink = imageUrl ? `<br><small><a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">View image</a></small>` : '';
                 return `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(vehicle.createdAt || vehicle.created_at))}</td>
                     <td><div class="vehicle-cell"><div class="vehicle-icon">🚗</div><div><b>${escapeHtml(vehicle.name)}</b><br><small>${escapeHtml(vehicle.id)} · ${escapeHtml(vehicle.model)}</small>${imageLink}</div></div></td>
                     <td>${escapeHtml(vehicle.regNo)}</td>
                     <td>${escapeHtml(vehicle.category)}<br><small>${escapeHtml(vehicle.subCategory || '')}</small></td>
@@ -1641,7 +1660,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <td><span class="badge ${vehicle.status === 'Active' ? 'ok' : 'warn'}">${escapeHtml(vehicle.status || '-')}</span></td>
                     <td><button type="button" class="mini-btn view-vehicle" data-id="${escapeHtml(vehicle.id)}">View</button><button type="button" class="mini-btn edit-vehicle" data-id="${escapeHtml(vehicle.id)}">Edit</button><button type="button" class="mini-btn danger delete-vehicle" data-id="${escapeHtml(vehicle.id)}">Delete</button></td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="9" class="empty">No vehicles found.</td></tr>';
+            }).join('') : '<tr><td colspan="10" class="empty">No vehicles found.</td></tr>';
 
             $('#vehicleKpiTotal').textContent = vehicles.length;
             $('#vehicleKpiActive').textContent = vehicles.filter((vehicle) => vehicle.status === 'Active').length;
@@ -1986,6 +2005,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             body.innerHTML = rows.length ? rows.map((row) => {
                 const statusClass = row.status === 'Active' ? 'ok' : row.status === 'Inactive' ? 'danger' : 'soft';
                 return `<tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><div class="fuel-cell"><div class="fuel-icon">⛽</div><div><b>${escapeHtml(row.name)}</b><br><small>${escapeHtml(row.fuelPriceId)}</small></div></div></td>
                     <td>${escapeHtml(row.fuelType || '-')}</td>
                     <td>${Number(row.price || 0).toLocaleString()}<br><small>${escapeHtml(row.remarks ? row.remarks.slice(0, 42) : '')}</small></td>
@@ -1995,7 +2015,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <td><span class="badge ${statusClass}">${escapeHtml(row.status || '-')}</span></td>
                     <td><button type="button" class="mini-btn view-fuel-price" data-id="${escapeHtml(row.fuelPriceId)}">View</button><button type="button" class="mini-btn edit-fuel-price" data-id="${escapeHtml(row.fuelPriceId)}">Edit</button><button type="button" class="mini-btn danger delete-fuel-price" data-id="${escapeHtml(row.fuelPriceId)}">Delete</button></td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="8" class="empty">No fuel price found. Click “Add Fuel Price” to create one.</td></tr>';
+            }).join('') : '<tr><td colspan="9" class="empty">No fuel price found. Click “Add Fuel Price” to create one.</td></tr>';
 
             $('#fuelPriceKpiTotal').textContent = prices.length;
             $('#fuelPriceKpiActive').textContent = prices.filter((row) => row.status === 'Active').length;
@@ -3382,6 +3402,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     const imageFlag = rechargePhotoFlag(row);
                     const imgClass = imageFlag === 'All 3 Images Taken' ? 'ok' : (imageFlag === 'Not Taken' ? 'danger' : 'warn');
                     return `<tr>
+                        <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                         <td><div class="listCell"><div class="listIcon">⛽</div><div><b>${escapeHtml(row.rechargeId || '')}</b></div></div></td>
                         <td>${escapeHtml(row.date || row.createdAt || '')}</td>
                         <td>${escapeHtml(row.contract || '')}</td>
@@ -3404,7 +3425,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                             <button class="mini-btn danger delete-recharge" type="button" data-recharge-delete="${escapeHtml(row.rechargeId || '')}">Delete</button>
                         </td>
                     </tr>`;
-                }).join('') : '<tr><td colspan="17" class="empty">No fuel recharge entry found. Click “Add Recharge” to create one.</td></tr>';
+                }).join('') : '<tr><td colspan="18" class="empty">No fuel recharge entry found. Click “Add Recharge” to create one.</td></tr>';
             }
 
             const submitted = recharges.filter((row) => row.status === 'Submitted').length;
@@ -3612,7 +3633,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 throw new Error(message);
             }
 
-            return await response.json().catch(() => ({ ok: true }));
+            const payload = await response.json().catch(() => ({ ok: true }));
+            if (Array.isArray(payload.rows) && Array.isArray(rows)) {
+                rows.splice(0, rows.length, ...payload.rows);
+            }
+            return payload;
         } catch (error) {
             toast(error.message || 'Saved locally in screen state, but database sync failed. Check server connection.');
             return { ok: false, syncFailed: true, message: error.message };
@@ -4213,6 +4238,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const uploadedCount = (party.documents || []).filter((doc) => doc.file?.filePath || doc.file?.fileUrl).length;
             const cls = party.status === 'Active' ? 'ok' : party.status === 'Blacklisted' ? 'danger' : party.status === 'Draft' ? 'soft' : 'warn';
             return `<tr>
+                <td>${escapeHtml(window.FleetmanFormatCreatedAt(party.createdAt || party.created_at))}</td>
                 <td><div class="party-cell"><div class="party-icon">🤝</div><div><b>${escapeHtml(party.partyName)}</b><br><small>${escapeHtml(party.partyId)}</small></div></div></td>
                 <td><span class="badge soft">${escapeHtml(party.partyType || '-')}</span><br><small>${escapeHtml(party.vendorContractorType || '-')}</small>${(party.fuelTypes || []).length ? `<br><small>${escapeHtml((party.fuelTypes || []).join(', '))}</small>` : ''}</td>
                 <td>${escapeHtml(party.phone || '-')}<br><small>${escapeHtml(party.email || '')}</small></td>
@@ -4237,7 +4263,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     && (!status || party.status === status)
                     && (!terms || party.paymentTerms === terms);
             });
-            $('#partyTbody').innerHTML = list.length ? list.map(rowHtml).join('') : '<tr><td colspan="9" class="empty">No vendor / party found. Click “Add Vendor / Party” to create one.</td></tr>';
+            $('#partyTbody').innerHTML = list.length ? list.map(rowHtml).join('') : '<tr><td colspan="10" class="empty">No vendor / party found. Click “Add Vendor / Party” to create one.</td></tr>';
             $('#partyKpiTotal').textContent = parties.length;
             $('#partyKpiActive').textContent = parties.filter((party) => party.status === 'Active').length;
             $('#partyKpiTypes').textContent = new Set(parties.map((party) => party.partyType).filter(Boolean)).size;
@@ -4861,6 +4887,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const state = paymentState(trip);
             const stateClass = state === 'Paid' ? 'paid' : state === 'Partially Paid' ? 'partial' : 'unpaid';
             return `<tr>
+                <td>${escapeHtml(window.FleetmanFormatCreatedAt(trip.createdAt || trip.created_at))}</td>
                 <td><div class="trip-cell"><div class="trip-icon">🧭</div><div><b>${escapeHtml(trip.tripId)}</b><br><small>${escapeHtml([trip.purpose || 'Trip', trip.client || ''].filter(Boolean).join(' · '))}</small></div></div></td>
                 <td>${escapeHtml(trip.startDate || '-')}</td>
                 <td><b>${escapeHtml(trip.vehicle || '-')}</b><br><small>${escapeHtml(trip.driver || '-')}</small></td>
@@ -4879,7 +4906,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 && (!vehicleQuery || String(trip.vehicle || '').toLowerCase().includes(vehicleQuery)));
             $('#tripTbody').innerHTML = list.length
                 ? list.map(rowHtml).join('')
-                : '<tr><td colspan="7" class="empty">No trip found.</td></tr>';
+                : '<tr><td colspan="8" class="empty">No trip found.</td></tr>';
             $('#tripKpiTotal').textContent = trips.length;
             $('#tripKpiCost').textContent = money(trips.reduce((sum, trip) => sum + legacyTotal(trip), 0));
             $('#tripKpiPaid').textContent = money(trips.reduce((sum, trip) => sum + paidAmount(trip), 0));
@@ -5084,7 +5111,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function refreshDriverContactOptions() {
-            documentSelects.refresh('#driverContacts', '.driverContactType', contactTypes, 'Select contact type');
+            // Contact rows are independent: every row keeps the complete contact-type list.
         }
 
         function toggleContactRelationship(row) {
@@ -5107,6 +5134,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             div.className = 'repeat-row driver-contact-row';
             const typeValue = row.type || '';
             const typeOptions = [''].concat(contactTypes);
+            if (typeValue && !typeOptions.some((type) => String(type).toLowerCase() === String(typeValue).toLowerCase())) typeOptions.push(typeValue);
 
             div.innerHTML = `
                 <div class="field">
@@ -5326,7 +5354,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 markDriverInvalid(null, 'Add at least one contact number.', $('#driverContactsSection'));
                 valid = false;
             }
-            const selectedTypes = new Set();
             contactRows.forEach((row) => {
                 const type = $('.driverContactType', row);
                 const phone = $('.driverContactPhone', row);
@@ -5335,11 +5362,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 if (!type?.value) {
                     markDriverInvalid(type, 'Contact Type is required.');
                     valid = false;
-                } else if (selectedTypes.has(normalizedType)) {
-                    markDriverInvalid(type, 'This contact type has already been added.');
-                    valid = false;
-                } else {
-                    selectedTypes.add(normalizedType);
                 }
                 if (!phonePattern.test(String(phone?.value || ''))) {
                     markDriverInvalid(phone, 'Phone Number must be exactly 11 digits.');
@@ -5459,13 +5481,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function rowHtml(row){
             const exp=isExpiringSoon(row);
             const statusClass=row.status==='Active'?'ok':row.status==='Draft'?'warn':row.status==='Blacklisted'?'danger':'soft';
-            return `<tr><td><div class="driver-cell"><div class="driver-icon">🧑‍✈️</div><div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT/Hour: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`;
+            return `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><div class="driver-cell"><div class="driver-icon">🧑‍✈️</div><div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT/Hour: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`;
         }
 
         function renderList(){
             const q=value('#driverSearch').toLowerCase(), status=value('#driverFilterStatus'), license=value('#driverFilterLicense'), tenure=value('#driverFilterTenure');
             const rows=drivers.filter((row)=>(!q||[row.fullName,row.contact,row.nid,row.licenseNo,row.driverId].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!license||row.licenseType===license)&&(!tenure||row.salaryTenure===tenure));
-            $('#driverTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="10" class="empty">No driver found. Click “Add Driver” to create one.</td></tr>';
+            $('#driverTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="11" class="empty">No driver found. Click “Add Driver” to create one.</td></tr>';
             $('#driverKpiTotal').textContent=drivers.length;
             $('#driverKpiActive').textContent=drivers.filter((row)=>row.status==='Active').length;
             $('#driverKpiExpired').textContent=drivers.filter(isExpiringSoon).length;
@@ -5695,8 +5717,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setTimeout(()=>{renderList();setVisible('clientListPage');},450);
         }
         function loadSample(){ resetForm(); const row=(samples.clients||[])[0]; if(!row) return; const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); toast('Sample client data added.'); }
-        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
-        function renderList(){ const q=value('#clientSearch').toLowerCase(), status=value('#clientFilterStatus'), type=value('#clientFilterType'), method=value('#clientFilterMethod'); const rows=clients.filter((row)=>{ const people=(row.contacts||[]).map((person)=>[person.name,person.phone,person.role,person.whatsapp,person.email].join(' ')).join(' '); return (!q||[row.clientName,row.phone,row.email,row.clientId,row.reference,people].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!type||row.clientType===type)&&(!method||row.contactMethod===method); }); $('#clientTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="8" class="empty">No client found. Click “Add Client” to create one.</td></tr>'; $('#clientKpiTotal').textContent=clients.length; $('#clientKpiActive').textContent=clients.filter((c)=>c.status==='Active').length; $('#clientKpiEmail').textContent=clients.filter((c)=>c.email).length; }
+        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
+        function renderList(){ const q=value('#clientSearch').toLowerCase(), status=value('#clientFilterStatus'), type=value('#clientFilterType'), method=value('#clientFilterMethod'); const rows=clients.filter((row)=>{ const people=(row.contacts||[]).map((person)=>[person.name,person.phone,person.role,person.whatsapp,person.email].join(' ')).join(' '); return (!q||[row.clientName,row.phone,row.email,row.clientId,row.reference,people].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!type||row.clientType===type)&&(!method||row.contactMethod===method); }); $('#clientTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="9" class="empty">No client found. Click “Add Client” to create one.</td></tr>'; $('#clientKpiTotal').textContent=clients.length; $('#clientKpiActive').textContent=clients.filter((c)=>c.status==='Active').length; $('#clientKpiEmail').textContent=clients.filter((c)=>c.email).length; }
         function editClient(id){ const row=clients.find((r)=>r.clientId===id); if(!row) return; resetForm(); const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); setVisible('clientAddPage'); }
         function viewClient(id){ const row=clients.find((r)=>r.clientId===id); if(row) window.FleetmanDetailViewer?.show('Client Details', row); }
         async function deleteClient(id){ if(!confirm('Delete this client from prototype list?')) return; const previous=clients.slice(); clients=clients.filter((row)=>row.clientId!==id); const result=await saveStore(); if(result?.syncFailed){clients=previous;return;} renderList(); toast('Client deleted.'); }
@@ -5819,7 +5841,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function refreshEmployeeContactOptions() {
-            documentSelects.refresh('#employeeContacts', '.empContactType', CONTACT_TYPES, 'Select contact type');
+            // Contact rows are independent: every row keeps the complete contact-type list.
         }
 
         function toggleEmployeeRelationship(row) {
@@ -5841,7 +5863,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const div = document.createElement('div');
             div.className = 'repeat-row emp-contact-row';
             const currentType = row.type || '';
-            const typeOptions = [''].concat(CONTACT_TYPES).map((type) =>
+            const employeeContactTypes = [''].concat(CONTACT_TYPES);
+            if (currentType && !employeeContactTypes.some((type) => String(type).toLowerCase() === String(currentType).toLowerCase())) employeeContactTypes.push(currentType);
+            const typeOptions = employeeContactTypes.map((type) =>
                 `<option value="${escapeHtml(type)}" ${currentType === type ? 'selected' : ''}>${escapeHtml(type || 'Select contact type')}</option>`
             ).join('');
             div.innerHTML = `
@@ -6014,7 +6038,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 toast('Please add at least one employee contact number.');
                 valid = false;
             }
-            const selectedContactTypes = new Set();
             contactRows.forEach((row) => {
                 const type = $('.empContactType', row);
                 const number = $('.empContactNumber', row);
@@ -6023,11 +6046,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 if (!type?.value) {
                     markEmployeeInvalid(type, 'Contact Type is required.');
                     valid = false;
-                } else if (selectedContactTypes.has(normalizedType)) {
-                    markEmployeeInvalid(type, 'This contact type has already been added.');
-                    valid = false;
-                } else {
-                    selectedContactTypes.add(normalizedType);
                 }
                 if (!phonePattern.test(String(number?.value || ''))) {
                     markEmployeeInvalid(number, 'Phone Number must be exactly 11 digits.');
@@ -6098,10 +6116,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (statusOverride !== 'Draft' && !validateEmployeeForm()) return;
             if (documentSelects.hasDuplicates('#employeeDocuments', '.empDocName')) {
                 toast('Each employee document type can be selected only once.');
-                return;
-            }
-            if (documentSelects.hasDuplicates('#employeeContacts', '.empContactType')) {
-                toast('Each employee contact type can be selected only once.');
                 return;
             }
             const row = collect(statusOverride);
@@ -6176,6 +6190,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function rowHtml(row) {
             const docCount = (row.documents || []).length;
             return `<tr>
+                <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                 <td><div class="employee-cell"><div class="employee-icon">👤</div><div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.employeeId)}</small></div></div></td>
                 <td>${formatContacts(row)}<br><small style="color:#667085">${escapeHtml(row.email || '')}</small></td>
                 <td>${escapeHtml(row.designation || '-')}</td>
@@ -6198,7 +6213,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return (!query || [row.employeeId, row.fullName, row.designation, row.contactNumber, row.nid, contactStr].join(' ').toLowerCase().includes(query)) &&
                     (!status || row.status === status) && (!tenure || row.salaryTenure === tenure) && (!designation || row.designation === designation);
             });
-            $('#employeeTbody').innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="9" class="empty">No employee found. Click “Add Employee” to create one.</td></tr>';
+            $('#employeeTbody').innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="10" class="empty">No employee found. Click “Add Employee” to create one.</td></tr>';
             $('#employeeKpiTotal').textContent = employees.length;
             $('#employeeKpiActive').textContent = employees.filter((row) => row.status === 'Active').length;
             $('#employeeKpiMonthly').textContent = employees.filter((row) => row.salaryTenure === 'Monthly').length;
@@ -6752,6 +6767,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function rowHtml(row) {
             const cls = badgeClass(row.status);
             return `<tr>
+                <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                 <td><div class="list-cell"><div class="list-icon">📝</div><div><b>${escapeHtml(row.logId)}</b><br><small>${escapeHtml(row.date)}</small></div></div></td>
                 <td>${escapeHtml(row.date || '-')}<br><small>${escapeHtml(row.startTime || '-')} to ${escapeHtml(row.endTime || '-')}</small></td>
                 <td><b>${escapeHtml(row.contract || '-')}</b><br><small>${escapeHtml(row.vehicle || '-')}</small></td>
@@ -6776,7 +6792,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return (!q || haystack.includes(q)) && (!status || row.status === status) && (!contract || row.contract === contract);
             });
             const tbody = $('#attendanceTbody');
-            if (tbody) tbody.innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="7" class="empty">No attendance found. Click “Add Attendance” to create one.</td></tr>';
+            if (tbody) tbody.innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="8" class="empty">No attendance found. Click “Add Attendance” to create one.</td></tr>';
             if ($('#attendanceKpiTotal')) $('#attendanceKpiTotal').textContent = logs.length;
             if ($('#attendanceKpiCompleted')) $('#attendanceKpiCompleted').textContent = logs.filter((row) => row.status === 'Completed').length;
             if ($('#attendanceKpiRunning')) $('#attendanceKpiRunning').textContent = logs.filter((row) => row.status === 'Running').length;
@@ -7487,13 +7503,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(vehicleCategories);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-vehicle-category="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-vehicle-category="${escapeHtml(row.code)}">Delete</button></div></td>
-                </tr>`).join('') : '<tr><td colspan="6" class="empty">No vehicle category added yet.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="7" class="empty">No vehicle category added yet.</td></tr>';
         }
 
         function renderVehicleSubCategories() {
@@ -7512,6 +7529,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td>${escapeHtml(vehicleCategoryName(row.vehicleCategoryCode))}</td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
@@ -7519,7 +7537,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-vehicle-sub-category="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-vehicle-sub-category="${escapeHtml(row.code)}">Delete</button></div></td>
-                </tr>`).join('') : '<tr><td colspan="7" class="empty">No vehicle sub category added yet.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="8" class="empty">No vehicle sub category added yet.</td></tr>';
         }
 
         function renderPartyTypes() {
@@ -7530,13 +7548,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(partyTypes);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-party="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-party="${escapeHtml(row.code)}">Delete</button></div></td>
-                </tr>`).join('') : '<tr><td colspan="6" class="empty">No party type added yet.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="7" class="empty">No party type added yet.</td></tr>';
         }
 
         function renderDocumentNames() {
@@ -7551,6 +7570,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
                 return `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><div class="master-document-type-badges">${badges}</div></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
@@ -7559,7 +7579,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-document="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-document="${escapeHtml(row.code)}">Delete</button></div></td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="7" class="empty">No document type added yet.</td></tr>';
+            }).join('') : '<tr><td colspan="8" class="empty">No document type added yet.</td></tr>';
         }
 
         function renderLicenceTypes() {
@@ -7570,13 +7590,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(licenceTypes);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-licence="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-licence="${escapeHtml(row.code)}">Delete</button></div></td>
-                </tr>`).join('') : '<tr><td colspan="6" class="empty">No licence type added yet.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="7" class="empty">No licence type added yet.</td></tr>';
         }
 
         function renderFuelTypes() {
@@ -7584,7 +7605,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const tbody = $('#fuelTypeMasterTbody');
             if (!tbody) return;
             const rows = sortRows(fuelTypes);
-            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No fuel type added yet.</td></tr>';
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No fuel type added yet.</td></tr>';
         }
 
         function renderFuelUnits() {
@@ -7592,7 +7613,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const tbody = $('#fuelUnitMasterTbody');
             if (!tbody) return;
             const rows = sortRows(fuelUnits);
-            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-unit="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-unit="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No fuel unit added yet.</td></tr>';
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-unit="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-unit="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No fuel unit added yet.</td></tr>';
         }
 
         function renderPaymentTypes() {
@@ -7600,7 +7621,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const tbody = $('#paymentTypeMasterTbody');
             if (!tbody) return;
             const rows = sortRows(paymentTypes);
-            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-payment-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-payment-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="6" class="empty">No payment type added yet.</td></tr>';
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-payment-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-payment-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No payment type added yet.</td></tr>';
         }
 
         function renderClientTypes() {
@@ -7611,13 +7632,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(clientTypes);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-client="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-client="${escapeHtml(row.code)}">Delete</button></div></td>
-                </tr>`).join('') : '<tr><td colspan="6" class="empty">No client type added yet.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="7" class="empty">No client type added yet.</td></tr>';
         }
 
         function renderContactMethods() {
@@ -7628,13 +7650,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(contactMethods);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-contact-method="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-contact-method="${escapeHtml(row.code)}">Delete</button></div></td>
-                </tr>`).join('') : '<tr><td colspan="6" class="empty">No contact method added yet.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="7" class="empty">No contact method added yet.</td></tr>';
         }
 
         function renderDriverContactTypes() {
@@ -7645,13 +7668,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(driverContactTypes);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
+                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-driver-contact-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-driver-contact-type="${escapeHtml(row.code)}">Delete</button></div></td>
-                </tr>`).join('') : '<tr><td colspan="6" class="empty">No driver contact type added yet.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="7" class="empty">No driver contact type added yet.</td></tr>';
         }
 
         function renderAll() {
@@ -8731,9 +8755,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (tbody) {
                 tbody.innerHTML = pageItems.length ? pageItems.map((row) => `
                     <tr>
-                        <td class="contract-sticky-1"><b>${escapeHtml(row.contractId)}</b></td>
-                        <td class="contract-sticky-2">${escapeHtml(row.partyName || '-')}</td>
-                        <td class="contract-sticky-3">${escapeHtml(row.contractWith || '-')}</td>
+                        <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                        <td><b>${escapeHtml(row.contractId)}</b></td>
+                        <td>${escapeHtml(row.partyName || '-')}</td>
+                        <td>${escapeHtml(row.contractWith || '-')}</td>
                         <td><span class="badge ${badgeClass(row.status)}">${escapeHtml(row.status || '-')}</span></td>
                         <td>${money(row.amount)}</td>
                         <td>${formatDate(row.contractStart)}</td>
@@ -8743,7 +8768,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                         <td>${(row.documents || []).length}</td>
                         <td><span class="badge ${badgeClass(row.savedAs)}">${escapeHtml(row.savedAs || '-')}</span></td>
                         <td><button class="mini-btn view-contract" type="button" data-id="${escapeHtml(row.contractId)}">View</button><button class="mini-btn edit-contract" type="button" data-id="${escapeHtml(row.contractId)}">Edit</button><button class="mini-btn danger delete-contract" type="button" data-id="${escapeHtml(row.contractId)}">Delete</button></td>
-                    </tr>`).join('') : '<tr><td colspan="12"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
+                    </tr>`).join('') : '<tr><td colspan="13"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
             }
 
             const cards = $('#contractMobileCards');

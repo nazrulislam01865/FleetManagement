@@ -754,7 +754,7 @@
 <?php endif; ?>
                 <div style="display:flex;gap:10px"><button type="button" class="btn secondary" id="applyEmployeeFiltersBtn">Apply</button><button type="button" class="btn light" id="clearEmployeeFiltersBtn">Clear</button></div>
             </div>
-            <div class="table-wrap employee-table"><table><thead><tr><th>Employee</th><th>Contacts</th><th>Designation</th><th>Joining Date</th><th>Salary</th><th>Status</th><th>Present Address</th><th>Docs</th><th>Actions</th></tr></thead><tbody id="employeeTbody"></tbody></table></div>
+            <div class="table-wrap employee-table"><table><thead><tr><th>Created At</th><th>Employee</th><th>Contacts</th><th>Designation</th><th>Joining Date</th><th>Salary</th><th>Status</th><th>Present Address</th><th>Docs</th><th>Actions</th></tr></thead><tbody id="employeeTbody"></tbody></table></div>
         </div>
     </div>
 </div>

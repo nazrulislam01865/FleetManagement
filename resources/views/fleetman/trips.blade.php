@@ -120,7 +120,7 @@
             </div>
             <div class="table-wrap trip-table">
                 <table>
-                    <thead><tr><th>Trip</th><th>Date</th><th>Vehicle & Driver</th><th>Route</th><th>Odometer</th><th>Payment</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Created At</th><th>Trip</th><th>Date</th><th>Vehicle & Driver</th><th>Route</th><th>Odometer</th><th>Payment</th><th>Actions</th></tr></thead>
                     <tbody id="tripTbody"></tbody>
                 </table>
             </div>

@@ -137,7 +137,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Payment Type</th>
+                        <th>Created At</th><th>Payment Type</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>
@@ -148,6 +148,7 @@
                 <tbody>
                     @forelse ($paymentTypes as $paymentType)
                         <tr>
+                            <td>{{ optional($paymentType->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</td>
                             <td><b>{{ $paymentType->name }}</b></td>
                             <td><span class="master-code">{{ $paymentType->code }}</span></td>
                             <td>{{ $paymentType->sort_order }}</td>
@@ -176,7 +177,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="6" class="empty">No payment type added yet.</td></tr>
+                        <tr><td colspan="7" class="empty">No payment type added yet.</td></tr>
                     @endforelse
                 </tbody>
             </table>

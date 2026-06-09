@@ -185,7 +185,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Contact Method</th>
+                        <th>Created At</th><th>Contact Method</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>

@@ -61,7 +61,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Vehicle Sub Category</th>
+                        <th>Created At</th><th>Vehicle Sub Category</th>
                         <th>Vehicle Category</th>
                         <th>Code</th>
                         <th>Sort</th>

@@ -405,8 +405,8 @@ class MasterDataController extends FleetBaseController
                     'documentTypes' => $documentTypes,
                     'sortOrder' => (int) $row->sort_order,
                     'status' => $row->is_active ? 'Active' : 'Inactive',
-                    'createdAt' => optional($row->created_at)->toDateTimeString(),
-                    'updatedAt' => optional($row->updated_at)->toDateTimeString(),
+                    'createdAt' => optional($row->created_at)->toIso8601String(),
+                    'updatedAt' => optional($row->updated_at)->toIso8601String(),
                 ];
             })
             ->values()
@@ -434,8 +434,8 @@ class MasterDataController extends FleetBaseController
                 'description' => $row->description ?? '',
                 'sortOrder' => (int) $row->sort_order,
                 'status' => $row->is_active ? 'Active' : 'Inactive',
-                'createdAt' => optional($row->created_at)->toDateTimeString(),
-                'updatedAt' => optional($row->updated_at)->toDateTimeString(),
+                'createdAt' => optional($row->created_at)->toIso8601String(),
+                'updatedAt' => optional($row->updated_at)->toIso8601String(),
             ])
             ->values()
             ->all();

@@ -1056,7 +1056,13 @@ abstract class FleetBaseController extends Controller
         return $modelClass::query()
             ->latest('id')
             ->get()
-            ->map(fn (Model $row) => $row->payload ?? [])
+            ->map(function (Model $row): array {
+                $payload = is_array($row->payload) ? $row->payload : [];
+                $payload['createdAt'] = optional($row->created_at)->toIso8601String();
+                $payload['updatedAt'] = optional($row->updated_at)->toIso8601String();
+
+                return $payload;
+            })
             ->values()
             ->all();
     }
@@ -1072,7 +1078,13 @@ abstract class FleetBaseController extends Controller
             ->whereNotIn('status', ['fuel_recharge', 'attendance'])
             ->latest('id')
             ->get()
-            ->map(fn (FleetContract $row) => $row->payload ?? [])
+            ->map(function (FleetContract $row): array {
+                $payload = is_array($row->payload) ? $row->payload : [];
+                $payload['createdAt'] = optional($row->created_at)->toIso8601String();
+                $payload['updatedAt'] = optional($row->updated_at)->toIso8601String();
+
+                return $payload;
+            })
             ->values()
             ->all();
     }

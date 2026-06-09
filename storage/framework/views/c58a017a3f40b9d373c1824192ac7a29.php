@@ -186,7 +186,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Party Type</th>
+                        <th>Created At</th><th>Party Type</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>

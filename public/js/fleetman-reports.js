@@ -6,7 +6,9 @@
     const page = document.querySelector('[data-report-page]')?.dataset.reportPage || report.type;
     if (!page) return;
 
-    const records = Array.isArray(report.records) ? report.records : [];
+    const records = Array.isArray(report.records)
+        ? report.records.filter((row) => String(row?.status || row?.savedAs || '').trim().toLowerCase() !== 'draft')
+        : [];
     let filtered = [];
     let currentPage = 1;
     let pageSize = 10;
@@ -209,10 +211,10 @@
         const tbody = $('#tbody');
         if (tbody) {
             tbody.innerHTML = rows.length ? rows.map((row) => `<tr>
-                <td class="sticky-left sticky-1">${escapeHtml(row.entryId)}</td>
-                <td class="sticky-left sticky-2">${reportDate(row.date)}</td>
-                <td class="sticky-left sticky-3">${escapeHtml(row.contract)}</td>
-                <td class="sticky-left sticky-4">${escapeHtml(row.car)}</td>
+                <td>${escapeHtml(row.entryId)}</td>
+                <td>${reportDate(row.date)}</td>
+                <td>${escapeHtml(row.contract)}</td>
+                <td>${escapeHtml(row.car)}</td>
                 <td>${escapeHtml(row.driver)}</td>
                 <td class="bordered-cell">${escapeHtml(row.driverStart)}</td>
                 <td class="bordered-cell">${escapeHtml(row.driverEnd)}</td>
@@ -274,10 +276,10 @@
         const tbody = $('#tbody');
         if (tbody) {
             tbody.innerHTML = pageRows.length ? pageRows.map((row) => `<tr>
-                <td class="sticky-left sticky-1">${escapeHtml(row.summaryId)}</td>
-                <td class="sticky-left sticky-2">${escapeHtml(row.contract)}</td>
-                <td class="sticky-left sticky-3">${escapeHtml(row.car)}</td>
-                <td class="sticky-left sticky-4">${escapeHtml(row.driver)}</td>
+                <td>${escapeHtml(row.summaryId)}</td>
+                <td>${escapeHtml(row.contract)}</td>
+                <td>${escapeHtml(row.car)}</td>
+                <td>${escapeHtml(row.driver)}</td>
                 <td style="text-align:right">${num(row.totalTime).toFixed(2)}</td>
                 ${row.daily.map((day) => `<td class="date-cell">${num(day.diesel).toFixed(2)}</td><td class="date-cell">${money(day.gas)}</td><td class="date-cell">${num(day.octane).toFixed(2)}</td>`).join('')}
                 <td style="text-align:right">${num(row.totalDiesel).toFixed(2)}</td>
@@ -301,10 +303,10 @@
         const thead = $('#thead');
         if (!thead) return;
         thead.innerHTML = `<tr>
-            <th rowspan="2" class="sticky-left sticky-1">Entry ID</th>
-            <th rowspan="2" class="sticky-left sticky-2">Contract</th>
-            <th rowspan="2" class="sticky-left sticky-3">Car</th>
-            <th rowspan="2" class="sticky-left sticky-4">Driver</th>
+            <th rowspan="2">Entry ID</th>
+            <th rowspan="2">Contract</th>
+            <th rowspan="2">Car</th>
+            <th rowspan="2">Driver</th>
             <th rowspan="2">Total Time</th>
             ${week.days.map((day) => `<th colspan="3" class="date-group">${escapeHtml(day.label)}</th>`).join('')}
             <th rowspan="2">Total Diesel</th>
@@ -344,10 +346,10 @@
         const tbody = $('#tbody');
         if (tbody) {
             tbody.innerHTML = pageRows.length ? pageRows.map((row) => `<tr>
-                <td class="sticky-left sticky-1">${escapeHtml(row.summaryId)}</td>
-                <td class="sticky-left sticky-2">${escapeHtml(row.monthLabel)}</td>
-                <td class="sticky-left sticky-3">${escapeHtml(row.contract)}</td>
-                <td class="sticky-left sticky-4">${escapeHtml(row.car)}</td>
+                <td>${escapeHtml(row.summaryId)}</td>
+                <td>${escapeHtml(row.monthLabel)}</td>
+                <td>${escapeHtml(row.contract)}</td>
+                <td>${escapeHtml(row.car)}</td>
                 <td>${escapeHtml(row.driver)}</td>
                 <td class="bordered-cell">${row.activeDays}</td>
                 <td class="bordered-cell">${num(row.totalTime).toFixed(2)}</td>
@@ -544,7 +546,7 @@
         fillSearchableInput('contractFilter', filters.contracts || []);
         fillSearchableInput('vehicleFilter', filters.vehicles || []);
         fillSearchableInput('driverFilter', filters.drivers || []);
-        fillSearchableInput('statusFilter', filters.statuses || []);
+        fillSearchableInput('statusFilter', (filters.statuses || []).filter((status) => String(status || '').trim().toLowerCase() !== 'draft'));
         fillSearchableInput('fuelFilter', filters.fuelTypes || []);
         if ($('#fromDate')) $('#fromDate').value = report.defaults?.fromDate || report.dateRange?.min || '';
         if ($('#toDate')) $('#toDate').value = report.defaults?.toDate || report.dateRange?.max || '';

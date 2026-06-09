@@ -236,20 +236,11 @@ class DriverController extends FleetBaseController
                     $errors["rows.{$index}.dob"] = 'Driver age calculated from Date of Birth must be between 18 and 80 years.';
                 }
             }
-
-            $selectedContactTypes = [];
             foreach ((array) ($row['contacts'] ?? []) as $contactIndex => $contact) {
                 if (! is_array($contact)) {
                     continue;
                 }
                 $type = trim((string) ($contact['type'] ?? ''));
-                $key = strtolower($type);
-                if ($type !== '' && isset($selectedContactTypes[$key])) {
-                    $errors["rows.{$index}.contacts.{$contactIndex}.type"] = 'Each contact type can be selected only once for a driver.';
-                }
-                if ($type !== '') {
-                    $selectedContactTypes[$key] = true;
-                }
                 if (strcasecmp($type, 'Relative') === 0 && trim((string) ($contact['relationship'] ?? '')) === '') {
                     $errors["rows.{$index}.contacts.{$contactIndex}.relationship"] = 'Relationship is required for a Relative contact.';
                 }

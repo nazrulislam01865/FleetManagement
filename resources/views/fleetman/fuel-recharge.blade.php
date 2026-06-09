@@ -143,7 +143,7 @@
     </section>
     </div>
 
-    <div id="rechargeListPage" class="hidden" style="max-width: 100%; padding: 0 10px;">
+    <div id="rechargeListPage" class="hidden" style="padding: 0 10px;">
         <x-fleetman.topbar :items="[['label' => 'Recharge List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportRechargesBtn">⬇ Export CSV</button>
@@ -175,6 +175,7 @@
                 <table>
                     <thead style="position: sticky; top: 0; z-index: 10; background: #f8fafc; outline: 1px solid #edf0f5; outline-offset: -1px;">
                         <tr>
+                            <th>Created At</th>
                             <th>Entry</th>
                             <th>Date</th>
                             <th>Contract</th>

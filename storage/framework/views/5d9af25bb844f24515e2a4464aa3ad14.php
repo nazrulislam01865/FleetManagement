@@ -207,7 +207,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Document Name</th>
+                        <th>Created At</th><th>Document Name</th>
                         <th>Used For</th>
                         <th>Code</th>
                         <th>Sort</th>

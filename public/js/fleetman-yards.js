@@ -30,6 +30,7 @@
     const csrfToken = () => document.querySelector('meta[name="csrf-token"]')?.content || '';
     const money = (amount) => `৳ ${Number(amount || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const integer = (value) => Number.parseInt(value || 0, 10) || 0;
+    const formatCreatedAt = (value) => window.FleetmanFormatCreatedAt ? window.FleetmanFormatCreatedAt(value) : (value || '—');
 
     function toast(message) {
         const node = $('#toast');
@@ -451,6 +452,7 @@
         const body = $('#yardTableBody');
         body.innerHTML = pageRows.length ? pageRows.map((record) => `
             <tr>
+                <td>${escapeHtml(formatCreatedAt(record.createdAt || record.created_at))}</td>
                 <td><b>${escapeHtml(record.yardId || '—')}</b></td>
                 <td class="yard-name-cell"><b>${escapeHtml(record.yardName || 'Unnamed Yard')}</b><br><small>${escapeHtml(record.address || 'No address')}</small></td>
                 <td>${escapeHtml(record.supervisor || '—')}</td>
@@ -462,7 +464,7 @@
                 <td>${Array.isArray(record.zones) ? record.zones.length : 0}</td>
                 <td>${Array.isArray(record.documents) ? record.documents.length : 0}</td>
                 <td class="yard-action-cell">${actionMarkup(record)}</td>
-            </tr>`).join('') : '<tr><td colspan="11" class="empty">No yard record matches the selected filters.</td></tr>';
+            </tr>`).join('') : '<tr><td colspan="12" class="empty">No yard record matches the selected filters.</td></tr>';
 
         $('#yardMobileList').innerHTML = pageRows.map((record) => `
             <article class="yard-mobile-card">

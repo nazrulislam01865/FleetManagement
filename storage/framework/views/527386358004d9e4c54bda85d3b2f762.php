@@ -239,7 +239,7 @@ unset($__errorArgs, $__bag); ?>
             <table>
                 <thead>
                     <tr>
-                        <th>Payment Type</th>
+                        <th>Created At</th><th>Payment Type</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>
@@ -250,6 +250,7 @@ unset($__errorArgs, $__bag); ?>
                 <tbody>
                     <?php $__empty_1 = true; $__currentLoopData = $paymentTypes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $paymentType): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                         <tr>
+                            <td><?php echo e(optional($paymentType->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A')); ?></td>
                             <td><b><?php echo e($paymentType->name); ?></b></td>
                             <td><span class="master-code"><?php echo e($paymentType->code); ?></span></td>
                             <td><?php echo e($paymentType->sort_order); ?></td>
@@ -279,7 +280,7 @@ unset($__errorArgs, $__bag); ?>
                             </td>
                         </tr>
                     <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
-                        <tr><td colspan="6" class="empty">No payment type added yet.</td></tr>
+                        <tr><td colspan="7" class="empty">No payment type added yet.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>

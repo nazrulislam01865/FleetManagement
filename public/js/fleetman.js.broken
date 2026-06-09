@@ -3383,9 +3383,9 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
             if (tbody) {
                 tbody.innerHTML = pageItems.length ? pageItems.map((row) => `
                     <tr>
-                        <td class="contract-sticky-1"><b>${escapeHtml(row.contractId)}</b></td>
-                        <td class="contract-sticky-2">${escapeHtml(row.partyName || '-')}</td>
-                        <td class="contract-sticky-3">${escapeHtml(row.contractWith || '-')}</td>
+                        <td><b>${escapeHtml(row.contractId)}</b></td>
+                        <td>${escapeHtml(row.partyName || '-')}</td>
+                        <td>${escapeHtml(row.contractWith || '-')}</td>
                         <td><span class="badge ${badgeClass(row.status)}">${escapeHtml(row.status || '-')}</span></td>
                         <td>${money(row.amount)}</td>
                         <td>${formatDate(row.contractStart)}</td>

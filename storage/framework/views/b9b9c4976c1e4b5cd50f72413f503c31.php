@@ -2,7 +2,7 @@
 <?php $__env->startSection('mobile-title', 'Users'); ?>
 
 <?php $__env->startSection('content'); ?>
-<div class="page-section role-matrix-page">
+<div class="page-section role-matrix-page fleet-list-page">
     <?php if (isset($component)) { $__componentOriginal9c1bf3ca5b4372ced6ff0d503060f43b = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.topbar','data' => ['items' => [['label' => 'System'], ['label' => 'Users']]]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -198,6 +198,7 @@
             <table class="role-user-table">
                 <thead>
                     <tr>
+                        <th>Created At</th>
                         <th>User</th>
                         <th>Email</th>
                         <th>Role</th>
@@ -220,6 +221,7 @@
                                 && ($canAssignSuperAdmin || $user->fleetRole?->slug !== 'super_admin');
                         ?>
                         <tr>
+                            <td><?php echo e(optional($user->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A')); ?></td>
                             <td>
                                 <b><?php echo e($user->name); ?></b>
                                 <?php if(auth()->id() === $user->id): ?>
@@ -274,7 +276,7 @@
                             </td>
                         </tr>
                     <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
-                        <tr><td colspan="6" class="empty">No users found.</td></tr>
+                        <tr><td colspan="7" class="empty">No users found.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>

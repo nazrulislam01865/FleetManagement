@@ -443,7 +443,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Vehicle</th><th>Registration</th><th>Category</th><th>Fuel Setup</th><th>Driver</th><th>Documents</th><th>Rent</th><th>Status</th><th>Action</th>
+                            <th>Created At</th><th>Vehicle</th><th>Registration</th><th>Category</th><th>Fuel Setup</th><th>Driver</th><th>Documents</th><th>Rent</th><th>Status</th><th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="vehicleTbody"></tbody>

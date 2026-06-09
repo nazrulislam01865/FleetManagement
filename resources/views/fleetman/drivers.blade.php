@@ -101,7 +101,7 @@
                 <x-fleetman.select id="driverFilterTenure" label="" :options="$fleetman['options']['driver_salary_tenures']" placeholder="All salary type" />
                 <button type="button" class="btn light" id="clearDriverFiltersBtn">Clear Filter</button>
             </div>
-            <div class="table-wrap driver-table"><table><thead><tr><th>Driver</th><th>Contact</th><th>License</th><th>Validity</th><th>Salary</th><th>Working Hour</th><th>Vendor</th><th>Docs</th><th>Status</th><th>Action</th></tr></thead><tbody id="driverTbody"></tbody></table></div>
+            <div class="table-wrap driver-table"><table><thead><tr><th>Created At</th><th>Driver</th><th>Contact</th><th>License</th><th>Validity</th><th>Salary</th><th>Working Hour</th><th>Vendor</th><th>Docs</th><th>Status</th><th>Action</th></tr></thead><tbody id="driverTbody"></tbody></table></div>
         </div>
     </div>
 </div>

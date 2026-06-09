@@ -135,10 +135,10 @@
          <?php $__env->slot('table', null, []); ?> 
             <thead>
                 <tr>
-                    <th rowspan="2" class="sticky-left sticky-1">Entry ID</th>
-                    <th rowspan="2" class="sticky-left sticky-2">Date</th>
-                    <th rowspan="2" class="sticky-left sticky-3">Contract</th>
-                    <th rowspan="2" class="sticky-left sticky-4">Car</th>
+                    <th rowspan="2">Entry ID</th>
+                    <th rowspan="2">Date</th>
+                    <th rowspan="2">Contract</th>
+                    <th rowspan="2">Car</th>
                     <th rowspan="2">Driver</th>
                     <th colspan="3" class="group-head">Driver Time</th>
                     <th colspan="3" class="group-head">Fuel</th>

@@ -139,7 +139,11 @@ class ReportController extends FleetBaseController
             : collect(config('fleetman.samples.fuel_recharges', []))
                 ->map(fn (array $row, int $index) => $this->normalizeRecharge($row, $row['rechargeId'] ?? ('FR-SAMPLE-' . ($index + 1)), $row['status'] ?? 'Submitted'));
 
-        return $this->enrichReportRecords($records);
+        $reportableRecords = $records
+            ->reject(fn (array $record): bool => strcasecmp(trim((string) ($record['status'] ?? '')), 'Draft') === 0)
+            ->values();
+
+        return $this->enrichReportRecords($reportableRecords);
     }
 
     private function enrichReportRecords(Collection $records): Collection
@@ -193,6 +197,11 @@ class ReportController extends FleetBaseController
                     return null;
                 }
 
+                $status = trim((string) ($payload['status'] ?? $row->status ?? ''));
+                if (strcasecmp($status, 'Draft') === 0) {
+                    return null;
+                }
+
                 $date = $payload['date'] ?? $payload['attendanceDate'] ?? null;
                 if (! $date) {
                     return null;
@@ -234,6 +243,11 @@ class ReportController extends FleetBaseController
             ->map(function (FleetTrip $row) use ($contractAssignments): ?array {
                 $payload = $row->payload ?? [];
                 if (! is_array($payload)) {
+                    return null;
+                }
+
+                $status = trim((string) ($payload['status'] ?? $row->status ?? ''));
+                if (strcasecmp($status, 'Draft') === 0) {
                     return null;
                 }
 

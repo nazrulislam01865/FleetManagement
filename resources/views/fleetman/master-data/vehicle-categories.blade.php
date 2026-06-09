@@ -58,7 +58,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Vehicle Category</th>
+                        <th>Created At</th><th>Vehicle Category</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>

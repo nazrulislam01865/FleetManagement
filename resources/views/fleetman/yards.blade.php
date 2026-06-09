@@ -155,6 +155,7 @@
                 <table class="yard-table">
                     <thead>
                         <tr>
+                            <th>Created At</th>
                             <th>Yard ID</th>
                             <th>Yard Name</th>
                             <th>Supervisor</th>

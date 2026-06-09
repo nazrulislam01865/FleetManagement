@@ -182,7 +182,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Fuel Unit</th>
+                        <th>Created At</th><th>Fuel Unit</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>

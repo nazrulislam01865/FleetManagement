@@ -58,7 +58,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Licence Type</th>
+                        <th>Created At</th><th>Licence Type</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>

@@ -60,7 +60,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Contact Type</th>
+                        <th>Created At</th><th>Contact Type</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>

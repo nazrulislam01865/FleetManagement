@@ -68,7 +68,7 @@
                 <input id="attendanceFilterContract" list="attendanceFilterContractList" placeholder="Contract"><datalist id="attendanceFilterContractList"></datalist>
                 <div style="display:flex;gap:10px"><button type="button" class="btn secondary" id="applyAttendanceFiltersBtn">Apply</button><button type="button" class="btn light" id="clearAttendanceFiltersBtn">Clear</button></div>
             </div>
-            <div class="table-wrap attendance-table"><table><thead><tr><th>Attendance</th><th>Date & Time</th><th>Contract / Vehicle</th><th>Driver</th><th>Hours</th><th>Status</th><th>Actions</th></tr></thead><tbody id="attendanceTbody"></tbody></table></div>
+            <div class="table-wrap attendance-table"><table><thead><tr><th>Created At</th><th>Attendance</th><th>Date & Time</th><th>Contract / Vehicle</th><th>Driver</th><th>Hours</th><th>Status</th><th>Actions</th></tr></thead><tbody id="attendanceTbody"></tbody></table></div>
         </div>
     </div>
 </div>

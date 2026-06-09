@@ -59,7 +59,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>Client Type</th>
+                        <th>Created At</th><th>Client Type</th>
                         <th>Code</th>
                         <th>Sort</th>
                         <th>Status</th>
