@@ -506,7 +506,9 @@ abstract class FleetBaseController extends Controller
                 'show_template' => route('fleet.clients.show', ['code' => '__CODE__']),
             ],
             'driver_attendance' => [
+                'store' => route('fleet.driver-attendance.store'),
                 'sync' => route('fleet.driver-attendance.sync'),
+                'destroy_template' => route('fleet.driver-attendance.destroy', ['code' => '__CODE__']),
                 'show_template' => route('fleet.driver-attendance.show', ['code' => '__CODE__']),
             ],
             'employees' => [

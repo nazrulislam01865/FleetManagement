@@ -14,10 +14,7 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Dues List']])]); ?>
-             <?php $__env->slot('actions', null, []); ?> 
-                <button type="button" class="btn secondary" id="generatePayrollBtn" title="Payroll can be generated only from the 26th through the 30th of each month.">🗓 Generate Monthly Payroll</button>
-             <?php $__env->endSlot(); ?>
-         <?php echo $__env->renderComponent(); ?>
+<?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b)): ?>
 <?php $attributes = $__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b; ?>
@@ -151,6 +148,19 @@
                     <option value="Cancelled">Cancelled</option>
                 </select>
                 <button type="button" class="btn light" id="clearDueFiltersBtn">Clear</button>
+                <div class="payroll-dropdown" id="payrollDropdown">
+                    <button type="button" class="btn secondary" id="generatePayrollBtn" aria-haspopup="true" aria-expanded="false" title="Payroll can be generated only from the 26th through the 30th of each month.">🗓 Generate Monthly Payroll</button>
+                    <div class="payroll-dropdown-menu" id="payrollDropdownMenu" hidden>
+                        <label class="section-label" for="payrollMonthSelect">Select Payroll Month</label>
+                        <select id="payrollMonthSelect" class="form-control">
+                            <option value="">Select month</option>
+                        </select>
+                        <div class="payroll-dropdown-actions">
+                            <button type="button" class="btn light" id="cancelPayrollMonthBtn">Cancel</button>
+                            <button type="button" class="btn secondary" id="confirmGeneratePayrollBtn">Generate Payroll</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div class="table-wrap">
@@ -175,6 +185,39 @@
         </div>
     </div>
 </div>
+
+<style>
+    .payroll-dropdown { position: relative; min-width: 0; }
+    .payroll-dropdown > .btn { width: 100%; }
+    .payroll-dropdown-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        z-index: 40;
+        width: min(360px, calc(100vw - 32px));
+        padding: 14px;
+        background: #fff;
+        border: 1px solid #e4e7ec;
+        border-radius: 14px;
+        box-shadow: 0 16px 40px rgba(16, 24, 40, .16);
+    }
+    .payroll-dropdown-menu[hidden] { display: none !important; }
+    .payroll-dropdown-menu select { width: 100%; }
+    .payroll-dropdown-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 12px;
+    }
+    @media (max-width: 1050px) {
+        .payroll-dropdown-menu {
+            position: static;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .payroll-dropdown-actions .btn { flex: 1; }
+    }
+</style>
 
 <!-- Scripts for Dues specific page -->
 <script>
@@ -304,20 +347,112 @@
             };
         }
 
-        document.getElementById('generatePayrollBtn').addEventListener('click', async () => {
+        const payrollDropdown = document.getElementById('payrollDropdown');
+        const payrollDropdownMenu = document.getElementById('payrollDropdownMenu');
+        const payrollMonthSelect = document.getElementById('payrollMonthSelect');
+        const generatePayrollBtn = document.getElementById('generatePayrollBtn');
+        const confirmGeneratePayrollBtn = document.getElementById('confirmGeneratePayrollBtn');
+
+        function payrollMonthFromDue(due) {
+            const candidates = [
+                due?.source_id,
+                due?.payload?.month,
+                typeof due?.code === 'string' ? due.code.match(/(\d{4}-(?:0[1-9]|1[0-2]))$/)?.[1] : null
+            ];
+
+            return candidates.find(value => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || ''))) || null;
+        }
+
+        function monthLabel(month, currentMonth) {
+            const [year, monthNumber] = month.split('-').map(Number);
+            const label = new Intl.DateTimeFormat('en-US', {
+                month: 'long',
+                year: 'numeric',
+                timeZone: 'Asia/Dhaka'
+            }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
+
+            return month === currentMonth ? `${label} (Current Month)` : label;
+        }
+
+        function populatePayrollMonthOptions() {
             const today = dhakaCalendarDate();
+            const currentYear = Number(today.month.slice(0, 4));
+            const fallbackStart = `${currentYear - 5}-01`;
+            const storedMonths = duesData.map(payrollMonthFromDue).filter(Boolean).sort();
+            const firstMonth = storedMonths.length && storedMonths[0] < fallbackStart
+                ? storedMonths[0]
+                : fallbackStart;
+
+            payrollMonthSelect.innerHTML = '<option value="">Select month</option>';
+
+            let [year, month] = today.month.split('-').map(Number);
+            const [firstYear, firstMonthNumber] = firstMonth.split('-').map(Number);
+
+            while (year > firstYear || (year === firstYear && month >= firstMonthNumber)) {
+                const value = `${year}-${String(month).padStart(2, '0')}`;
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = monthLabel(value, today.month);
+                payrollMonthSelect.appendChild(option);
+
+                month--;
+                if (month === 0) {
+                    month = 12;
+                    year--;
+                }
+            }
+
+            payrollMonthSelect.value = today.month;
+        }
+
+        function openPayrollMonthSelector() {
+            populatePayrollMonthOptions();
+            payrollDropdownMenu.hidden = false;
+            generatePayrollBtn.setAttribute('aria-expanded', 'true');
+            setTimeout(() => payrollMonthSelect.focus(), 0);
+        }
+
+        function closePayrollMonthSelector() {
+            payrollDropdownMenu.hidden = true;
+            generatePayrollBtn.setAttribute('aria-expanded', 'false');
+        }
+
+        generatePayrollBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+
+            if (payrollDropdownMenu.hidden) {
+                openPayrollMonthSelector();
+            } else {
+                closePayrollMonthSelector();
+            }
+        });
+
+        document.getElementById('cancelPayrollMonthBtn').addEventListener('click', closePayrollMonthSelector);
+        payrollDropdownMenu.addEventListener('click', event => event.stopPropagation());
+        document.addEventListener('click', (event) => {
+            if (!payrollDropdown.contains(event.target)) {
+                closePayrollMonthSelector();
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !payrollDropdownMenu.hidden) {
+                closePayrollMonthSelector();
+                generatePayrollBtn.focus();
+            }
+        });
+
+        confirmGeneratePayrollBtn.addEventListener('click', async () => {
+            const today = dhakaCalendarDate();
+            const month = payrollMonthSelect.value;
 
             if (today.day < 26 || today.day > 30) {
                 alert(`Monthly payroll can only be generated from the 26th through the 30th of each month. Today is ${today.display}.`);
                 return;
             }
 
-            const enteredMonth = prompt('Enter the payroll month (YYYY-MM):', today.month);
-            if (enteredMonth === null) return;
-
-            const month = enteredMonth.trim();
-            if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
-                alert('Enter a valid payroll month using YYYY-MM format.');
+            if (!month) {
+                alert('Select a payroll month.');
+                payrollMonthSelect.focus();
                 return;
             }
 
@@ -330,9 +465,9 @@
                 return;
             }
 
-            const btn = document.getElementById('generatePayrollBtn');
-            btn.disabled = true;
-            btn.textContent = 'Generating...';
+            confirmGeneratePayrollBtn.disabled = true;
+            payrollMonthSelect.disabled = true;
+            confirmGeneratePayrollBtn.textContent = 'Generating...';
 
             try {
                 const response = await fetch(payrollUrl, {
@@ -350,6 +485,7 @@
                     alert(res.message);
                     duesData = res.rows || [];
                     renderDues();
+                    closePayrollMonthSelector();
                 } else {
                     alert(res.message || 'Unable to generate payroll.');
                 }
@@ -357,8 +493,9 @@
                 console.error(err);
                 alert('Request failed. Please try again.');
             } finally {
-                btn.disabled = false;
-                btn.textContent = '🗓 Generate Monthly Payroll';
+                confirmGeneratePayrollBtn.disabled = false;
+                payrollMonthSelect.disabled = false;
+                confirmGeneratePayrollBtn.textContent = 'Generate Payroll';
             }
         });
 

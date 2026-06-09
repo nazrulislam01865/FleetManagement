@@ -186,6 +186,12 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/driver-attendance', [DriverAttendanceController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':driver_attendance.view')
         ->name('driver-attendance');
+    Route::post('/driver-attendance', [DriverAttendanceController::class, 'store'])
+        ->middleware(EnsureFleetPermission::class.':driver_attendance.manage')
+        ->name('driver-attendance.store');
+    Route::delete('/driver-attendance/{code}', [DriverAttendanceController::class, 'destroy'])
+        ->middleware(EnsureFleetPermission::class.':driver_attendance.manage')
+        ->name('driver-attendance.destroy');
     Route::get('/driver-attendance/{code}', [DriverAttendanceController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':driver_attendance.view')
         ->name('driver-attendance.show');

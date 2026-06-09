@@ -6327,7 +6327,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
     }
 
     function initDriverAttendance() {
-        let logs = Array.isArray(records.driver_attendance) ? records.driver_attendance : (samples.driver_attendance || []);
+        let logs = Array.isArray(records.driver_attendance) ? [...records.driver_attendance] : [];
+        const attendanceResources = resources?.driver_attendance || {};
         const masters = data.attendanceMasters || { contracts: [], vehicle_driver_map: {}, drivers: [] };
         let selectedStatus = 'Completed';
         let savingLog = false;
@@ -6397,8 +6398,48 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             };
         });
 
-        function saveStore() {
-            return syncResource('driver_attendance', logs);
+        function attendanceResponseMessage(payload, fallback) {
+            const errors = Object.values(payload?.errors || {}).flat().filter(Boolean);
+            return payload?.message || errors.join(' ') || fallback;
+        }
+
+        async function attendanceRequest(endpoint, requestOptions, fallbackMessage) {
+            if (!endpoint) {
+                return { ok: false, syncFailed: true, message: fallbackMessage };
+            }
+
+            try {
+                const response = await fetch(endpoint, {
+                    ...requestOptions,
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken(),
+                        ...(requestOptions?.headers || {}),
+                    },
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(attendanceResponseMessage(payload, fallbackMessage));
+                }
+                return payload;
+            } catch (error) {
+                const message = error?.message || fallbackMessage;
+                toast(message);
+                return { ok: false, syncFailed: true, message };
+            }
+        }
+
+        async function saveStore(row) {
+            const endpoint = attendanceResources.store;
+            if (!endpoint) {
+                return syncResource('driver_attendance', rowsWithUpsertedLog(row));
+            }
+
+            return attendanceRequest(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ row }),
+            }, 'The attendance record could not be saved.');
         }
 
         function genId() {
@@ -6728,7 +6769,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (activeButton) activeButton.textContent = isDraft ? 'Saving Draft...' : 'Saving...';
 
             try {
-                const result = await syncResource('driver_attendance', nextRows);
+                const result = await saveStore(row);
                 if (result?.syncFailed || result?.ok === false) return;
 
                 logs = Array.isArray(result?.rows) ? result.rows : nextRows;
@@ -6847,7 +6888,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             logs[index] = updated;
 
-            const result = await saveStore();
+            const result = await saveStore(updated);
             if (result?.syncFailed || result?.ok === false) {
                 logs = previousLogs;
                 transitioningLogs.delete(id);
@@ -6893,13 +6934,19 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         async function deleteLog(id) {
             if (!confirm('Delete this attendance record?')) return;
+
             const nextRows = logs.filter((row) => row.logId !== id);
-            const result = await syncResource('driver_attendance', nextRows);
+            const endpoint = String(attendanceResources.destroy_template || '')
+                .replace('__CODE__', encodeURIComponent(id));
+            const result = endpoint
+                ? await attendanceRequest(endpoint, { method: 'DELETE' }, 'The attendance record could not be deleted.')
+                : await syncResource('driver_attendance', nextRows);
+
             if (result?.syncFailed || result?.ok === false) return;
 
             logs = Array.isArray(result?.rows) ? result.rows : nextRows;
             renderList();
-            toast('Attendance deleted.');
+            toast(result?.message || 'Attendance deleted.');
         }
 
         function exportLogs() {

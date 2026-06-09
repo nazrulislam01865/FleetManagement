@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers\Fleet;
 
+use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetDriverAttendance;
+use App\Models\Fleet\FleetDue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class DriverAttendanceController extends FleetBaseController
@@ -18,6 +22,78 @@ class DriverAttendanceController extends FleetBaseController
     protected string $statusKey = 'status';
     protected string $modelClass = FleetDriverAttendance::class;
 
+    /**
+     * Save one log without submitting and revalidating the complete table.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'row' => ['required', 'array'],
+        ]);
+
+        $row = $this->cleanPersistenceMetadata(
+            $this->withCalculatedDuration($validated['row'])
+        );
+        $this->validateAttendanceRows([$row]);
+
+        $code = trim((string) ($row[$this->idKey] ?? ''));
+        if ($code === '') {
+            throw ValidationException::withMessages([
+                'row.logId' => 'Attendance ID is required.',
+            ]);
+        }
+
+        $isNewRecord = ! FleetDriverAttendance::query()->where('code', $code)->exists();
+
+        $record = DB::transaction(function () use ($code, $row): FleetDriverAttendance {
+            $record = FleetDriverAttendance::query()->updateOrCreate(
+                ['code' => $code],
+                [
+                    'name' => trim((string) ($row[$this->nameKey] ?? '')) ?: $code,
+                    'status' => trim((string) ($row[$this->statusKey] ?? '')) ?: null,
+                    'payload' => $row,
+                ]
+            );
+
+            $this->syncAttendanceDue($row);
+
+            return $record->refresh();
+        });
+
+        return response()->json([
+            'ok' => true,
+            'message' => $isNewRecord ? 'Attendance saved successfully.' : 'Attendance updated successfully.',
+            'record' => $this->attendancePayload($record),
+            'rows' => $this->recordsFor(FleetDriverAttendance::class),
+        ]);
+    }
+
+    /**
+     * Delete only the selected log. Remaining logs are not revalidated.
+     */
+    public function destroy(string $code): JsonResponse
+    {
+        $record = FleetDriverAttendance::query()->where('code', $code)->firstOrFail();
+
+        DB::transaction(function () use ($record, $code): void {
+            if (Schema::hasTable('fleet_dues')) {
+                FleetDue::query()->where('code', 'PAY-LOG-'.$code)->delete();
+            }
+            $record->delete();
+        });
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Attendance deleted successfully.',
+            'rows' => $this->recordsFor(FleetDriverAttendance::class),
+        ]);
+    }
+
+    /**
+     * Compatibility endpoint for older cached JavaScript.
+     * Only a new or changed row is validated, so old demo/history rows cannot
+     * block saving or deleting another log.
+     */
     public function sync(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -26,83 +102,62 @@ class DriverAttendanceController extends FleetBaseController
         ]);
 
         $rows = collect($validated['rows'])
-            ->map(fn (array $row): array => $this->withCalculatedDuration($row))
+            ->map(fn (array $row): array => $this->cleanPersistenceMetadata(
+                $this->withCalculatedDuration($row)
+            ))
             ->values()
             ->all();
 
-        $request->merge(['rows' => $rows]);
-        $this->validateAttendanceRows($rows);
+        $existingPayloads = FleetDriverAttendance::query()
+            ->get()
+            ->mapWithKeys(fn (FleetDriverAttendance $record): array => [
+                $record->code => is_array($record->payload) ? $record->payload : [],
+            ]);
 
+        $changedRows = collect($rows)
+            ->filter(function (array $row) use ($existingPayloads): bool {
+                $code = trim((string) ($row[$this->idKey] ?? ''));
+                if ($code === '' || ! $existingPayloads->has($code)) {
+                    return true;
+                }
+
+                return $this->comparableAttendancePayload($row)
+                    !== $this->comparableAttendancePayload((array) $existingPayloads->get($code));
+            })
+            ->values()
+            ->all();
+
+        $this->validateAttendanceRows($changedRows);
+
+        $existingCodes = $existingPayloads->keys()->values();
+        $incomingCodes = collect($rows)
+            ->pluck($this->idKey)
+            ->map(fn ($code): string => trim((string) $code))
+            ->filter()
+            ->values();
+        $deletedCodes = $existingCodes->diff($incomingCodes)->values();
+
+        $request->merge(['rows' => $rows]);
         $response = parent::sync($request);
 
-        foreach ($rows as $row) {
-            if (($row[$this->statusKey] ?? '') !== 'Completed') {
-                continue;
-            }
-
-            $driverStr = $row['driver'] ?? '';
-            // Extract driver code (e.g., DVR12345 from "DVR12345 - Kamal")
-            if (! preg_match('/^(DVR\d+)/', $driverStr, $matches)) {
-                continue;
-            }
-
-            $driverCode = $matches[1];
-            $driver = \App\Models\Fleet\FleetDriver::where('code', $driverCode)->first();
-
-            if (! $driver || ($driver->payload['salaryTenure'] ?? '') !== 'Hourly') {
-                continue;
-            }
-
-            $salary = (float) ($driver->payload['salary'] ?? 0);
-            $driverHours = 0;
-            $hoursStr = $row['hours'] ?? '';
-
-            if (preg_match('/(\d+)h\s*(\d+)m/', $hoursStr, $hourMatches)) {
-                $driverHours = (int) $hourMatches[1] + ((int) $hourMatches[2] / 60);
-            } else {
-                $start = strtotime($row['startTime'] ?? '');
-                $end = strtotime($row['endTime'] ?? '');
-                if ($start && $end) {
-                    if ($end < $start) {
-                        $end += 86400; // cross midnight
-                    }
-                    $driverHours = ($end - $start) / 3600;
+        DB::transaction(function () use ($rows, $deletedCodes): void {
+            if (Schema::hasTable('fleet_dues')) {
+                foreach ($deletedCodes as $code) {
+                    FleetDue::query()->where('code', 'PAY-LOG-'.$code)->delete();
                 }
             }
 
-            $amount = $salary * $driverHours;
-            $logId = $row[$this->idKey] ?? '';
-
-            if ($amount <= 0 || ! $logId) {
-                continue;
+            foreach ($rows as $row) {
+                $this->syncAttendanceDue($row);
             }
-
-            \App\Models\Fleet\FleetDue::updateOrCreate(
-                ['code' => 'PAY-LOG-'.$logId],
-                [
-                    'type' => 'Driver Salary',
-                    'party_type' => 'Driver',
-                    'party_id' => $driverCode,
-                    'source_type' => 'Attendance',
-                    'source_id' => $logId,
-                    'amount' => $amount,
-                    'status' => 'Pending',
-                    'due_date' => $row['date'] ?? null,
-                    'payload' => [
-                        'logId' => $logId,
-                        'driverName' => $driverStr,
-                        'hours' => $hoursStr,
-                    ],
-                ]
-            );
-        }
+        });
 
         return $response;
     }
 
     /**
-     * Validate every completed/non-draft log before it reaches persistence.
-     * Drafts remain intentionally permissive.
+     * Validate every completed/non-draft log before persistence.
+     * Drafts stay permissive except that they must keep their generated Log ID.
      */
     protected function validateAttendanceRows(array $rows): void
     {
@@ -115,13 +170,16 @@ class DriverAttendanceController extends FleetBaseController
         }
 
         foreach ($rows as $index => $row) {
+            if (trim((string) ($row['logId'] ?? '')) === '') {
+                $errors["rows.$index.logId"] = 'Attendance ID is required.';
+            }
+
             $status = trim((string) ($row['status'] ?? ''));
             if (strcasecmp($status, 'Draft') === 0) {
                 continue;
             }
 
             $required = [
-                'logId' => 'Attendance ID',
                 'date' => 'Date',
                 'contract' => 'Contract',
                 'vehicle' => 'Vehicle',
@@ -246,5 +304,95 @@ class DriverAttendanceController extends FleetBaseController
     protected function isValidTime(string $value): bool
     {
         return preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $value) === 1;
+    }
+
+    private function syncAttendanceDue(array $row): void
+    {
+        if (! Schema::hasTable('fleet_dues')) {
+            return;
+        }
+
+        $logId = trim((string) ($row[$this->idKey] ?? ''));
+        if ($logId === '') {
+            return;
+        }
+
+        $dueCode = 'PAY-LOG-'.$logId;
+        if (trim((string) ($row[$this->statusKey] ?? '')) !== 'Completed') {
+            FleetDue::query()->where('code', $dueCode)->delete();
+            return;
+        }
+
+        $driverText = trim((string) ($row['driver'] ?? ''));
+        $driverCode = trim((string) ($row['driverId'] ?? ''));
+        if ($driverCode === '' && preg_match('/^(DVR\d+)/', $driverText, $matches) === 1) {
+            $driverCode = $matches[1];
+        }
+
+        $driver = $driverCode !== ''
+            ? FleetDriver::query()->where('code', $driverCode)->first()
+            : null;
+
+        if (! $driver || strcasecmp((string) ($driver->payload['salaryTenure'] ?? ''), 'Hourly') !== 0) {
+            FleetDue::query()->where('code', $dueCode)->delete();
+            return;
+        }
+
+        $salary = (float) ($driver->payload['salary'] ?? 0);
+        $hoursText = trim((string) ($row['hours'] ?? ''));
+        $driverHours = 0.0;
+
+        if (preg_match('/(\d+)h\s*(\d+)m/', $hoursText, $matches) === 1) {
+            $driverHours = (int) $matches[1] + ((int) $matches[2] / 60);
+        }
+
+        $amount = round($salary * $driverHours, 2);
+        if ($amount <= 0) {
+            FleetDue::query()->where('code', $dueCode)->delete();
+            return;
+        }
+
+        FleetDue::query()->updateOrCreate(
+            ['code' => $dueCode],
+            [
+                'type' => 'Driver Salary',
+                'party_type' => 'Driver',
+                'party_id' => $driverCode,
+                'source_type' => 'Attendance',
+                'source_id' => $logId,
+                'amount' => $amount,
+                'status' => 'Pending',
+                'due_date' => $row['date'] ?? null,
+                'payload' => [
+                    'logId' => $logId,
+                    'driverName' => $driverText,
+                    'hours' => $hoursText,
+                ],
+            ]
+        );
+    }
+
+    private function cleanPersistenceMetadata(array $row): array
+    {
+        unset($row['createdAt'], $row['created_at'], $row['updatedAt'], $row['updated_at']);
+
+        return $row;
+    }
+
+    private function comparableAttendancePayload(array $row): array
+    {
+        $row = $this->cleanPersistenceMetadata($row);
+        ksort($row);
+
+        return $row;
+    }
+
+    private function attendancePayload(FleetDriverAttendance $record): array
+    {
+        $payload = is_array($record->payload) ? $record->payload : [];
+        $payload['createdAt'] = optional($record->created_at)->toIso8601String();
+        $payload['updatedAt'] = optional($record->updated_at)->toIso8601String();
+
+        return $payload;
     }
 }

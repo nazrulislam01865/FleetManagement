@@ -7,7 +7,6 @@ use App\Models\Fleet\FleetContract;
 use App\Models\Fleet\FleetDocumentName;
 use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetDriverContactType;
-use App\Models\Fleet\FleetDriverAttendance;
 use App\Models\Fleet\FleetEmployee;
 use App\Models\Fleet\FleetFuelPrice;
 use App\Models\Fleet\FleetFuelType;
@@ -134,7 +133,7 @@ class FleetDatabaseSeeder extends Seeder
         $this->seedRecords(FleetTrip::class, $samples['trips'] ?? [], 'tripId', 'purpose', 'status');
         $this->seedRecords(FleetDriver::class, $samples['drivers'] ?? [], 'driverId', 'fullName', 'status');
         $this->seedRecords(FleetClient::class, $samples['clients'] ?? [], 'clientId', 'clientName', 'status');
-        $this->seedRecords(FleetDriverAttendance::class, $samples['driver_attendance'] ?? [], 'logId', 'driver', 'status');
+        // Attendance/log records are operational data and must never be recreated as demo rows.
         $this->seedRecords(FleetEmployee::class, $samples['employees'] ?? [], 'employeeId', 'fullName', 'status');
     }
 
