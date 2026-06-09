@@ -61,7 +61,7 @@ class DueController extends FleetBaseController
 
         return response()->json([
             'ok' => true,
-            'rows' => FleetDue::all(),
+            'rows' => $this->latestDues(),
         ]);
     }
 
@@ -235,7 +235,7 @@ class DueController extends FleetBaseController
             'message' => $message,
             'created' => $result['created'],
             'existing' => $result['existing'],
-            'rows' => FleetDue::query()->orderByDesc('due_date')->orderByDesc('id')->get(),
+            'rows' => $this->latestDues(),
         ]);
     }
 
@@ -243,7 +243,19 @@ class DueController extends FleetBaseController
     {
         return response()->json([
             'ok' => true,
-            'rows' => FleetDue::query()->orderByDesc('due_date')->orderByDesc('id')->get(),
+            'rows' => $this->latestDues(),
         ]);
+    }
+
+    /**
+     * Keep the newest Accounts Payable & Dues entry at the top consistently
+     * after initial load, payroll generation and status updates.
+     */
+    private function latestDues()
+    {
+        return FleetDue::query()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
     }
 }
