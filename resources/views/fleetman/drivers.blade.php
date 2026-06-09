@@ -81,7 +81,14 @@
 
     <div id="driverListPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Driver List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportDriversBtn">⬇ Export CSV</button></x-slot:actions>
+            <x-slot:actions>
+                <button type="button" class="btn light" id="exportDriversBtn">⬇ Export CSV</button>
+                @if(data_get($fleetman, 'auth.pageAccess.canManage'))
+                    <a href="{{ route('fleet.drivers', ['action' => 'add']) }}" class="btn primary" id="addDriverFromListBtn">＋ Add Driver</a>
+                @else
+                    <span class="btn primary rbac-control-muted" id="addDriverFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Driver</span>
+                @endif
+            </x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card title="Driver List" subtitle="All saved drivers appear here. Search, filter, view, edit or export."></x-fleetman.title-card>

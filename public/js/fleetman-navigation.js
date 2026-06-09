@@ -26,6 +26,10 @@
     const sessionStore = safeStorage('sessionStorage');
 
     const PAGE_VIEWS = {
+        yards: {
+            add: 'yardAddPage',
+            list: 'yardListPage',
+        },
         vehicles: {
             add: 'vehicleAddPage',
             list: 'vehicleListPage',

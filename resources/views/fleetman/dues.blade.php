@@ -8,7 +8,7 @@
     <div id="dueListPage">
         <x-fleetman.topbar :items="[['label' => 'Dues List']]">
             <x-slot:actions>
-                <button type="button" class="btn secondary" id="generatePayrollBtn">🗓 Generate Monthly Payroll</button>
+                <button type="button" class="btn secondary" id="generatePayrollBtn" title="Payroll can be generated only from the 26th through the 30th of each month.">🗓 Generate Monthly Payroll</button>
             </x-slot:actions>
         </x-fleetman.topbar>
 
@@ -150,33 +150,6 @@
             }
         }
 
-        async function generatePayroll() {
-            if (!confirm('Are you sure you want to generate payroll dues for all active drivers and employees?')) return;
-            const btn = document.getElementById('generatePayrollBtn');
-            btn.disabled = true;
-            btn.textContent = 'Generating...';
-            try {
-                const response = await fetch(payrollUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-                    body: JSON.stringify({ month: new Date().toISOString().slice(0, 7) })
-                });
-                const res = await response.json();
-                if (res.ok) {
-                    duesData = res.rows || [];
-                    renderDues();
-                } else {
-                    alert('Error generating payroll: ' + (res.message || 'Unknown error'));
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Request failed.');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '🗓 Generate Monthly Payroll';
-            }
-        }
-
         async function markAsPaid(code) {
             const due = duesData.find(d => d.code === code);
             if (!due) return;
@@ -201,27 +174,77 @@
             }
         }
 
+        function dhakaCalendarDate() {
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Dhaka',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).formatToParts(new Date());
+            const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+
+            return {
+                day: Number(values.day),
+                month: `${values.year}-${values.month}`,
+                display: `${values.day}-${values.month}-${values.year}`
+            };
+        }
+
         document.getElementById('generatePayrollBtn').addEventListener('click', async () => {
-            const month = prompt("Enter the month (YYYY-MM) to generate payroll for:", new Date().toISOString().slice(0,7));
-            if (!month) return;
+            const today = dhakaCalendarDate();
+
+            if (today.day < 26 || today.day > 30) {
+                alert(`Monthly payroll can only be generated from the 26th through the 30th of each month. Today is ${today.display}.`);
+                return;
+            }
+
+            const enteredMonth = prompt('Enter the payroll month (YYYY-MM):', today.month);
+            if (enteredMonth === null) return;
+
+            const month = enteredMonth.trim();
+            if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+                alert('Enter a valid payroll month using YYYY-MM format.');
+                return;
+            }
+
+            if (month > today.month) {
+                alert(`Future-month payroll cannot be generated. Select ${today.month} or an earlier month.`);
+                return;
+            }
+
+            if (!confirm(`Generate and store payroll dues for ${month}? Existing records for this month will be preserved.`)) {
+                return;
+            }
+
+            const btn = document.getElementById('generatePayrollBtn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
 
             try {
                 const response = await fetch(payrollUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                    },
                     body: JSON.stringify({ month })
                 });
                 const res = await response.json();
-                if (res.ok) {
+
+                if (response.ok && res.ok) {
                     alert(res.message);
                     duesData = res.rows || [];
                     renderDues();
                 } else {
-                    alert('Error generating payroll: ' + (res.message || 'Unknown error'));
+                    alert(res.message || 'Unable to generate payroll.');
                 }
             } catch (err) {
                 console.error(err);
-                alert('Request failed.');
+                alert('Request failed. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🗓 Generate Monthly Payroll';
             }
         });
 

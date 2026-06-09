@@ -20,7 +20,7 @@
         </div>
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.document-names') }}">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document types available</span></div>
         </a>
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.licence-types') }}">
             <div class="master-overview-icon">🪪</div>

@@ -105,7 +105,7 @@ class TripController extends FleetBaseController
                 $totalCost = (float) ($row['totalCost'] ?? 0);
                 $paidAmount = collect($row['payments'] ?? [])->sum(fn (array $payment) => (float) ($payment['amount'] ?? 0));
                 if ($paidAmount > $totalCost + 0.009) {
-                    $validator->errors()->add("rows.$index.payments", 'Total payments cannot be greater than the total trip cost.');
+                    $validator->errors()->add("rows.$index.payments", 'Total paid cannot exceed the total bill (trip cost).');
                 }
             }
         });

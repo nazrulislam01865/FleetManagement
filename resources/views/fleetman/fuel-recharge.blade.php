@@ -145,7 +145,14 @@
 
     <div id="rechargeListPage" class="hidden" style="max-width: 100%; padding: 0 10px;">
         <x-fleetman.topbar :items="[['label' => 'Recharge List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportRechargesBtn">⬇ Export CSV</button></x-slot:actions>
+            <x-slot:actions>
+                <button type="button" class="btn light" id="exportRechargesBtn">⬇ Export CSV</button>
+                @if(data_get($fleetman, 'auth.pageAccess.canManage'))
+                    <a href="{{ route('fleet.fuel-recharge', ['action' => 'add']) }}" class="btn primary" id="addFuelFromListBtn">＋ Add Fuel</a>
+                @else
+                    <span class="btn primary rbac-control-muted" id="addFuelFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Fuel</span>
+                @endif
+            </x-slot:actions>
         </x-fleetman.topbar>
 
         <x-fleetman.title-card title="Recharge List" subtitle="Clean list view with quick search, filters, and sample data. Designed to replace the spreadsheet-like screen with something easier to scan and use."></x-fleetman.title-card>

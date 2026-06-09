@@ -1,60 +1,80 @@
 @extends('layouts.fleetman')
 
-@section('title', 'Document Name Master | FleetMan')
-@section('mobile-title', 'Document Name Master')
+@section('title', 'Document Type | FleetMan')
+@section('mobile-title', 'Document Type')
 
 @section('content')
 <div class="page-section master-data-page">
-    <x-fleetman.topbar :items="[['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Document Name Master']]">
+    <x-fleetman.topbar :items="[['label' => 'Master Data', 'route' => 'fleet.master-data'], ['label' => 'Document Type']]">
 
     </x-fleetman.topbar>
 
     <x-fleetman.title-card
-        title="{{ $fleetman['masterTitle'] ?? 'Document Name Master' }}"
-        subtitle="{{ $fleetman['masterSubtitle'] ?? 'Add document names once and reuse them across FleetMan forms.' }}"
+        title="{{ $fleetman['masterTitle'] ?? 'Document Type' }}"
+        subtitle="{{ $fleetman['masterSubtitle'] ?? 'Manage document names and select every module where each document will be available.' }}"
     />
 
     <div class="master-overview-grid">
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.party-types') }}">
             <div class="master-overview-icon">🤝</div>
-            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available </span></div>
+            <div><strong id="masterPartyTypeCount">0</strong><span>Party types available</span></div>
         </a>
         <div class="master-overview-card">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document types available</span></div>
         </div>
         <a class="master-overview-card master-overview-link" href="{{ route('fleet.master-data.licence-types') }}">
             <div class="master-overview-icon">🪪</div>
-            <div><strong id="masterLicenceTypeCount">0</strong><span>Licence types available </span></div>
+            <div><strong id="masterLicenceTypeCount">0</strong><span>Licence types available</span></div>
         </a>
     </div>
 
     <section class="card master-card" id="documentNameMasterCard">
         <div class="section-head">
             <div>
-                <h2>Document Name Master</h2>
+                <h2>Document Type</h2>
             </div>
             <button type="button" class="btn light" id="resetDocumentNameMasterBtn">Reset</button>
         </div>
 
-        <form id="documentNameMasterForm" class="master-form" autocomplete="off">
+        <form id="documentNameMasterForm" class="master-form document-type-master-form" autocomplete="off">
             <input type="hidden" id="documentNameEditingCode">
             <x-fleetman.input id="documentNameMasterName" label="Document Name" placeholder="Example: Driving License Copy" required />
-            <x-fleetman.select id="documentNameMasterType" label="Document Type / Used For" :options="['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts']" placeholder="Select who will use this document" required />
-            <x-fleetman.input id="documentNameMasterCode" label="Code" placeholder="Example: DRIVING_LICENSE_COPY" hint="Used internally to keep the dropdown value stable." />
+            <x-fleetman.input id="documentNameMasterCode" label="Code" placeholder="Example: DRIVING_LICENSE_COPY" />
             <x-fleetman.input id="documentNameMasterSort" label="Sort Order" type="number" value="0" min="0" />
             <x-fleetman.select id="documentNameMasterStatus" label="Status" :options="['Active', 'Inactive']" value="Active" />
+
+            <fieldset class="master-form-full document-type-check-field" id="documentNameMasterTypesField">
+                <legend>Document Type / Used For <span class="req">*</span></legend>
+                <div class="document-type-check-grid" id="documentNameMasterTypes">
+                    @foreach (['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'] as $documentType)
+                        @php($typeId = 'documentNameMasterType'.$loop->index)
+                        <label class="document-type-check" for="{{ $typeId }}">
+                            <input
+                                type="checkbox"
+                                id="{{ $typeId }}"
+                                name="documentNameMasterTypes[]"
+                                value="{{ $documentType }}"
+                                @checked($documentType === 'All Modules')
+                            >
+                            <span>{{ $documentType }}</span>
+                        </label>
+                    @endforeach
+                </div>
+                <small class="document-type-check-error" id="documentNameMasterTypesError" hidden>Select at least one document type.</small>
+            </fieldset>
+
             <div class="master-form-full">
                 <x-fleetman.textarea id="documentNameMasterDescription" label="Description / Note" placeholder="Optional note, such as required for vendor onboarding or vehicle renewal." />
             </div>
             <div class="master-form-actions">
-                <button type="submit" class="btn primary" id="saveDocumentNameMasterBtn">Save Document Name</button>
+                <button type="submit" class="btn primary" id="saveDocumentNameMasterBtn">Save Document Type</button>
                 <button type="button" class="btn light" id="cancelDocumentNameEditBtn">Cancel Edit</button>
             </div>
         </form>
 
         <div class="master-table-title">
-            <div><b>Added Document Names</b></div>
+            <div><b>Added Document Types</b></div>
         </div>
         <div class="table-wrap master-table-wrap">
             <table>

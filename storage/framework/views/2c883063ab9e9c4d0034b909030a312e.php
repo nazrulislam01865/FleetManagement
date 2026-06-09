@@ -425,7 +425,11 @@
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Vendor List']])]); ?>
              <?php $__env->slot('actions', null, []); ?> 
                 <button type="button" class="btn light" id="exportPartiesBtn">⬇ Export CSV</button>
-
+                <?php if(data_get($fleetman, 'auth.pageAccess.canManage')): ?>
+                    <a href="<?php echo e(route('fleet.vendors', ['action' => 'add'])); ?>" class="btn primary" id="addVendorFromListBtn">＋ Add Vendor</a>
+                <?php else: ?>
+                    <span class="btn primary rbac-control-muted" id="addVendorFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Vendor</span>
+                <?php endif; ?>
              <?php $__env->endSlot(); ?>
          <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>

@@ -5,10 +5,10 @@ namespace App\Http\Controllers\Fleet;
 use App\Models\Fleet\FleetDue;
 use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetEmployee;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class DueController extends FleetBaseController
 {
@@ -66,72 +66,100 @@ class DueController extends FleetBaseController
     }
 
     /**
-     * Generate Payroll Dues for Drivers and Employees for a specific month.
+     * Generate monthly payroll dues during the permitted business window.
+     *
+     * Payroll can be generated only from the 26th through the 30th day of
+     * a month (Asia/Dhaka time), and never for a future payroll month.
+     * Existing monthly records are preserved so historical/paid payroll is
+     * never reset by generating the same month again.
      */
     public function generatePayroll(Request $request): JsonResponse
     {
-        $month = $request->input('month', date('Y-m')); // e.g. 2026-06
+        $validated = $request->validate([
+            'month' => ['required', 'date_format:Y-m'],
+        ], [
+            'month.required' => 'Select a payroll month.',
+            'month.date_format' => 'The payroll month must use YYYY-MM format.',
+        ]);
 
-        DB::transaction(function () use ($month) {
-            // Pre-fetch all attendances to calculate hourly wages
-            $attendances = \App\Models\Fleet\FleetDriverAttendance::all()->filter(function ($att) use ($month) {
-                return str_starts_with($att->payload['date'] ?? '', $month);
-            });
+        $today = CarbonImmutable::now('Asia/Dhaka');
+        $day = $today->day;
+
+        if ($day < 26 || $day > 30) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'PAYROLL_WINDOW_CLOSED',
+                'message' => 'Monthly payroll can only be generated from the 26th through the 30th of each month. Today is '.$today->format('d M Y').'.',
+            ], 422);
+        }
+
+        $month = $validated['month'];
+        $payrollMonth = CarbonImmutable::createFromFormat('!Y-m', $month, 'Asia/Dhaka')->startOfMonth();
+        $currentMonth = $today->startOfMonth();
+
+        if ($payrollMonth->isAfter($currentMonth)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'FUTURE_PAYROLL_MONTH',
+                'message' => 'Future-month payroll cannot be generated. Select '.$currentMonth->format('Y-m').' or an earlier month.',
+            ], 422);
+        }
+
+        $result = DB::transaction(function () use ($month, $today): array {
+            $created = 0;
+            $existing = 0;
 
             // 1. Driver Salaries
             $drivers = FleetDriver::where('status', 'Active')->get();
             foreach ($drivers as $driver) {
                 $payload = $driver->payload ?? [];
-                $salary = (float)($payload['salary'] ?? 0);
+                $salary = (float) ($payload['salary'] ?? 0);
                 $tenure = $payload['salaryTenure'] ?? 'Monthly';
 
-                if ($salary <= 0) continue;
-
-                $dueCode = "PAY-DRV-{$driver->code}-{$month}";
-                
-                $amount = $salary;
-
-                if ($tenure === 'Hourly') {
-                    // Hourly drivers are generated per attendance log in DriverAttendanceController@sync
+                if ($salary <= 0 || $tenure === 'Hourly') {
+                    // Hourly drivers are generated per attendance log in DriverAttendanceController@sync.
                     continue;
                 }
 
-                FleetDue::updateOrCreate(
-                    ['code' => $dueCode],
+                $due = FleetDue::firstOrCreate(
+                    ['code' => "PAY-DRV-{$driver->code}-{$month}"],
                     [
                         'type' => 'Driver Salary',
                         'party_type' => 'Driver',
                         'party_id' => $driver->code,
                         'source_type' => 'Payroll',
                         'source_id' => $month,
-                        'amount' => $amount,
+                        'amount' => $salary,
                         'status' => 'Pending',
-                        'due_date' => $month . '-05', // Assume due on 5th of next month
+                        'due_date' => $month.'-05',
                         'payload' => [
                             'month' => $month,
                             'tenure' => $tenure,
                             'driverName' => $payload['fullName'] ?? $driver->name,
-                        ]
+                            'generatedAt' => $today->toIso8601String(),
+                        ],
                     ]
                 );
+
+                $due->wasRecentlyCreated ? $created++ : $existing++;
             }
 
             // 2. Employee Salaries
             $employees = FleetEmployee::where('status', 'Active')->get();
             foreach ($employees as $employee) {
                 $payload = $employee->payload ?? [];
-                $salary = (float)($payload['salary'] ?? 0);
+                $salary = (float) ($payload['salary'] ?? 0);
                 $tenure = $payload['salaryTenure'] ?? 'Monthly';
-                
-                if ($salary <= 0) continue;
 
-                // Without an Employee Attendance module, we assume a standard 200 hours/month for Hourly employees
+                if ($salary <= 0) {
+                    continue;
+                }
+
+                // Without an Employee Attendance module, use the existing 200-hour monthly calculation.
                 $amount = $tenure === 'Hourly' ? ($salary * 200) : $salary;
 
-                $dueCode = "PAY-EMP-{$employee->code}-{$month}";
-
-                FleetDue::updateOrCreate(
-                    ['code' => $dueCode],
+                $due = FleetDue::firstOrCreate(
+                    ['code' => "PAY-EMP-{$employee->code}-{$month}"],
                     [
                         'type' => 'Employee Salary',
                         'party_type' => 'Employee',
@@ -140,29 +168,32 @@ class DueController extends FleetBaseController
                         'source_id' => $month,
                         'amount' => $amount,
                         'status' => 'Pending',
-                        'due_date' => $month . '-05',
+                        'due_date' => $month.'-05',
                         'payload' => [
                             'month' => $month,
                             'tenure' => $tenure,
                             'employeeName' => $payload['fullName'] ?? $employee->name,
-                        ]
+                            'generatedAt' => $today->toIso8601String(),
+                        ],
                     ]
                 );
+
+                $due->wasRecentlyCreated ? $created++ : $existing++;
             }
 
-            // 3. Vehicle Monthly Rents
+            // 3. Vehicle Monthly Rents (kept in the existing monthly generation flow)
             $vehicles = \App\Models\Fleet\FleetVehicle::where('status', 'Active')->get();
             foreach ($vehicles as $vehicle) {
                 $payload = $vehicle->payload ?? [];
-                $rent = (float)($payload['rent'] ?? 0);
+                $rent = (float) ($payload['rent'] ?? 0);
                 $vendor = $payload['vendor'] ?? null;
-                
-                if ($rent <= 0 || !$vendor) continue;
 
-                $dueCode = "RENT-VHL-{$vehicle->code}-{$month}";
+                if ($rent <= 0 || ! $vendor) {
+                    continue;
+                }
 
-                FleetDue::updateOrCreate(
-                    ['code' => $dueCode],
+                $due = FleetDue::firstOrCreate(
+                    ['code' => "RENT-VHL-{$vehicle->code}-{$month}"],
                     [
                         'type' => 'Vehicle Rent',
                         'party_type' => 'Vendor',
@@ -171,21 +202,40 @@ class DueController extends FleetBaseController
                         'source_id' => $month,
                         'amount' => $rent,
                         'status' => 'Pending',
-                        'due_date' => $month . '-01',
+                        'due_date' => $month.'-01',
                         'payload' => [
                             'month' => $month,
                             'vehicleId' => $vehicle->code,
                             'regNo' => $payload['regNo'] ?? '',
-                        ]
+                            'generatedAt' => $today->toIso8601String(),
+                        ],
                     ]
                 );
+
+                $due->wasRecentlyCreated ? $created++ : $existing++;
             }
+
+            return compact('created', 'existing');
         });
+
+        if (($result['created'] + $result['existing']) === 0) {
+            $message = "No eligible active payroll or vehicle-rent records were found for {$month}.";
+        } elseif ($result['created'] > 0) {
+            $message = "Payroll dues generated and stored for {$month}. {$result['created']} new record(s) created.";
+
+            if ($result['existing'] > 0) {
+                $message .= " {$result['existing']} existing record(s) were preserved.";
+            }
+        } else {
+            $message = "Payroll for {$month} is already stored. No duplicate records were created.";
+        }
 
         return response()->json([
             'ok' => true,
-            'message' => 'Payroll dues generated successfully for ' . $month,
-            'rows' => FleetDue::all(),
+            'message' => $message,
+            'created' => $result['created'],
+            'existing' => $result['existing'],
+            'rows' => FleetDue::query()->orderByDesc('due_date')->orderByDesc('id')->get(),
         ]);
     }
 
@@ -193,7 +243,7 @@ class DueController extends FleetBaseController
     {
         return response()->json([
             'ok' => true,
-            'rows' => FleetDue::all(),
+            'rows' => FleetDue::query()->orderByDesc('due_date')->orderByDesc('id')->get(),
         ]);
     }
 }

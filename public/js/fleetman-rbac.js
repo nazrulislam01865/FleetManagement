@@ -133,6 +133,7 @@
 
         const page = String(document.body?.dataset?.page || '').toLowerCase();
         const pagePairs = {
+            'yards': ['yardAddPage', 'yardListPage'],
             'vehicles': ['vehicleAddPage', 'vehicleListPage'],
             'fuel-prices': ['fuelPriceAddPage', 'fuelPriceListPage'],
             'fuel-recharge': ['rechargeAddPage', 'rechargeListPage'],

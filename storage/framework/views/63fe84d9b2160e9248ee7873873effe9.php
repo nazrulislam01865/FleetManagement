@@ -146,7 +146,11 @@
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Contract List']])]); ?>
              <?php $__env->slot('actions', null, []); ?> 
                 <button type="button" class="btn light" id="exportContractsBtn">⬇ Export CSV</button>
-                
+                <?php if(data_get($fleetman, 'auth.pageAccess.canManage')): ?>
+                    <a href="<?php echo e(route('fleet.contracts', ['action' => 'add'])); ?>" class="btn primary" id="addContractFromListBtn">＋ Add Contract</a>
+                <?php else: ?>
+                    <span class="btn primary rbac-control-muted" id="addContractFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Contract</span>
+                <?php endif; ?>
              <?php $__env->endSlot(); ?>
          <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>

@@ -21,6 +21,7 @@ use App\Models\Fleet\FleetVehicle;
 use App\Models\Fleet\FleetVehicleCategory;
 use App\Models\Fleet\FleetVehicleSubCategory;
 use App\Models\Fleet\FleetVendorParty;
+use App\Models\Fleet\FleetYard;
 use App\Models\Fleet\FleetVendorContractorType;
 use App\Support\FleetRbac;
 use Illuminate\Database\Eloquent\Model;
@@ -129,6 +130,12 @@ abstract class FleetBaseController extends Controller
     protected function recordDetailDefinition(): array
     {
         $definitions = [
+            'yards' => [
+                'title' => 'Yard Details',
+                'list_label' => 'Yard List',
+                'list_route' => 'fleet.yards',
+                'title_key' => 'yardName',
+            ],
             'vehicles' => [
                 'title' => 'Vehicle Details',
                 'list_label' => 'Vehicle List',
@@ -403,6 +410,7 @@ abstract class FleetBaseController extends Controller
             'dashboard' => ['dashboard.view', null],
             'trips' => ['trips.view', 'trips.manage'],
             'driver-attendance' => ['driver_attendance.view', 'driver_attendance.manage'],
+            'yards' => ['yards.view', 'yards.manage'],
             'vehicles' => ['vehicles.view', 'vehicles.manage'],
             'fuel-recharge' => ['fuel_recharge.view', 'fuel_recharge.manage'],
             'fuel-prices' => ['fuel_prices.view', 'fuel_prices.manage'],
@@ -424,6 +432,7 @@ abstract class FleetBaseController extends Controller
         }
 
         $resourceMap = [
+            'yards' => ['yards.view', 'yards.manage'],
             'vehicles' => ['vehicles.view', 'vehicles.manage'],
             'fuel_prices' => ['fuel_prices.view', 'fuel_prices.manage'],
             'fuel_recharges' => ['fuel_recharge.view', 'fuel_recharge.manage'],
@@ -457,6 +466,12 @@ abstract class FleetBaseController extends Controller
     protected function resourceUrls(): array
     {
         return [
+            'yards' => [
+                'store' => route('fleet.yards.store'),
+                'update_template' => route('fleet.yards.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.yards.destroy', ['code' => '__CODE__']),
+                'show_template' => route('fleet.yards.show', ['code' => '__CODE__']),
+            ],
             'vehicles' => [
                 'sync' => route('fleet.vehicles.sync'),
                 'show_template' => route('fleet.vehicles.show', ['code' => '__CODE__']),
@@ -868,20 +883,42 @@ abstract class FleetBaseController extends Controller
     protected function documentNameValues(string|array $module, string $fallbackGroup): array
     {
         if (Schema::hasTable('fleet_document_names')) {
-            $query = FleetDocumentName::query()->active();
+            $modules = array_values(array_filter(array_map(
+                fn ($value) => trim((string) $value),
+                (array) $module
+            )));
+            $supportsMultipleTypes = Schema::hasColumn('fleet_document_names', 'document_types');
+            $supportsLegacyType = Schema::hasColumn('fleet_document_names', 'document_type');
 
-            if (Schema::hasColumn('fleet_document_names', 'document_type')) {
-                $modules = array_values(array_filter(array_map('strval', (array) $module)));
-                $query->where(function ($documentQuery) use ($modules) {
-                    $documentQuery
-                        ->whereIn('document_type', $modules)
-                        ->orWhere('document_type', 'All Modules');
-                });
-            }
-
-            $masterDocuments = $query
+            $masterDocuments = FleetDocumentName::query()
+                ->active()
                 ->orderBy('sort_order')
                 ->orderBy('name')
+                ->get()
+                ->filter(function (FleetDocumentName $document) use ($modules, $supportsMultipleTypes, $supportsLegacyType): bool {
+                    $types = [];
+
+                    if ($supportsMultipleTypes) {
+                        $types = $document->document_types;
+                        if (is_string($types)) {
+                            $decoded = json_decode($types, true);
+                            $types = is_array($decoded) ? $decoded : [$types];
+                        }
+                    }
+
+                    if (! is_array($types) || count($types) === 0) {
+                        $legacyType = $supportsLegacyType ? trim((string) $document->document_type) : '';
+                        $types = [$legacyType !== '' ? $legacyType : 'All Modules'];
+                    }
+
+                    $types = array_values(array_unique(array_filter(array_map(
+                        fn ($value) => trim((string) $value),
+                        $types
+                    ))));
+
+                    return in_array('All Modules', $types, true)
+                        || count(array_intersect($modules, $types)) > 0;
+                })
                 ->pluck('name')
                 ->values()
                 ->all();
@@ -985,6 +1022,7 @@ abstract class FleetBaseController extends Controller
         $page = strtolower(trim((string) $currentPage));
         $pageToRecord = [
             'contracts' => ['contracts', 'contracts.view', fn (): array => $this->contractRecordsFromDatabase()],
+            'yards' => ['yards', 'yards.view', fn (): array => $this->recordsFor(FleetYard::class)],
             'vehicles' => ['vehicles', 'vehicles.view', fn (): array => $this->recordsFor(FleetVehicle::class)],
             'fuel-prices' => ['fuel_prices', 'fuel_prices.view', fn (): array => $this->recordsFor(FleetFuelPrice::class)],
             'fuel-recharge' => ['fuel_recharges', 'fuel_recharge.view', fn (): array => $this->recordsFor(FleetFuelRecharge::class)],
@@ -996,7 +1034,7 @@ abstract class FleetBaseController extends Controller
             'employees' => ['employees', 'employees.view', fn (): array => $this->recordsFor(FleetEmployee::class)],
         ];
         $empty = [
-            'contracts' => [], 'vehicles' => [], 'fuel_prices' => [], 'fuel_recharges' => [],
+            'contracts' => [], 'yards' => [], 'vehicles' => [], 'fuel_prices' => [], 'fuel_recharges' => [],
             'parties' => [], 'trips' => [], 'drivers' => [], 'clients' => [],
             'driver_attendance' => [], 'employees' => [],
         ];

@@ -452,6 +452,11 @@
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Trip List']])]); ?>
              <?php $__env->slot('actions', null, []); ?> 
                 <button type="button" class="btn light" id="exportTripsBtn">⬇ Export CSV</button>
+                <?php if(data_get($fleetman, 'auth.pageAccess.canManage')): ?>
+                    <a href="<?php echo e(route('fleet.trips', ['action' => 'add'])); ?>" class="btn primary" id="addTripFromListBtn">＋ Add Trip</a>
+                <?php else: ?>
+                    <span class="btn primary rbac-control-muted" id="addTripFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Trip</span>
+                <?php endif; ?>
              <?php $__env->endSlot(); ?>
          <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>

@@ -50,7 +50,14 @@
 
     <div id="attendanceListPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Log List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportAttendanceBtn">⬇ Export CSV</button></x-slot:actions>
+            <x-slot:actions>
+                <button type="button" class="btn light" id="exportAttendanceBtn">⬇ Export CSV</button>
+                @if(data_get($fleetman, 'auth.pageAccess.canManage'))
+                    <a href="{{ route('fleet.driver-attendance', ['action' => 'add']) }}" class="btn primary" id="addLogFromListBtn">＋ Add Log</a>
+                @else
+                    <span class="btn primary rbac-control-muted" id="addLogFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Log</span>
+                @endif
+            </x-slot:actions>
         </x-fleetman.topbar>
         <x-fleetman.title-card title="Log List" subtitle="Database-backed drive log / attendance records using real contract, vehicle, and driver assignments." />
         <div class="kpi"><x-fleetman.kpi-card id="attendanceKpiTotal" label="Total Logs" /><x-fleetman.kpi-card id="attendanceKpiCompleted" label="Completed Logs" /><x-fleetman.kpi-card id="attendanceKpiRunning" label="Running Logs" /><x-fleetman.kpi-card id="attendanceKpiHours" label="Total Hours" /></div>

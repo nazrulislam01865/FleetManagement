@@ -21,6 +21,7 @@ use App\Http\Controllers\Fleet\UserManagementController;
 use App\Http\Controllers\Fleet\SettingsController;
 use App\Http\Controllers\Fleet\VehicleController;
 use App\Http\Controllers\Fleet\VendorPartyController;
+use App\Http\Controllers\Fleet\YardController;
 use App\Http\Middleware\EnsureFleetManageAccess;
 use App\Http\Middleware\EnsureFleetPermission;
 use App\Support\FleetRbac;
@@ -83,6 +84,22 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':dashboard.view')
         ->name('dashboard');
+
+    Route::get('/yards', [YardController::class, 'index'])
+        ->middleware(EnsureFleetPermission::class.':yards.view')
+        ->name('yards');
+    Route::post('/yards', [YardController::class, 'store'])
+        ->middleware(EnsureFleetPermission::class.':yards.manage')
+        ->name('yards.store');
+    Route::put('/yards/{code}', [YardController::class, 'update'])
+        ->middleware(EnsureFleetPermission::class.':yards.manage')
+        ->name('yards.update');
+    Route::delete('/yards/{code}', [YardController::class, 'destroy'])
+        ->middleware(EnsureFleetPermission::class.':yards.manage')
+        ->name('yards.destroy');
+    Route::get('/yards/{code}', [YardController::class, 'show'])
+        ->middleware(EnsureFleetPermission::class.':yards.view')
+        ->name('yards.show');
 
     Route::get('/vehicles', [VehicleController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':vehicles.view')

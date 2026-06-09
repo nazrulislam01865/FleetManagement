@@ -95,7 +95,14 @@
 
     <div id="employeeListPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Employee List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportEmployeesBtn">⬇ Export CSV</button></x-slot:actions>
+            <x-slot:actions>
+                <button type="button" class="btn light" id="exportEmployeesBtn">⬇ Export CSV</button>
+                @if(data_get($fleetman, 'auth.pageAccess.canManage'))
+                    <a href="{{ route('fleet.employees', ['action' => 'add']) }}" class="btn primary" id="addEmployeeFromListBtn">＋ Add Employee</a>
+                @else
+                    <span class="btn primary rbac-control-muted" id="addEmployeeFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Employee</span>
+                @endif
+            </x-slot:actions>
         </x-fleetman.topbar>
         <x-fleetman.title-card title="Employee List" subtitle="A simple employee list with sample data, quick search, filters, and common actions. Designed for everyday office use.">
         </x-fleetman.title-card>

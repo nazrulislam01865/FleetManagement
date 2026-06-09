@@ -207,11 +207,12 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
     }
 
     function titleFor(type, record = {}) {
-        return record.fullName || record.clientName || record.partyName || record.name || record.tripId || record.id || record.employeeId || record.driverId || 'Record Details';
+        return record.yardName || record.fullName || record.clientName || record.partyName || record.name || record.tripId || record.id || record.employeeId || record.driverId || 'Record Details';
     }
 
     function subtitleFor(type, record = {}) {
         const values = [];
+        if (record.yardId) values.push(record.yardId);
         if (record.id) values.push(record.id);
         if (record.driverId) values.push(record.driverId);
         if (record.employeeId) values.push(record.employeeId);
@@ -224,6 +225,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
 
     function recordDetailUrl(record = {}) {
         const resourceByPage = {
+            yards: 'yards',
             vehicles: 'vehicles',
             'fuel-prices': 'fuel_prices',
             'fuel-recharge': 'fuel_recharges',
@@ -236,6 +238,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
             contracts: 'contracts',
         };
         const idKeysByResource = {
+            yards: ['yardId'],
             vehicles: ['id'],
             fuel_prices: ['fuelPriceId'],
             fuel_recharges: ['rechargeId'],
@@ -753,11 +756,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 <label>Reminder</label>
                 <select class="${escapeHtml(classes.reminder || '')}">${reminderMarkup(config.reminders, row.reminder || '')}</select>
             </div>`;
+        const nameControl = config.nameInput === true
+            ? `<input class="${escapeHtml(classes.name || '')}" type="text" value="${escapeHtml(row.name || '')}" placeholder="${escapeHtml(config.namePlaceholder || 'Enter document name')}" required aria-required="true">`
+            : `<select class="${escapeHtml(classes.name || '')}" required aria-required="true">${optionMarkup(config.names, row.name || '', config.namePlaceholder || 'Select document')}</select>`;
 
         element.innerHTML = `
             <div class="field">
                 <label>Document Name <span class="req">*</span></label>
-                <select class="${escapeHtml(classes.name || '')}" required aria-required="true">${optionMarkup(config.names, row.name || '', config.namePlaceholder || 'Select document')}</select>
+                ${nameControl}
                 ${extraHidden}
             </div>
             <div class="field">
@@ -4524,13 +4530,76 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             })).filter((payment) => payment.method || payment.amount > 0 || payment.reference);
         }
 
+        function clearPaymentLimitValidation() {
+            const page = $('#tripAddPage');
+            if (!page) return;
+
+            $$('.trip-payment-limit-error', page).forEach((error) => {
+                const field = error.closest('.field');
+                error.remove();
+                if (field && !field.querySelector('.field-error')) field.classList.remove('field-invalid');
+            });
+
+            [$('#tripTotalCost'), $('#tripPaidAmount'), ...$$('.trip-payment-amount', $('#tripPayments'))].filter(Boolean).forEach((element) => {
+                const field = fieldContainer(element);
+                if (!field?.querySelector('.field-error')) {
+                    field?.classList.remove('field-invalid');
+                    element.removeAttribute('aria-invalid');
+                }
+                element.setCustomValidity?.('');
+            });
+        }
+
+        function markPaymentLimitInvalid(element, message) {
+            if (!element) return;
+            const field = fieldContainer(element);
+            field?.classList.add('field-invalid');
+            element.setAttribute('aria-invalid', 'true');
+            element.setCustomValidity?.(message);
+            if (field && !field.querySelector('.trip-payment-limit-error')) {
+                const error = document.createElement('div');
+                error.className = 'field-error trip-payment-limit-error';
+                error.textContent = message;
+                field.appendChild(error);
+            }
+        }
+
+        function updatePaymentMaximums(total) {
+            const amountInputs = $$('.trip-payment-amount', $('#tripPayments'));
+            const enteredAmounts = amountInputs.map((input) => roundMoney(input.value));
+            const totalPaid = roundMoney(enteredAmounts.reduce((sum, amount) => sum + amount, 0));
+
+            amountInputs.forEach((input, index) => {
+                if (total > 0) {
+                    const otherPayments = roundMoney(totalPaid - enteredAmounts[index]);
+                    input.max = Math.max(0, roundMoney(total - otherPayments)).toFixed(2);
+                } else {
+                    input.removeAttribute('max');
+                }
+            });
+        }
+
         function recalculatePayment() {
             const total = roundMoney(value('#tripTotalCost'));
             const paid = roundMoney(collectPayments().reduce((sum, payment) => sum + payment.amount, 0));
             const balance = roundMoney(Math.max(0, total - paid));
+            const isOverpaid = paid > total + 0.009;
+
             setValue('#tripPaidAmount', paid.toFixed(2));
             setValue('#tripBalanceDue', balance.toFixed(2));
-            return { total, paid, balance };
+            updatePaymentMaximums(total);
+            clearPaymentLimitValidation();
+
+            if (isOverpaid) {
+                const message = 'Total paid cannot exceed the total bill (trip cost).';
+                markPaymentLimitInvalid($('#tripTotalCost'), message);
+                markPaymentLimitInvalid($('#tripPaidAmount'), message);
+                $$('.trip-payment-amount', $('#tripPayments')).forEach((element) => {
+                    if (toNum(element.value) > 0) markPaymentLimitInvalid(element, 'Reduce the payment amount so total paid does not exceed the total bill.');
+                });
+            }
+
+            return { total, paid, balance, isOverpaid };
         }
 
         function fieldContainer(element) {
@@ -4637,9 +4706,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             });
 
             if (enteredPayment > total + 0.009) {
-                markInvalid(totalInput, 'Total payments cannot be greater than the total trip cost.');
+                const message = 'Total paid cannot exceed the total bill (trip cost).';
+                markInvalid(totalInput, message);
+                markInvalid($('#tripPaidAmount'), message);
                 errors.push(totalInput);
-                $$('.trip-payment-amount', $('#tripPayments')).forEach((element) => markInvalid(element, 'Reduce the payment amount so the total does not exceed trip cost.'));
+                $$('.trip-payment-amount', $('#tripPayments')).forEach((element) => {
+                    if (toNum(element.value) > 0) markInvalid(element, 'Reduce the payment amount so total paid does not exceed the total bill.');
+                });
             }
 
             if (errors.length) {
@@ -6926,6 +6999,62 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         let fuelTypes = Array.isArray(masterData.fuel_types) ? masterData.fuel_types.slice() : [];
         let fuelUnits = Array.isArray(masterData.fuel_units) ? masterData.fuel_units.slice() : [];
         let paymentTypes = Array.isArray(masterData.payment_types) ? masterData.payment_types.slice() : [];
+        const documentTypeOptions = ['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'];
+
+        function normalizeDocumentTypes(documentTypes, legacyType = '') {
+            let types = documentTypes;
+
+            if (typeof types === 'string') {
+                try {
+                    const decoded = JSON.parse(types);
+                    types = Array.isArray(decoded) ? decoded : [types];
+                } catch (error) {
+                    types = [types];
+                }
+            }
+
+            if (!Array.isArray(types) || !types.length) {
+                types = [legacyType || 'All Modules'];
+            }
+
+            const normalized = [...new Set(types
+                .map((type) => String(type || '').trim())
+                .filter((type) => documentTypeOptions.includes(type)))];
+
+            if (normalized.includes('All Modules')) return ['All Modules'];
+            return normalized.length ? normalized : ['All Modules'];
+        }
+
+        function selectedDocumentTypes() {
+            return normalizeDocumentTypes(
+                Array.from(document.querySelectorAll('input[name="documentNameMasterTypes[]"]:checked'))
+                    .map((input) => input.value)
+            );
+        }
+
+        function setDocumentTypeValidationError(show) {
+            const field = $('#documentNameMasterTypesField');
+            const error = $('#documentNameMasterTypesError');
+            field?.classList.toggle('is-invalid', Boolean(show));
+            if (error) error.hidden = !show;
+        }
+
+        function setDocumentTypeCheckboxes(documentTypes, legacyType = '') {
+            const selected = normalizeDocumentTypes(documentTypes, legacyType);
+            document.querySelectorAll('input[name="documentNameMasterTypes[]"]').forEach((input) => {
+                input.checked = selected.includes(input.value);
+            });
+            setDocumentTypeValidationError(false);
+        }
+
+        documentNames = documentNames.map((row) => {
+            const documentTypes = normalizeDocumentTypes(row.documentTypes, row.documentType);
+            return {
+                ...row,
+                documentTypes,
+                documentType: documentTypes.includes('All Modules') ? 'All Modules' : documentTypes[0],
+            };
+        });
 
         function populateVehicleCategorySelect(selectedValue = '') {
             const select = $('#vehicleSubCategoryParent');
@@ -7030,11 +7159,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#documentNameEditingCode', '');
             setValue('#documentNameMasterName', '');
             setValue('#documentNameMasterCode', '');
-            setValue('#documentNameMasterType', 'All Modules');
+            setDocumentTypeCheckboxes(['All Modules']);
             setValue('#documentNameMasterSort', '0');
             setValue('#documentNameMasterStatus', 'Active');
             setValue('#documentNameMasterDescription', '');
-            setText('#saveDocumentNameMasterBtn', 'Save Document Name');
+            setText('#saveDocumentNameMasterBtn', 'Save Document Type');
         }
 
         function resetLicenceTypeForm() {
@@ -7166,20 +7295,26 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function collectDocumentName() {
             const name = value('#documentNameMasterName').trim();
-            const documentType = value('#documentNameMasterType').trim();
+            const checkedTypes = Array.from(document.querySelectorAll('input[name="documentNameMasterTypes[]"]:checked'))
+                .map((input) => input.value);
             if (!name) {
                 toast('Document Name is required.');
                 return null;
             }
-            if (!documentType) {
-                toast('Document Type / Used For is required.');
+            if (!checkedTypes.length) {
+                setDocumentTypeValidationError(true);
+                toast('Select at least one document type.');
                 return null;
             }
+
+            setDocumentTypeValidationError(false);
+            const documentTypes = normalizeDocumentTypes(checkedTypes);
 
             return {
                 code: codeFrom(value('#documentNameMasterCode') || name),
                 name,
-                documentType,
+                documentTypes,
+                documentType: documentTypes.includes('All Modules') ? 'All Modules' : documentTypes[0],
                 sortOrder: Number(value('#documentNameMasterSort') || 0),
                 status: value('#documentNameMasterStatus') || 'Active',
                 description: value('#documentNameMasterDescription').trim(),
@@ -7347,16 +7482,21 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (!tbody) return;
 
             const rows = sortRows(documentNames);
-            tbody.innerHTML = rows.length ? rows.map((row) => `
+            tbody.innerHTML = rows.length ? rows.map((row) => {
+                const types = normalizeDocumentTypes(row.documentTypes, row.documentType);
+                const badges = types.map((type) => `<span class="badge soft">${escapeHtml(type)}</span>`).join('');
+
+                return `
                 <tr>
                     <td><b>${escapeHtml(row.name)}</b></td>
-                    <td><span class="badge soft">${escapeHtml(row.documentType || 'All Modules')}</span></td>
+                    <td><div class="master-document-type-badges">${badges}</div></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
                     <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-document="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-document="${escapeHtml(row.code)}">Delete</button></div></td>
-                </tr>`).join('') : '<tr><td colspan="7" class="empty">No document name added yet.</td></tr>';
+                </tr>`;
+            }).join('') : '<tr><td colspan="7" class="empty">No document type added yet.</td></tr>';
         }
 
         function renderLicenceTypes() {
@@ -7512,11 +7652,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#documentNameEditingCode', row.code);
             setValue('#documentNameMasterName', row.name);
             setValue('#documentNameMasterCode', row.code);
-            setValue('#documentNameMasterType', row.documentType || 'All Modules');
+            setDocumentTypeCheckboxes(row.documentTypes, row.documentType);
             setValue('#documentNameMasterSort', row.sortOrder || 0);
             setValue('#documentNameMasterStatus', row.status || 'Active');
             setValue('#documentNameMasterDescription', row.description || '');
-            setText('#saveDocumentNameMasterBtn', 'Update Document Name');
+            setText('#saveDocumentNameMasterBtn', 'Update Document Type');
             $('#documentNameMasterName')?.focus();
         }
 
@@ -7656,7 +7796,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             resetDocumentNameForm();
             renderAll();
             saveStore();
-            toast('Document name saved to database.');
+            toast('Document type saved to database.');
         });
 
         $('#licenceTypeMasterForm')?.addEventListener('submit', (event) => {
@@ -7776,6 +7916,25 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         $('#documentNameMasterName')?.addEventListener('input', () => {
             if (!value('#documentNameMasterCode') || !value('#documentNameEditingCode')) setValue('#documentNameMasterCode', codeFrom(value('#documentNameMasterName')));
         });
+        $('#documentNameMasterTypes')?.addEventListener('change', (event) => {
+            const changed = event.target.closest('input[name="documentNameMasterTypes[]"]');
+            if (!changed) return;
+
+            const allModules = document.querySelector('input[name="documentNameMasterTypes[]"][value="All Modules"]');
+            const specificTypes = Array.from(document.querySelectorAll('input[name="documentNameMasterTypes[]"]:not([value="All Modules"])'));
+
+            if (changed.value === 'All Modules' && changed.checked) {
+                specificTypes.forEach((input) => { input.checked = false; });
+            } else if (changed.checked && allModules) {
+                allModules.checked = false;
+            }
+
+            // The validation message is shown only after Save is pressed
+            // with no document type selected. Any valid selection hides it.
+            if (document.querySelector('input[name="documentNameMasterTypes[]"]:checked')) {
+                setDocumentTypeValidationError(false);
+            }
+        });
         $('#licenceTypeMasterName')?.addEventListener('input', () => {
             if (!value('#licenceTypeMasterCode') || !value('#licenceTypeEditingCode')) setValue('#licenceTypeMasterCode', codeFrom(value('#licenceTypeMasterName')));
         });
@@ -7841,11 +8000,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (editDocumentBtn) editDocument(editDocumentBtn.dataset.masterEditDocument);
 
             const deleteDocumentBtn = event.target.closest('[data-master-delete-document]');
-            if (deleteDocumentBtn && confirm('Delete this document name from master data?')) {
+            if (deleteDocumentBtn && confirm('Delete this document type from master data?')) {
                 documentNames = documentNames.filter((row) => row.code !== deleteDocumentBtn.dataset.masterDeleteDocument);
                 renderAll();
                 saveStore();
-                toast('Document name deleted from database.');
+                toast('Document type deleted from database.');
             }
 
             const editLicenceBtn = event.target.closest('[data-master-edit-licence]');

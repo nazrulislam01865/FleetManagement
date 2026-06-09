@@ -156,7 +156,11 @@
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Price List']])]); ?>
              <?php $__env->slot('actions', null, []); ?> 
                 <button type="button" class="btn light" id="exportFuelPricesBtn">⬇ Export CSV</button>
-                
+                <?php if(data_get($fleetman, 'auth.pageAccess.canManage')): ?>
+                    <a href="<?php echo e(route('fleet.fuel-prices', ['action' => 'add'])); ?>" class="btn primary" id="addPriceFromListBtn">＋ Add Price</a>
+                <?php else: ?>
+                    <span class="btn primary rbac-control-muted" id="addPriceFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Price</span>
+                <?php endif; ?>
              <?php $__env->endSlot(); ?>
          <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>

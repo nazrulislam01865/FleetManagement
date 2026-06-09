@@ -569,7 +569,14 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([['label' => 'Employee List']])]); ?>
-             <?php $__env->slot('actions', null, []); ?> <button type="button" class="btn light" id="exportEmployeesBtn">⬇ Export CSV</button> <?php $__env->endSlot(); ?>
+             <?php $__env->slot('actions', null, []); ?> 
+                <button type="button" class="btn light" id="exportEmployeesBtn">⬇ Export CSV</button>
+                <?php if(data_get($fleetman, 'auth.pageAccess.canManage')): ?>
+                    <a href="<?php echo e(route('fleet.employees', ['action' => 'add'])); ?>" class="btn primary" id="addEmployeeFromListBtn">＋ Add Employee</a>
+                <?php else: ?>
+                    <span class="btn primary rbac-control-muted" id="addEmployeeFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Employee</span>
+                <?php endif; ?>
+             <?php $__env->endSlot(); ?>
          <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal9c1bf3ca5b4372ced6ff0d503060f43b)): ?>

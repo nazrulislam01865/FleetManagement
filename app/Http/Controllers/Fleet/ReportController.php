@@ -145,9 +145,9 @@ class ReportController extends FleetBaseController
     private function enrichReportRecords(Collection $records): Collection
     {
         $attendanceRows = $this->driverAttendanceReportRows();
-        $tripRows = $this->tripCostReportRows();
+        $tripRows = null;
 
-        return $records->map(function (array $record) use ($attendanceRows, $tripRows): array {
+        return $records->map(function (array $record) use ($attendanceRows, &$tripRows): array {
             $attendance = $this->attendanceForRecord($record, $attendanceRows);
 
             if ($attendance !== null) {
@@ -156,10 +156,22 @@ class ReportController extends FleetBaseController
                 $record['totalTime'] = $attendance['totalTime'];
             }
 
-            $totalCost = $this->tripCostForRecord($record, $tripRows);
-            $record['totalCost'] = round($totalCost, 2);
-            $record['tkKm'] = ((float) ($record['totalKm'] ?? 0)) > 0
-                ? round($totalCost / max((float) $record['totalKm'], 1), 2)
+            // TK(KM) on Add Fuel is defined as total fuel price divided by
+            // total travelled KM. Use the stored fuel amount first so daily,
+            // weekly, monthly, and exported reports all follow that same rule.
+            $totalFuelPrice = (float) ($record['totalAmount'] ?? 0);
+
+            // Preserve reports for old rows created before fuel amounts were
+            // stored by using the previous trip-cost matching only as fallback.
+            if ($totalFuelPrice <= 0) {
+                $tripRows ??= $this->tripCostReportRows();
+                $totalFuelPrice = $this->tripCostForRecord($record, $tripRows);
+            }
+
+            $totalKm = (float) ($record['totalKm'] ?? 0);
+            $record['totalCost'] = round($totalFuelPrice, 2);
+            $record['tkKm'] = $totalKm > 0 && $totalFuelPrice > 0
+                ? round($totalFuelPrice / $totalKm, 2)
                 : 0.0;
 
             return $record;
@@ -526,6 +538,10 @@ class ReportController extends FleetBaseController
         $secondaryRate = (float) ($row['secondaryRate'] ?? 0);
         $primaryAmount = (float) ($row['primaryAmount'] ?? ($primaryQty * $primaryRate));
         $secondaryAmount = (float) ($row['secondaryAmount'] ?? ($secondaryQty * $secondaryRate));
+        $totalAmount = (float) ($row['totalAmount'] ?? 0);
+        if ($totalAmount <= 0) {
+            $totalAmount = $primaryAmount + $secondaryAmount;
+        }
 
         $diesel = (float) ($row['diesel'] ?? 0);
         $octane = (float) ($row['octane'] ?? 0);
@@ -598,6 +614,10 @@ class ReportController extends FleetBaseController
             'endKm' => (int) round($endKm),
             'totalKm' => (int) round($totalKm),
             'mileage' => round($mileage, 2),
+            'totalAmount' => round($totalAmount, 2),
+            'tkKm' => $totalKm > 0 && $totalAmount > 0
+                ? round($totalAmount / $totalKm, 2)
+                : round((float) ($row['tkKm'] ?? 0), 2),
             'status' => (string) ($row['status'] ?? $fallbackStatus ?? 'Submitted'),
             'submittedBy' => (string) ($row['submittedBy'] ?? $row['operator'] ?? 'Admin User'),
             'fuelType' => $fuelType,

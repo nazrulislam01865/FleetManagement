@@ -628,3 +628,117 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
     min-width:150px;
     white-space:nowrap;
 }
+
+/* Report filters: balanced columns and consistent control alignment on every report page. */
+.report-filter-card .report-filter-grid{
+    align-items:end;
+    column-gap:14px;
+    row-gap:14px;
+}
+.report-filter-card .report-filter-grid>.field{
+    display:flex;
+    min-width:0;
+    flex-direction:column;
+    justify-content:flex-end;
+}
+.report-filter-card .report-filter-grid>.field>label,
+.report-filter-card .report-filter-grid>.field>.search-label{
+    width:100%;
+    min-height:24px;
+    margin:0 0 7px;
+    align-items:center;
+}
+.report-filter-card .report-filter-grid>.field>label{
+    display:flex;
+}
+.report-filter-card .report-filter-grid input,
+.report-filter-card .report-filter-grid select{
+    width:100%;
+    height:46px;
+    min-height:46px;
+}
+.report-filter-card .daily-filter-grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+}
+.report-filter-card .weekly-filter-grid,
+.report-filter-card .monthly-filter-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+}
+@media(max-width:1180px){
+    .report-filter-card .daily-filter-grid,
+    .report-filter-card .weekly-filter-grid,
+    .report-filter-card .monthly-filter-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+}
+@media(max-width:900px){
+    .report-filter-card .daily-filter-grid,
+    .report-filter-card .weekly-filter-grid,
+    .report-filter-card .monthly-filter-grid{
+        grid-template-columns:1fr;
+    }
+}
+
+/* Parking yard module */
+.yard-page{max-width:1220px;width:100%;}
+.yard-form-row{margin-top:16px;}
+.yard-repeat-list{display:flex;flex-direction:column;gap:12px;}
+.yard-repeat-card{border:1px solid #dfe8f3;border-radius:16px;padding:15px;background:#fbfdff;}
+.yard-repeat-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
+.yard-repeat-head b{display:block;font-size:15px;}
+.yard-repeat-head small{display:block;color:#667085;margin-top:3px;line-height:1.4;}
+.yard-zone-grid{display:grid;grid-template-columns:1.1fr 1fr .8fr auto;gap:12px;align-items:end;}
+.yard-document-grid{display:grid;grid-template-columns:1.05fr .6fr 1.4fr auto;gap:12px;align-items:end;}
+.yard-repeat-card .remove-yard-row{min-height:46px;white-space:nowrap;}
+.yard-empty-note{border:1px dashed #cbdcf5;background:#f8fbff;border-radius:14px;padding:12px 14px;color:#667085;font-size:13px;line-height:1.45;}
+.yard-list-filters{display:grid;grid-template-columns:minmax(280px,1.6fr) minmax(170px,.7fr) minmax(170px,.7fr) auto;gap:12px;align-items:end;}
+.yard-filter-actions{display:flex;gap:8px;align-items:end;}
+.yard-table{min-width:1400px;}
+.yard-table td,.yard-table th{white-space:nowrap;}
+.yard-table .yard-name-cell{white-space:normal;min-width:210px;}
+.yard-table .yard-action-cell{min-width:230px;}
+.yard-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;}
+.yard-page-buttons{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.yard-page-buttons #yardPageNumbers{display:flex;gap:6px;flex-wrap:wrap;}
+.yard-mobile-list{display:none;}
+.yard-mobile-card{border:1px solid #e4e7ec;border-radius:16px;padding:14px;margin-top:12px;background:#fff;}
+.yard-mobile-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
+.yard-mobile-card-head h3{margin:0 0 4px;font-size:16px;}
+.yard-mobile-card-head small{color:#667085;}
+.yard-mobile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px;}
+.yard-mobile-grid div{background:#f8fafc;border-radius:10px;padding:9px 10px;font-size:12px;color:#475467;}
+.yard-mobile-grid b{display:block;color:#172033;margin-top:3px;font-size:13px;}
+.yard-mobile-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.yard-upload-progress{margin-top:7px;}
+.yard-document-file{width:100%;}
+.yard-document-file input[type=file]{padding:9px 10px;}
+.yard-document-file .upload-meta{min-height:18px;}
+@media(max-width:1050px){
+    .yard-zone-grid,.yard-document-grid,.yard-list-filters{grid-template-columns:1fr;align-items:stretch;}
+    .yard-filter-actions{display:grid;grid-template-columns:1fr 1fr;}
+    .yard-repeat-card .remove-yard-row{width:100%;}
+}
+@media(max-width:760px){
+    .yard-table-wrap{display:none;}
+    .yard-mobile-list{display:block;}
+    .yard-pagination{align-items:stretch;flex-direction:column;}
+    .yard-page-buttons{justify-content:space-between;}
+    .yard-mobile-actions .mini-btn{flex:1;}
+}
+
+/* Document Type master: multi-module checkbox selector */
+.document-type-master-form{grid-template-columns:1.3fr 1fr .7fr .8fr}
+.document-type-check-field{min-width:0;margin:0;padding:0;border:0}
+.document-type-check-field legend{display:block;width:100%;padding:0;margin:0 0 8px;color:#344054;font-size:14px;font-weight:800}
+.document-type-check-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.document-type-check{display:flex;align-items:center;gap:9px;min-height:46px;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:#fff;color:#344054;font-size:13px;font-weight:800;cursor:pointer;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease}
+.document-type-check:hover{border-color:#91bfff;background:#f8fbff}
+.document-type-check input{width:18px;height:18px;min-height:auto;margin:0;flex:0 0 auto;accent-color:#0b63ce;cursor:pointer}
+.document-type-check:has(input:checked){border-color:#6aa8f5;background:#eef6ff;box-shadow:0 0 0 2px rgba(11,99,206,.08);color:#174ea6}
+.document-type-check-field.is-invalid .document-type-check-grid{border:1px solid #d92d20;border-radius:13px;padding:8px;background:#fffafa}
+.document-type-check-error{display:block;margin-top:7px;color:#b42318;font-size:12px;font-weight:750}
+.document-type-check-error[hidden]{display:none!important}
+.master-document-type-badges{display:flex;flex-wrap:wrap;gap:6px;min-width:210px;white-space:normal}
+.master-document-type-badges .badge{white-space:nowrap}
+@media(max-width:1050px){.document-type-master-form{grid-template-columns:repeat(2,minmax(0,1fr))}.document-type-check-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.document-type-master-form{grid-template-columns:1fr}.document-type-check-grid{grid-template-columns:1fr}}

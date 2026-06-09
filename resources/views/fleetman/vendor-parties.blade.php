@@ -109,7 +109,11 @@
         <x-fleetman.topbar :items="[['label' => 'Vendor List']]">
             <x-slot:actions>
                 <button type="button" class="btn light" id="exportPartiesBtn">⬇ Export CSV</button>
-
+                @if(data_get($fleetman, 'auth.pageAccess.canManage'))
+                    <a href="{{ route('fleet.vendors', ['action' => 'add']) }}" class="btn primary" id="addVendorFromListBtn">＋ Add Vendor</a>
+                @else
+                    <span class="btn primary rbac-control-muted" id="addVendorFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Vendor</span>
+                @endif
             </x-slot:actions>
         </x-fleetman.topbar>
 

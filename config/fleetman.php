@@ -142,12 +142,22 @@ return [
                         ['key' => 'logs-list', 'label' => 'Log List', 'icon' => '↳', 'route' => 'fleet.driver-attendance', 'routeParams' => ['action' => 'list'], 'permission' => 'driver_attendance.view'],
                     ]
                 ],
-                ['key' => 'yards', 'label' => 'Yards', 'icon' => '🅿️', 'route' => null],
             ],
         ],
         [
             'title' => 'Fleet Management',
             'items' => [
+                [
+                    'key' => 'yards',
+                    'label' => 'Yards',
+                    'icon' => '🅿️',
+                    'route' => 'fleet.yards',
+                    'permission' => 'yards.view',
+                    'children' => [
+                        ['key' => 'yards-add', 'label' => 'Add Yard', 'icon' => '↳', 'route' => 'fleet.yards', 'routeParams' => ['action' => 'add'], 'permission' => 'yards.manage'],
+                        ['key' => 'yards-list', 'label' => 'Yard List', 'icon' => '↳', 'route' => 'fleet.yards', 'routeParams' => ['action' => 'list'], 'permission' => 'yards.view'],
+                    ]
+                ],
                 [
                     'key' => 'vehicles',
                     'label' => 'Vehicles',

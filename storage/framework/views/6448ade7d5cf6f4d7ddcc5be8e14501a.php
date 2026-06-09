@@ -29,14 +29,14 @@
 
     <?php if (isset($component)) { $__componentOriginal33f656cc9906d43d1f23d50a43b5f3b3 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal33f656cc9906d43d1f23d50a43b5f3b3 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.title-card','data' => ['title' => 'Master Data','subtitle' => 'Manage reusable dropdown values from one place. Party Types and Document Names saved here are loaded dynamically across FleetMan forms.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.title-card','data' => ['title' => 'Master Data','subtitle' => 'Manage reusable dropdown values from one place. Document Types saved here are loaded dynamically across FleetMan forms.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.title-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Master Data','subtitle' => 'Manage reusable dropdown values from one place. Party Types and Document Names saved here are loaded dynamically across FleetMan forms.']); ?>
+<?php $component->withAttributes(['title' => 'Master Data','subtitle' => 'Manage reusable dropdown values from one place. Document Types saved here are loaded dynamically across FleetMan forms.']); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal33f656cc9906d43d1f23d50a43b5f3b3)): ?>
@@ -55,7 +55,7 @@
         </div>
         <div class="master-overview-card">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available for document dropdowns</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document types available for document dropdowns</span></div>
         </div>
         <div class="master-overview-card">
             <div class="master-overview-icon">🪪</div>
@@ -206,13 +206,12 @@
         <section class="card master-card" id="documentNameMasterCard">
             <div class="section-head">
                 <div>
-                    <h2>Document Name Master</h2>
-                    <p>Add document names once and reuse them in vehicle, party, driver, employee, client, and other document dropdowns.</p>
+                    <h2>Document Type</h2>
                 </div>
                 <button type="button" class="btn light" id="resetDocumentNameMasterBtn">Reset</button>
             </div>
 
-            <form id="documentNameMasterForm" class="master-form" autocomplete="off">
+            <form id="documentNameMasterForm" class="master-form document-type-master-form" autocomplete="off">
                 <input type="hidden" id="documentNameEditingCode">
                 <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
@@ -236,14 +235,14 @@
 <?php endif; ?>
                 <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'documentNameMasterCode','label' => 'Code','placeholder' => 'Example: TRADE_LICENSE_COPY','hint' => 'Used internally to keep the dropdown value stable.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'documentNameMasterCode','label' => 'Code','placeholder' => 'Example: TRADE_LICENSE_COPY']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.input'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'documentNameMasterCode','label' => 'Code','placeholder' => 'Example: TRADE_LICENSE_COPY','hint' => 'Used internally to keep the dropdown value stable.']); ?>
+<?php $component->withAttributes(['id' => 'documentNameMasterCode','label' => 'Code','placeholder' => 'Example: TRADE_LICENSE_COPY']); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
@@ -294,6 +293,21 @@
 <?php $component = $__componentOriginal4b244ece64768724078120db372595a2; ?>
 <?php unset($__componentOriginal4b244ece64768724078120db372595a2); ?>
 <?php endif; ?>
+
+                <fieldset class="master-form-full document-type-check-field" id="documentNameMasterTypesField">
+                    <legend>Document Type / Used For <span class="req">*</span></legend>
+                    <div class="document-type-check-grid" id="documentNameMasterTypes">
+                        <?php $__currentLoopData = ['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $documentType): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                            <?php ($typeId = 'documentNameMasterType'.$loop->index); ?>
+                            <label class="document-type-check" for="<?php echo e($typeId); ?>">
+                                <input type="checkbox" id="<?php echo e($typeId); ?>" name="documentNameMasterTypes[]" value="<?php echo e($documentType); ?>" <?php if($documentType === 'All Modules'): echo 'checked'; endif; ?>>
+                                <span><?php echo e($documentType); ?></span>
+                            </label>
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                    </div>
+                    <small class="document-type-check-error" id="documentNameMasterTypesError" hidden>Select at least one document type.</small>
+                </fieldset>
+
                 <div class="master-form-full">
                     <?php if (isset($component)) { $__componentOriginal07268ac3e2412b39f93e549948ffa1ca = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal07268ac3e2412b39f93e549948ffa1ca = $attributes; } ?>
@@ -317,19 +331,20 @@
 <?php endif; ?>
                 </div>
                 <div class="master-form-actions">
-                    <button type="submit" class="btn primary" id="saveDocumentNameMasterBtn">Save Document Name</button>
+                    <button type="submit" class="btn primary" id="saveDocumentNameMasterBtn">Save Document Type</button>
                     <button type="button" class="btn light" id="cancelDocumentNameEditBtn">Cancel Edit</button>
                 </div>
             </form>
 
             <div class="master-table-title">
-                <div><b>Added Document Names</b><small>Active rows appear in document dropdowns across the system.</small></div>
+                <div><b>Added Document Types</b></div>
             </div>
             <div class="table-wrap master-table-wrap">
                 <table>
                     <thead>
                         <tr>
                             <th>Document Name</th>
+                            <th>Used For</th>
                             <th>Code</th>
                             <th>Sort</th>
                             <th>Status</th>

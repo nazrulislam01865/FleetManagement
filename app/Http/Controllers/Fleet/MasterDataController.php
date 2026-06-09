@@ -66,8 +66,8 @@ class MasterDataController extends FleetBaseController
         return view('fleetman.master-data.document-names', $this->masterViewData('master-data-document-names', [
             'page' => 'master-data',
             'masterSection' => 'document_names',
-            'masterTitle' => 'Document Name Master',
-            'masterSubtitle' => 'Add document names once and reuse them in document dropdowns across FleetMan forms.',
+            'masterTitle' => 'Document Type',
+            'masterSubtitle' => 'Manage document names and select every module where each document will be available.',
         ]));
     }
 
@@ -248,6 +248,8 @@ class MasterDataController extends FleetBaseController
             'party_types.*' => ['array'],
             'document_names' => ['present', 'array'],
             'document_names.*' => ['array'],
+            'document_names.*.documentTypes' => ['nullable', 'array'],
+            'document_names.*.documentTypes.*' => [Rule::in(['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'])],
             'licence_types' => ['present', 'array'],
             'licence_types.*' => ['array'],
             'driver_contact_types' => ['present', 'array'],
@@ -316,18 +318,31 @@ class MasterDataController extends FleetBaseController
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(fn (Model $row) => [
-                'id' => $row->id,
-                'code' => $row->code,
-                'name' => $row->name,
-                'label' => $row->name,
-                'description' => $row->description ?? '',
-                'documentType' => $row->getAttribute('document_type') ?: null,
-                'sortOrder' => (int) $row->sort_order,
-                'status' => $row->is_active ? 'Active' : 'Inactive',
-                'createdAt' => optional($row->created_at)->toDateTimeString(),
-                'updatedAt' => optional($row->updated_at)->toDateTimeString(),
-            ])
+            ->map(function (Model $row): array {
+                $legacyDocumentType = $row->getAttribute('document_type') ?: null;
+                $documentTypes = null;
+
+                if ($row instanceof FleetDocumentName) {
+                    $documentTypes = $this->normalizeDocumentTypes(
+                        $row->getAttribute('document_types'),
+                        $legacyDocumentType
+                    );
+                }
+
+                return [
+                    'id' => $row->id,
+                    'code' => $row->code,
+                    'name' => $row->name,
+                    'label' => $row->name,
+                    'description' => $row->description ?? '',
+                    'documentType' => $legacyDocumentType,
+                    'documentTypes' => $documentTypes,
+                    'sortOrder' => (int) $row->sort_order,
+                    'status' => $row->is_active ? 'Active' : 'Inactive',
+                    'createdAt' => optional($row->created_at)->toDateTimeString(),
+                    'updatedAt' => optional($row->updated_at)->toDateTimeString(),
+                ];
+            })
             ->values()
             ->all();
     }
@@ -394,16 +409,22 @@ class MasterDataController extends FleetBaseController
 
     private function syncDocumentNames(array $rows): void
     {
-        $allowedTypes = ['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'];
         $cleanRows = collect($rows)
-            ->map(function (array $row) use ($allowedTypes): ?array {
+            ->map(function (array $row): ?array {
                 $clean = $this->cleanMasterRow($row);
                 if ($clean === null) {
                     return null;
                 }
 
-                $documentType = trim((string) ($row['documentType'] ?? $row['document_type'] ?? 'All Modules'));
-                $clean['documentType'] = in_array($documentType, $allowedTypes, true) ? $documentType : 'All Modules';
+                $documentTypes = $this->normalizeDocumentTypes(
+                    $row['documentTypes'] ?? $row['document_types'] ?? null,
+                    $row['documentType'] ?? $row['document_type'] ?? null
+                );
+
+                $clean['documentTypes'] = $documentTypes;
+                $clean['documentType'] = in_array('All Modules', $documentTypes, true)
+                    ? 'All Modules'
+                    : ($documentTypes[0] ?? 'All Modules');
 
                 return $clean;
             })
@@ -421,18 +442,53 @@ class MasterDataController extends FleetBaseController
             return;
         }
 
+        $supportsMultipleTypes = Schema::hasColumn('fleet_document_names', 'document_types');
+
         foreach ($cleanRows as $row) {
+            $attributes = [
+                'name' => $row['name'],
+                'document_type' => $row['documentType'],
+                'description' => $row['description'],
+                'sort_order' => $row['sortOrder'],
+                'is_active' => $row['status'] === 'Active',
+            ];
+
+            if ($supportsMultipleTypes) {
+                $attributes['document_types'] = $row['documentTypes'];
+            }
+
             FleetDocumentName::updateOrCreate(
                 ['code' => $row['code']],
-                [
-                    'name' => $row['name'],
-                    'document_type' => $row['documentType'],
-                    'description' => $row['description'],
-                    'sort_order' => $row['sortOrder'],
-                    'is_active' => $row['status'] === 'Active',
-                ]
+                $attributes
             );
         }
+    }
+
+    private function normalizeDocumentTypes(mixed $documentTypes, mixed $legacyDocumentType = null): array
+    {
+        $allowedTypes = ['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'];
+
+        if (is_string($documentTypes)) {
+            $decoded = json_decode($documentTypes, true);
+            $documentTypes = is_array($decoded) ? $decoded : [$documentTypes];
+        }
+
+        if (! is_array($documentTypes) || count($documentTypes) === 0) {
+            $documentTypes = [filled($legacyDocumentType) ? (string) $legacyDocumentType : 'All Modules'];
+        }
+
+        $normalized = collect($documentTypes)
+            ->map(fn ($type) => trim((string) $type))
+            ->filter(fn (string $type) => in_array($type, $allowedTypes, true))
+            ->unique()
+            ->values()
+            ->all();
+
+        if (in_array('All Modules', $normalized, true)) {
+            return ['All Modules'];
+        }
+
+        return count($normalized) > 0 ? $normalized : ['All Modules'];
     }
 
     private function syncVehicleSubCategories(array $rows): void

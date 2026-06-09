@@ -13,7 +13,7 @@
 
     <x-fleetman.title-card
         title="Master Data"
-        subtitle="Manage reusable dropdown values from one place. Party Types and Document Names saved here are loaded dynamically across FleetMan forms."
+        subtitle="Manage reusable dropdown values from one place. Document Types saved here are loaded dynamically across FleetMan forms."
     />
 
     <div class="master-overview-grid">
@@ -23,7 +23,7 @@
         </div>
         <div class="master-overview-card">
             <div class="master-overview-icon">🧾</div>
-            <div><strong id="masterDocumentNameCount">0</strong><span>Document names available for document dropdowns</span></div>
+            <div><strong id="masterDocumentNameCount">0</strong><span>Document types available for document dropdowns</span></div>
         </div>
         <div class="master-overview-card">
             <div class="master-overview-icon">🪪</div>
@@ -79,35 +79,50 @@
         <section class="card master-card" id="documentNameMasterCard">
             <div class="section-head">
                 <div>
-                    <h2>Document Name Master</h2>
-                    <p>Add document names once and reuse them in vehicle, party, driver, employee, client, and other document dropdowns.</p>
+                    <h2>Document Type</h2>
                 </div>
                 <button type="button" class="btn light" id="resetDocumentNameMasterBtn">Reset</button>
             </div>
 
-            <form id="documentNameMasterForm" class="master-form" autocomplete="off">
+            <form id="documentNameMasterForm" class="master-form document-type-master-form" autocomplete="off">
                 <input type="hidden" id="documentNameEditingCode">
                 <x-fleetman.input id="documentNameMasterName" label="Document Name" placeholder="Example: Trade License Copy" required />
-                <x-fleetman.input id="documentNameMasterCode" label="Code" placeholder="Example: TRADE_LICENSE_COPY" hint="Used internally to keep the dropdown value stable." />
+                <x-fleetman.input id="documentNameMasterCode" label="Code" placeholder="Example: TRADE_LICENSE_COPY" />
                 <x-fleetman.input id="documentNameMasterSort" label="Sort Order" type="number" value="0" min="0" />
                 <x-fleetman.select id="documentNameMasterStatus" label="Status" :options="['Active', 'Inactive']" value="Active" />
+
+                <fieldset class="master-form-full document-type-check-field" id="documentNameMasterTypesField">
+                    <legend>Document Type / Used For <span class="req">*</span></legend>
+                    <div class="document-type-check-grid" id="documentNameMasterTypes">
+                        @foreach (['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'] as $documentType)
+                            @php($typeId = 'documentNameMasterType'.$loop->index)
+                            <label class="document-type-check" for="{{ $typeId }}">
+                                <input type="checkbox" id="{{ $typeId }}" name="documentNameMasterTypes[]" value="{{ $documentType }}" @checked($documentType === 'All Modules')>
+                                <span>{{ $documentType }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                    <small class="document-type-check-error" id="documentNameMasterTypesError" hidden>Select at least one document type.</small>
+                </fieldset>
+
                 <div class="master-form-full">
                     <x-fleetman.textarea id="documentNameMasterDescription" label="Description / Note" placeholder="Optional note, such as required for vendor onboarding or vehicle renewal." />
                 </div>
                 <div class="master-form-actions">
-                    <button type="submit" class="btn primary" id="saveDocumentNameMasterBtn">Save Document Name</button>
+                    <button type="submit" class="btn primary" id="saveDocumentNameMasterBtn">Save Document Type</button>
                     <button type="button" class="btn light" id="cancelDocumentNameEditBtn">Cancel Edit</button>
                 </div>
             </form>
 
             <div class="master-table-title">
-                <div><b>Added Document Names</b><small>Active rows appear in document dropdowns across the system.</small></div>
+                <div><b>Added Document Types</b></div>
             </div>
             <div class="table-wrap master-table-wrap">
                 <table>
                     <thead>
                         <tr>
                             <th>Document Name</th>
+                            <th>Used For</th>
                             <th>Code</th>
                             <th>Sort</th>
                             <th>Status</th>

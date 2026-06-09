@@ -30,6 +30,7 @@ class EnsureFleetManageAccess
         )));
 
         $scopePermissions = [
+            'yards' => ['yards.view', 'yards.manage'],
             'vehicles' => ['vehicles.view', 'vehicles.manage'],
             'fuel-recharge' => ['fuel_recharge.view', 'fuel_recharge.manage'],
             'vendors' => ['vendors.view', 'vendors.manage'],

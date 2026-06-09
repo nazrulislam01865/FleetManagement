@@ -40,7 +40,14 @@
 
     <div id="clientListPage" class="hidden">
         <x-fleetman.topbar :items="[['label' => 'Client List']]">
-            <x-slot:actions><button type="button" class="btn light" id="exportClientsBtn">⬇ Export CSV</button></x-slot:actions>
+            <x-slot:actions>
+                <button type="button" class="btn light" id="exportClientsBtn">⬇ Export CSV</button>
+                @if(data_get($fleetman, 'auth.pageAccess.canManage'))
+                    <a href="{{ route('fleet.clients', ['action' => 'add']) }}" class="btn primary" id="addClientFromListBtn">＋ Add Client</a>
+                @else
+                    <span class="btn primary rbac-control-muted" id="addClientFromListBtn" aria-disabled="true" tabindex="-1" title="Your role has read-only access to this module." data-rbac-disabled="true">🔒 Add Client</span>
+                @endif
+            </x-slot:actions>
         </x-fleetman.topbar>
         <x-fleetman.title-card title="Client List" subtitle="Simple list page with sample data, search, filters, and quick actions. Designed for easy day-to-day office use."></x-fleetman.title-card>
         <div class="kpi"><x-fleetman.kpi-card id="clientKpiTotal" label="Total Clients" /><x-fleetman.kpi-card id="clientKpiActive" label="Active Clients" /><x-fleetman.kpi-card id="clientKpiEmail" label="Clients with Email" /></div>
