@@ -59,11 +59,11 @@
                         <button class="chip" type="button" data-contract-chip="status" data-value="Completed">Completed</button>
                     </div>
                 </div>
-                <div class="field contract-col-3">
+                <div class="field contract-col-3 fleet-form-temporal-field">
                     <label for="contractStart">Contract Start <span class="req">*</span></label>
                     <input id="contractStart" type="date" required aria-required="true">
                 </div>
-                <div class="field contract-col-3">
+                <div class="field contract-col-3 fleet-form-temporal-field">
                     <label for="contractEnd">Contract End <span class="req">*</span></label>
                     <input id="contractEnd" type="date" required aria-required="true">
                 </div>

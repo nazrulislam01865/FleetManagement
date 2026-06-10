@@ -36,7 +36,7 @@
                     <div class="grid3" style="margin-top:16px">
                         <div class="field"><label for="fuelPrice">Price per Unit <span class="req">*</span></label><input id="fuelPrice" type="number" min="0.01" step="0.01" required aria-required="true" placeholder="Example: 122"></div>
                         <x-fleetman.select id="fuelUnit" label="Unit" :options="$fleetman['options']['fuel_units']" placeholder="Select unit type" required />
-                        <div class="field"><label for="effectiveDate">Effective Date <span class="req">*</span></label><input id="effectiveDate" type="date" required aria-required="true"></div>
+                        <div class="field fleet-form-temporal-field"><label for="effectiveDate">Effective Date <span class="req">*</span></label><input id="effectiveDate" type="date" required aria-required="true"></div>
                         <div class="field"><label for="fuelReference">Reference <span class="req">*</span></label><input id="fuelReference" maxlength="160" required aria-required="true" placeholder="Circular / memo / market note"></div>
                     </div>
                     <div class="field" style="margin-top:16px">

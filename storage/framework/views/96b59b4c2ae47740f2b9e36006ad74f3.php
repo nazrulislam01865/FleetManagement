@@ -48,7 +48,11 @@ foreach ($attributes->all() as $__key => $__value) {
 
 unset($__defined_vars, $__key, $__value); ?>
 
-<div class="field">
+<?php
+    $isTemporalField = in_array(strtolower((string) $type), ['date', 'time', 'datetime-local', 'month', 'week'], true);
+?>
+
+<div class="field<?php echo e($isTemporalField ? ' fleet-form-temporal-field' : ''); ?>">
     <?php if($label !== null && $label !== ''): ?>
         <label for="<?php echo e($id); ?>"><?php echo e($label); ?> <?php if($required): ?><span class="req">*</span><?php endif; ?></label>
     <?php endif; ?>

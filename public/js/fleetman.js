@@ -784,7 +784,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 ${nameControl}
                 ${extraHidden}
             </div>
-            <div class="field">
+            <div class="field fleet-form-temporal-field">
                 <label>Expiry Date</label>
                 <input class="${escapeHtml(classes.expiry || '')}" type="date" value="${escapeHtml(row.expiry || row.expiryDate || '')}">
             </div>

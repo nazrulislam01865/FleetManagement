@@ -23,8 +23,8 @@
         title="Report Filters"
     >
         <div class="report-filter-grid daily-filter-grid">
-            <div class="field"><label for="fromDate">From Date</label><input id="fromDate" type="date"></div>
-            <div class="field"><label for="toDate">To Date</label><input id="toDate" type="date"></div>
+            <div class="field fleet-form-temporal-field"><label for="fromDate">From Date</label><input id="fromDate" type="date"></div>
+            <div class="field fleet-form-temporal-field"><label for="toDate">To Date</label><input id="toDate" type="date"></div>
             <div class="field searchable report-searchable-field"><div class="search-label"><label for="contractFilter">Contract</label><span class="search-tag">Searchable</span></div><input id="contractFilter" list="contractFilterList" placeholder="All contracts" autocomplete="off"><datalist id="contractFilterList"></datalist></div>
             <div class="field searchable report-searchable-field"><div class="search-label"><label for="vehicleFilter">Car / Vehicle</label><span class="search-tag">Filtered</span></div><input id="vehicleFilter" list="vehicleFilterList" placeholder="All vehicles" autocomplete="off"><datalist id="vehicleFilterList"></datalist></div>
             <div class="field searchable report-searchable-field"><div class="search-label"><label for="driverFilter">Driver</label><span class="search-tag">Filtered</span></div><input id="driverFilter" list="driverFilterList" placeholder="All drivers" autocomplete="off"><datalist id="driverFilterList"></datalist></div>

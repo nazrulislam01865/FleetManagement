@@ -10,7 +10,11 @@
     'hint' => null,
 ])
 
-<div class="field">
+@php
+    $isTemporalField = in_array(strtolower((string) $type), ['date', 'time', 'datetime-local', 'month', 'week'], true);
+@endphp
+
+<div class="field{{ $isTemporalField ? ' fleet-form-temporal-field' : '' }}">
     @if($label !== null && $label !== '')
         <label for="{{ $id }}">{{ $label }} @if($required)<span class="req">*</span>@endif</label>
     @endif
