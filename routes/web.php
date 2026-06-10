@@ -23,6 +23,7 @@ use App\Http\Controllers\Fleet\SettingsController;
 use App\Http\Controllers\Fleet\VehicleController;
 use App\Http\Controllers\Fleet\VendorPartyController;
 use App\Http\Controllers\Fleet\YardController;
+use App\Http\Middleware\EnsureFleetDeleteAccess;
 use App\Http\Middleware\EnsureFleetManageAccess;
 use App\Http\Middleware\EnsureFleetPermission;
 use App\Support\FleetRbac;
@@ -63,7 +64,7 @@ Route::get('/', function () {
         : redirect()->route('login');
 });
 
-Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
+Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAccess::class])->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/feed', [NotificationController::class, 'feed'])->name('notifications.feed');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
@@ -289,6 +290,9 @@ Route::prefix('fleet')->name('fleet.')->middleware('auth')->group(function () {
     Route::post('/master-data/document-names/save', [MasterDataController::class, 'saveDocumentName'])
         ->middleware(EnsureFleetPermission::class.':master_data.manage')
         ->name('master-data.document-names.save');
+    Route::delete('/master-data/document-names/{documentName}', [MasterDataController::class, 'destroyDocumentName'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.document-names.destroy');
     Route::post('/master-data/sync', [MasterDataController::class, 'sync'])
         ->middleware(EnsureFleetPermission::class.':master_data.manage')
         ->name('master-data.sync');

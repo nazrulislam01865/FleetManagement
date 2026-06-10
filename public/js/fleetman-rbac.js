@@ -5,6 +5,7 @@
     const pageAccess = auth.pageAccess || {};
     const managePermission = String(pageAccess.managePermission || '');
     const isReadOnly = Boolean(managePermission) && pageAccess.canManage !== true;
+    const canDeleteRecords = auth.canDeleteRecords === true;
     const canViewFullDetails = typeof window.FleetmanDetailViewer?.canViewDetails === 'function'
         ? window.FleetmanDetailViewer.canViewDetails()
         : Boolean(auth.isSuperAdmin);
@@ -21,6 +22,54 @@
                 || name.startsWith('data-master-delete-')
                 || name === 'data-recharge-edit'
                 || name === 'data-recharge-delete';
+        });
+    }
+
+    function isDeleteControl(element) {
+        if (!(element instanceof HTMLElement)) return false;
+        if (element.matches('[data-rbac-ignore], [data-rbac-disabled]')) return false;
+
+        const form = element.matches('form') ? element : element.closest('form');
+        if (form) {
+            const declaredMethod = String(form.getAttribute('method') || 'get').toLowerCase();
+            const spoofedMethod = String(form.querySelector('input[name="_method"]')?.value || '').toLowerCase();
+            if (declaredMethod === 'delete' || spoofedMethod === 'delete') return true;
+        }
+
+        const id = String(element.id || '').toLowerCase();
+        const classes = String(element.className || '').toLowerCase().split(/\s+/).filter(Boolean);
+        const text = String(element.textContent || element.value || '').trim().toLowerCase();
+        const hasDeleteData = Array.from(element.attributes || []).some((attribute) =>
+            String(attribute.name || '').toLowerCase().includes('delete')
+        );
+
+        return id.startsWith('delete')
+            || classes.some((className) => className.startsWith('delete-'))
+            || hasDeleteData
+            || text === 'delete';
+    }
+
+    function enforceDeleteControls(root = document) {
+        if (canDeleteRecords) return;
+
+        const scope = root instanceof Element ? root : document.querySelector('.main-content');
+        if (!scope) return;
+
+        if (isDeleteControl(scope)) {
+            muteElement(scope, 'Only Admin User and Super Admin can delete records.');
+        }
+
+        scope.querySelectorAll('button, a, input[type="submit"], form').forEach((element) => {
+            if (!isDeleteControl(element)) return;
+
+            if (element.matches('form')) {
+                element.querySelectorAll('button, input[type="submit"]').forEach((button) =>
+                    muteElement(button, 'Only Admin User and Super Admin can delete records.')
+                );
+                return;
+            }
+
+            muteElement(element, 'Only Admin User and Super Admin can delete records.');
         });
     }
 
@@ -164,7 +213,15 @@
 
     document.addEventListener('click', blockDisabledNavigation, true);
     document.addEventListener('submit', (event) => {
-        if (!isReadOnly || event.target.closest('.logout-form')) return;
+        if (event.target.closest('.logout-form')) return;
+
+        if (!canDeleteRecords && isDeleteControl(event.target)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+
+        if (!isReadOnly) return;
         event.preventDefault();
         event.stopImmediatePropagation();
     }, true);
@@ -177,9 +234,10 @@
         forceListPage();
         addReadOnlyBanner();
         enforceReadOnlyControls();
+        enforceDeleteControls();
         enforceDetailControls();
 
-        if (isReadOnly || !canViewFullDetails) {
+        if (isReadOnly || !canDeleteRecords || !canViewFullDetails) {
             const mainContent = document.querySelector('.main-content');
             if (mainContent) {
                 new MutationObserver((mutations) => {
@@ -187,6 +245,7 @@
                         mutation.addedNodes.forEach((node) => {
                             if (node instanceof Element) {
                                 enforceReadOnlyControls(node);
+                                enforceDeleteControls(node);
                                 enforceDetailControls(node);
                             }
                         });
@@ -199,6 +258,7 @@
     window.FleetmanAccess = Object.freeze({
         has: permissionAllowed,
         canManagePage: () => !isReadOnly,
+        canDeleteRecords: () => canDeleteRecords,
         pageAccess: { ...pageAccess },
     });
 })();

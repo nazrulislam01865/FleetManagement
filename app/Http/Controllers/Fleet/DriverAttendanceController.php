@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Fleet;
 use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetDriverAttendance;
 use App\Models\Fleet\FleetDue;
+use App\Support\FleetDuration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -278,11 +279,10 @@ class DriverAttendanceController extends FleetBaseController
             return $row;
         }
 
-        [$startHour, $startMinute] = array_map('intval', explode(':', $startTime));
-        [$endHour, $endMinute] = array_map('intval', explode(':', $endTime));
-        $minutes = max(0, (($endHour * 60) + $endMinute) - (($startHour * 60) + $startMinute));
-
-        $row['hours'] = intdiv($minutes, 60).'h '.($minutes % 60).'m';
+        $minutes = FleetDuration::minutesBetween($startTime, $endTime);
+        $row['totalMinutes'] = $minutes;
+        $row['totalTime'] = FleetDuration::decimalHours($minutes);
+        $row['hours'] = FleetDuration::format($minutes);
 
         return $row;
     }

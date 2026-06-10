@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class MasterDataController extends FleetBaseController
@@ -270,6 +271,7 @@ class MasterDataController extends FleetBaseController
 
         DB::transaction(function () use ($row, $documentTypes, $documentType, $editingCode): void {
             $attributes = [
+                'code' => $row['code'],
                 'name' => $row['name'],
                 'description' => $row['description'],
                 'sort_order' => $row['sortOrder'],
@@ -284,21 +286,44 @@ class MasterDataController extends FleetBaseController
                 $attributes['document_types'] = $documentTypes;
             }
 
-            FleetDocumentName::query()->updateOrCreate(
-                ['code' => $row['code']],
-                $attributes
-            );
+            $documentName = $editingCode !== null
+                ? FleetDocumentName::query()->where('code', $editingCode)->lockForUpdate()->first()
+                : null;
 
-            if ($editingCode !== null && $editingCode !== $row['code']) {
-                FleetDocumentName::query()
-                    ->where('code', $editingCode)
-                    ->delete();
+            $conflictingDocument = FleetDocumentName::query()
+                ->where('code', $row['code'])
+                ->when(
+                    $documentName !== null,
+                    fn ($query) => $query->where($documentName->getKeyName(), '!=', $documentName->getKey())
+                )
+                ->exists();
+
+            if ($conflictingDocument) {
+                throw ValidationException::withMessages([
+                    'document.code' => 'This Document Type code is already used by another row.',
+                ]);
             }
+
+            $documentName ??= new FleetDocumentName();
+            $documentName->fill($attributes);
+            $documentName->save();
         });
 
         return response()->json([
             'ok' => true,
             'documentNames' => $this->masterRows(FleetDocumentName::class),
+        ]);
+    }
+
+    public function destroyDocumentName(FleetDocumentName $documentName): JsonResponse
+    {
+        $deletedId = (int) $documentName->getKey();
+
+        $documentName->delete();
+
+        return response()->json([
+            'ok' => true,
+            'deletedId' => $deletedId,
         ]);
     }
 
@@ -311,7 +336,10 @@ class MasterDataController extends FleetBaseController
             'vehicle_sub_categories.*' => ['array'],
             'party_types' => ['present', 'array'],
             'party_types.*' => ['array'],
-            'document_names' => ['present', 'array'],
+            // Document Types use dedicated save/delete endpoints. Keep this
+            // optional for older clients, but never use a missing row in this
+            // bulk payload as an instruction to delete database records.
+            'document_names' => ['sometimes', 'array'],
             'document_names.*' => ['array'],
             'document_names.*.documentTypes' => ['nullable', 'array'],
             'document_names.*.documentTypes.*' => [Rule::in(['All Modules', 'Vehicles', 'Drivers', 'Vendors', 'Vendors & Parties', 'Employees', 'Clients', 'Contracts'])],
@@ -333,7 +361,9 @@ class MasterDataController extends FleetBaseController
             $this->syncMasterTable(FleetVehicleCategory::class, $validated['vehicle_categories']);
             $this->syncVehicleSubCategories($validated['vehicle_sub_categories']);
             $this->syncMasterTable(FleetPartyType::class, $validated['party_types']);
-            $this->syncDocumentNames($validated['document_names']);
+            if (array_key_exists('document_names', $validated)) {
+                $this->upsertDocumentNames($validated['document_names']);
+            }
             $this->syncMasterTable(FleetLicenceType::class, $validated['licence_types']);
             $this->syncMasterTable(FleetDriverContactType::class, $validated['driver_contact_types']);
             $this->syncMasterTable(FleetClientType::class, $validated['client_types']);
@@ -355,7 +385,12 @@ class MasterDataController extends FleetBaseController
             'masterData' => $this->masterDataPayload(),
             'resources' => array_merge($this->resourceUrls(), [
                 'master_data' => ['sync' => route('fleet.master-data.sync')],
-                'document_names' => ['save' => route('fleet.master-data.document-names.save')],
+                'document_names' => [
+                    'save' => route('fleet.master-data.document-names.save'),
+                    'destroy' => route('fleet.master-data.document-names.destroy', [
+                        'documentName' => '__DOCUMENT_ID__',
+                    ]),
+                ],
             ]),
         ], $pageData));
     }
@@ -451,12 +486,9 @@ class MasterDataController extends FleetBaseController
 
         $codes = $cleanRows->pluck('code')->all();
 
-        $modelClass::query()
-            ->when(count($codes) > 0, fn ($query) => $query->whereNotIn('code', $codes))
-            ->delete();
+        $this->deleteMissingRecords($modelClass::query(), $codes);
 
         if (count($codes) === 0) {
-            $modelClass::query()->delete();
             return;
         }
 
@@ -473,7 +505,7 @@ class MasterDataController extends FleetBaseController
         }
     }
 
-    private function syncDocumentNames(array $rows): void
+    private function upsertDocumentNames(array $rows): void
     {
         $cleanRows = collect($rows)
             ->map(function (array $row): ?array {
@@ -497,16 +529,6 @@ class MasterDataController extends FleetBaseController
             ->filter(fn (?array $row) => $row !== null)
             ->unique('code')
             ->values();
-
-        $codes = $cleanRows->pluck('code')->all();
-        FleetDocumentName::query()
-            ->when(count($codes) > 0, fn ($query) => $query->whereNotIn('code', $codes))
-            ->delete();
-
-        if (count($codes) === 0) {
-            FleetDocumentName::query()->delete();
-            return;
-        }
 
         $supportsMultipleTypes = Schema::hasColumn('fleet_document_names', 'document_types');
 
@@ -567,12 +589,9 @@ class MasterDataController extends FleetBaseController
 
         $codes = $cleanRows->pluck('code')->all();
 
-        FleetVehicleSubCategory::query()
-            ->when(count($codes) > 0, fn ($query) => $query->whereNotIn('code', $codes))
-            ->delete();
+        $this->deleteMissingRecords(FleetVehicleSubCategory::query(), $codes);
 
         if (count($codes) === 0) {
-            FleetVehicleSubCategory::query()->delete();
             return;
         }
 

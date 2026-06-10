@@ -277,7 +277,7 @@ class EmployeeController extends FleetBaseController
         $modelClass = $this->modelClass;
         DB::transaction(function () use ($modelClass, $rows) {
             $incomingCodes = collect($rows)->map(fn (array $row) => (string) ($row[$this->idKey] ?? ''))->filter()->values();
-            $modelClass::query()->whereNotIn('code', $incomingCodes)->delete();
+            $this->deleteMissingRecords($modelClass::query(), $incomingCodes);
             foreach ($rows as $row) {
                 $code = (string) ($row[$this->idKey] ?? '');
                 if ($code === '') {

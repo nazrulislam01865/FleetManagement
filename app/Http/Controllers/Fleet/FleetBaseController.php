@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Fleet;
 
 use App\Http\Controllers\Controller;
 use App\Support\FleetBrand;
+use App\Support\FleetDuration;
 use App\Models\Fleet\FleetClient;
 use App\Models\Fleet\FleetContract;
 use App\Models\Fleet\FleetDriver;
@@ -24,6 +25,7 @@ use App\Models\Fleet\FleetVendorParty;
 use App\Models\Fleet\FleetYard;
 use App\Models\Fleet\FleetVendorContractorType;
 use App\Support\FleetRbac;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -69,33 +71,14 @@ abstract class FleetBaseController extends Controller
             unset($payload['submittedAt'], $payload['submittedLocation']);
         }
         if ($this->resource === 'driver_attendance') {
-            $timeToMinutes = static function (mixed $value): ?int {
-                $time = trim((string) $value);
-                if (preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i', $time, $matches) !== 1) {
-                    return null;
-                }
-
-                $hour = (int) $matches[1];
-                $minute = (int) $matches[2];
-                $meridiem = strtoupper((string) ($matches[3] ?? ''));
-                if ($minute > 59 || ($meridiem === '' && $hour > 23) || ($meridiem !== '' && ($hour < 1 || $hour > 12))) {
-                    return null;
-                }
-                if ($meridiem === 'AM' && $hour === 12) {
-                    $hour = 0;
-                } elseif ($meridiem === 'PM' && $hour !== 12) {
-                    $hour += 12;
-                }
-
-                return ($hour * 60) + $minute;
-            };
-
-            $startMinutes = $timeToMinutes($payload['startTime'] ?? null);
-            $endMinutes = $timeToMinutes($payload['endTime'] ?? null);
-            if ($startMinutes !== null && $endMinutes !== null) {
-                $durationMinutes = max(0, $endMinutes - $startMinutes);
-                $payload['hours'] = intdiv($durationMinutes, 60).'h '.($durationMinutes % 60).'m';
-            }
+            $durationMinutes = FleetDuration::minutesFromPayload(
+                $payload,
+                $payload['startTime'] ?? null,
+                $payload['endTime'] ?? null,
+            );
+            $payload['totalMinutes'] = $durationMinutes;
+            $payload['totalTime'] = FleetDuration::decimalHours($durationMinutes);
+            $payload['hours'] = FleetDuration::format($durationMinutes);
         }
         $detail = $this->recordDetailDefinition();
         $recordTitle = trim((string) ($payload[$detail['title_key']] ?? $payload[$this->nameKey] ?? $record->name ?? $record->code));
@@ -226,7 +209,7 @@ abstract class FleetBaseController extends Controller
                 ->filter()
                 ->values();
 
-            $modelClass::query()->whereNotIn('code', $incomingCodes)->delete();
+            $this->deleteMissingRecords($modelClass::query(), $incomingCodes);
 
             foreach ($rows as $row) {
                 $code = (string) ($row[$idKey] ?? '');
@@ -249,6 +232,37 @@ abstract class FleetBaseController extends Controller
             'ok' => true,
             'rows' => $this->recordsFor($modelClass),
         ]);
+    }
+
+    /**
+     * Full-table sync endpoints may delete records by omitting them from the
+     * submitted rows. Protect that server-side so UI changes or crafted POST
+     * requests cannot bypass the Admin/Super Admin delete rule.
+     */
+    protected function deleteMissingRecords(Builder $query, iterable $incomingCodes, string $column = 'code'): void
+    {
+        $codes = collect($incomingCodes)
+            ->map(fn ($code): string => trim((string) $code))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $deleteQuery = clone $query;
+        if ($codes->isNotEmpty()) {
+            $deleteQuery->whereNotIn($column, $codes->all());
+        }
+
+        if (! (clone $deleteQuery)->exists()) {
+            return;
+        }
+
+        $user = auth()->user();
+        $allowed = $user && method_exists($user, 'canDeleteFleetRecords')
+            && $user->canDeleteFleetRecords();
+
+        abort_unless($allowed, 403, 'Only Admin User and Super Admin can delete records.');
+
+        $deleteQuery->delete();
     }
 
     protected function validateUniqueDocumentNames(array $rows, string $documentKey = 'documents'): void
@@ -399,6 +413,7 @@ abstract class FleetBaseController extends Controller
             ] : null,
             'permissions' => $allowedPermissions,
             'isSuperAdmin' => $user?->isFleetSuperAdmin() ?? false,
+            'canDeleteRecords' => $user?->canDeleteFleetRecords() ?? false,
             'pageAccess' => $pageAccess,
         ];
     }

@@ -242,16 +242,6 @@
         const generatePayrollBtn = document.getElementById('generatePayrollBtn');
         const confirmGeneratePayrollBtn = document.getElementById('confirmGeneratePayrollBtn');
 
-        function payrollMonthFromDue(due) {
-            const candidates = [
-                due?.source_id,
-                due?.payload?.month,
-                typeof due?.code === 'string' ? due.code.match(/(\d{4}-(?:0[1-9]|1[0-2]))$/)?.[1] : null
-            ];
-
-            return candidates.find(value => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || ''))) || null;
-        }
-
         function monthLabel(month, currentMonth) {
             const [year, monthNumber] = month.split('-').map(Number);
             const label = new Intl.DateTimeFormat('en-US', {
@@ -265,30 +255,18 @@
 
         function populatePayrollMonthOptions() {
             const today = dhakaCalendarDate();
-            const currentYear = Number(today.month.slice(0, 4));
-            const fallbackStart = `${currentYear - 5}-01`;
-            const storedMonths = duesData.map(payrollMonthFromDue).filter(Boolean).sort();
-            const firstMonth = storedMonths.length && storedMonths[0] < fallbackStart
-                ? storedMonths[0]
-                : fallbackStart;
+            const [currentYear, currentMonth] = today.month.split('-').map(Number);
 
             payrollMonthSelect.innerHTML = '<option value="">Select month</option>';
 
-            let [year, month] = today.month.split('-').map(Number);
-            const [firstYear, firstMonthNumber] = firstMonth.split('-').map(Number);
-
-            while (year > firstYear || (year === firstYear && month >= firstMonthNumber)) {
-                const value = `${year}-${String(month).padStart(2, '0')}`;
+            // Show exactly three rolling options: current month and the previous two months.
+            for (let offset = 0; offset < 3; offset++) {
+                const optionDate = new Date(Date.UTC(currentYear, currentMonth - 1 - offset, 1));
+                const value = `${optionDate.getUTCFullYear()}-${String(optionDate.getUTCMonth() + 1).padStart(2, '0')}`;
                 const option = document.createElement('option');
                 option.value = value;
                 option.textContent = monthLabel(value, today.month);
                 payrollMonthSelect.appendChild(option);
-
-                month--;
-                if (month === 0) {
-                    month = 12;
-                    year--;
-                }
             }
 
             payrollMonthSelect.value = today.month;

@@ -79,7 +79,7 @@
             <div class="section-head">
                 <div>
                     <h2>Permission Matrix</h2>
-                    <p>Tick a permission for each role. View opens the page; Manage allows save, sync, upload, and delete actions for that module.</p>
+                    <p>Tick a permission for each role. View opens the page; Manage allows create, edit, save, sync, and upload. Delete Records is protected for Admin User and Super Admin only.</p>
                 </div>
                 @if($canManageRoleMatrix)
                     <button type="submit" class="btn primary">Save Role Matrix</button>
@@ -89,7 +89,7 @@
             </div>
 
             <div class="role-matrix-note">
-                Super Admin is protected and always has full access. Create users and assign one of these roles from the <b>Users</b> page.
+                Super Admin is protected and always has full access. The global Delete Records permission is locked to Admin User and Super Admin; it cannot be granted to any other role. Create users and assign roles from the <b>Users</b> page.
             </div>
 
             <div class="table-wrap role-matrix-table-wrap">
@@ -115,13 +115,15 @@
                                         <span>{{ $permission->description }}</span>
                                         <code>{{ $permission->key }}</code>
                                     </td>
-                                    <td><span class="badge {{ $permission->action === 'Manage' ? 'warn' : 'soft' }}">{{ $permission->action }}</span></td>
+                                    <td><span class="badge {{ $permission->action === 'Delete' ? 'danger' : ($permission->action === 'Manage' ? 'warn' : 'soft') }}">{{ $permission->action }}</span></td>
                                     @foreach($roles as $role)
                                         @php
-                                            $checked = $role->isSuperAdmin()
-                                                ? true
-                                                : (bool) ($permissionMatrix[$role->id][$permission->key] ?? false);
-                                            $disabled = ! $canManageRoleMatrix || $role->isSuperAdmin();
+                                            $isDeletePermission = $permission->key === \App\Support\FleetRbac::DELETE_PERMISSION_KEY;
+                                            $deleteRoleAllowed = \App\Support\FleetRbac::roleCanDelete((string) $role->slug);
+                                            $checked = $isDeletePermission
+                                                ? $deleteRoleAllowed
+                                                : ($role->isSuperAdmin() || (bool) ($permissionMatrix[$role->id][$permission->key] ?? false));
+                                            $disabled = ! $canManageRoleMatrix || $role->isSuperAdmin() || $isDeletePermission;
                                         @endphp
                                         <td class="role-check-cell">
                                             <label class="role-check {{ $checked ? 'checked' : '' }} {{ $disabled ? 'disabled' : '' }}">

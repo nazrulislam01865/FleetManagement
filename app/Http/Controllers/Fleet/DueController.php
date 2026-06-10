@@ -69,8 +69,9 @@ class DueController extends FleetBaseController
      * Generate monthly payroll dues during the permitted business window.
      *
      * Payroll can be generated only from the 26th through the 30th day of
-     * a month (Asia/Dhaka time), and never for a future payroll month.
-     * Existing monthly records are preserved so historical/paid payroll is
+     * a month (Asia/Dhaka time). Generation is limited to the current
+     * month and the two immediately previous months. Existing monthly records
+     * are preserved so historical/paid payroll is
      * never reset by generating the same month again.
      */
     public function generatePayroll(Request $request): JsonResponse
@@ -102,6 +103,17 @@ class DueController extends FleetBaseController
                 'ok' => false,
                 'code' => 'FUTURE_PAYROLL_MONTH',
                 'message' => 'Future-month payroll cannot be generated. Select '.$currentMonth->format('Y-m').' or an earlier month.',
+            ], 422);
+        }
+
+        $earliestAllowedMonth = $currentMonth->subMonths(2);
+
+        if ($payrollMonth->isBefore($earliestAllowedMonth)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'PAYROLL_MONTH_OUT_OF_RANGE',
+                'message' => 'Payroll can only be generated for the current month or the previous two months. Select a month from '
+                    .$earliestAllowedMonth->format('Y-m').' through '.$currentMonth->format('Y-m').'.',
             ], 422);
         }
 

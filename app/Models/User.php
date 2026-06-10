@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Fleet\FleetRole;
+use App\Support\FleetRbac;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -83,6 +84,26 @@ class User extends Authenticatable
             && $this->fleetRole?->is_active;
     }
 
+    /**
+     * Deleting business records is intentionally role-protected. It cannot be
+     * granted to supervisors, operators or custom roles through user overrides.
+     */
+    public function canDeleteFleetRecords(): bool
+    {
+        if (! Schema::hasTable('users') || ! Schema::hasColumn('users', 'fleet_role_id') || ! Schema::hasTable('fleet_roles')) {
+            return true;
+        }
+
+        if (! $this->isAccountActive()) {
+            return false;
+        }
+
+        $role = $this->fleetRole;
+
+        return (bool) ($role?->is_active)
+            && in_array((string) $role?->slug, FleetRbac::deleteAllowedRoleSlugs(), true);
+    }
+
     public function userPermissions()
     {
         return $this->belongsToMany(\App\Models\Fleet\FleetPermission::class, 'fleet_user_permissions', 'user_id', 'permission_id')
@@ -91,6 +112,10 @@ class User extends Authenticatable
 
     public function canFleet(string $permissionKey): bool
     {
+        if ($permissionKey === FleetRbac::DELETE_PERMISSION_KEY) {
+            return $this->canDeleteFleetRecords();
+        }
+
         if (! Schema::hasTable('users') || ! Schema::hasColumn('users', 'fleet_role_id') || ! Schema::hasTable('fleet_roles') || ! Schema::hasTable('fleet_role_permissions')) {
             return true;
         }

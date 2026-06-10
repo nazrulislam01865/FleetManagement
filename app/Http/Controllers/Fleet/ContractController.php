@@ -272,10 +272,10 @@ class ContractController extends FleetBaseController
                 ->filter()
                 ->values();
 
-            FleetContract::query()
-                ->whereNotIn('status', ['fuel_recharge', 'attendance'])
-                ->whereNotIn('code', $incomingCodes)
-                ->delete();
+            $this->deleteMissingRecords(
+                FleetContract::query()->whereNotIn('status', ['fuel_recharge', 'attendance']),
+                $incomingCodes
+            );
 
             foreach ($rows as $row) {
                 $code = (string) ($row[$this->idKey] ?? '');

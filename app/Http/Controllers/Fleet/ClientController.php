@@ -113,7 +113,7 @@ class ClientController extends FleetBaseController
                 ->filter()
                 ->values();
 
-            FleetClient::query()->whereNotIn('code', $incomingCodes)->delete();
+            $this->deleteMissingRecords(FleetClient::query(), $incomingCodes);
 
             foreach ($rows as $row) {
                 $code = (string) ($row['clientId'] ?? '');

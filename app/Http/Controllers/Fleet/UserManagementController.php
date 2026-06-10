@@ -223,9 +223,9 @@ class UserManagementController extends FleetBaseController
                     'permission_id' => $permission->id,
                 ],
                 [
-                    'allowed' => $role->isSuperAdmin()
-                        ? true
-                        : (bool) ($allowedByPermissionId[$permission->id] ?? false),
+                    'allowed' => $permission->key === FleetRbac::DELETE_PERMISSION_KEY
+                        ? FleetRbac::roleCanDelete((string) $role->slug)
+                        : ($role->isSuperAdmin() || (bool) ($allowedByPermissionId[$permission->id] ?? false)),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]

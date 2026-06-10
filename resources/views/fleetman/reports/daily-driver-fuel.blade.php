@@ -69,7 +69,7 @@
                 <tr>
                     <th class="sub-head">Start Time</th>
                     <th class="sub-head">End Time</th>
-                    <th class="sub-head">Total Time (hrs)</th>
+                    <th class="sub-head">Total Time</th>
                     <th class="sub-head">Diesel (L)</th>
                     <th class="sub-head">CNG/LPG Cost (৳)</th>
                     <th class="sub-head">Octane (L)</th>

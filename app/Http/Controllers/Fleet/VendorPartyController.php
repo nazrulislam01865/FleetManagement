@@ -304,7 +304,7 @@ class VendorPartyController extends FleetBaseController
                 ->filter()
                 ->values();
 
-            $modelClass::query()->whereNotIn('code', $incomingCodes)->delete();
+            $this->deleteMissingRecords($modelClass::query(), $incomingCodes);
 
             foreach ($rows as $row) {
                 $code = (string) ($row[$idKey] ?? '');

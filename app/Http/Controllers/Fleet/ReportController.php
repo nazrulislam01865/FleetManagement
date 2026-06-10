@@ -6,6 +6,7 @@ use App\Models\Fleet\FleetContract;
 use App\Models\Fleet\FleetDriverAttendance;
 use App\Models\Fleet\FleetFuelRecharge;
 use App\Models\Fleet\FleetTrip;
+use App\Support\FleetDuration;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;
@@ -180,7 +181,13 @@ class ReportController extends FleetBaseController
             if ($attendance !== null) {
                 $record['driverStart'] = $attendance['startTime'] ?: $record['driverStart'];
                 $record['driverEnd'] = $attendance['endTime'] ?: $record['driverEnd'];
+                $record['totalMinutes'] = $attendance['totalMinutes'];
                 $record['totalTime'] = $attendance['totalTime'];
+                $record['workTimeKey'] = $attendance['workTimeKey'];
+            } else {
+                $record['totalMinutes'] = (int) ($record['totalMinutes'] ?? 0);
+                $record['totalTime'] = FleetDuration::decimalHours($record['totalMinutes']);
+                $record['workTimeKey'] = $record['workTimeKey'] ?: $this->fallbackWorkTimeKey($record);
             }
 
             // TK(KM) on Add Fuel is defined as total fuel price divided by
@@ -389,10 +396,21 @@ class ReportController extends FleetBaseController
         $end = $this->latestTime($matches->pluck('endTime')->filter()->values()->all());
         $minutes = $matches->sum(fn (array $row) => (int) ($row['minutes'] ?? 0));
 
+        $logIds = $matches
+            ->pluck('logId')
+            ->map(fn ($logId): string => trim((string) $logId))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
         return [
             'startTime' => $start,
             'endTime' => $end,
-            'totalTime' => round($minutes / 60, 2),
+            'totalMinutes' => $minutes,
+            'totalTime' => FleetDuration::decimalHours($minutes),
+            'workTimeKey' => 'attendance:'.sha1(implode('|', $logIds)),
         ];
     }
 
@@ -499,52 +517,7 @@ class ReportController extends FleetBaseController
 
     private function attendanceMinutes(array $payload, string $start, string $end): int
     {
-        $minutes = $this->minutesFromHoursText($payload['hours'] ?? $payload['totalHours'] ?? null);
-        if ($minutes > 0) {
-            return $minutes;
-        }
-
-        if (is_numeric($payload['totalTime'] ?? null)) {
-            return (int) round(((float) $payload['totalTime']) * 60);
-        }
-
-        return $this->minutesBetweenTimes($start, $end);
-    }
-
-    private function minutesFromHoursText(mixed $value): int
-    {
-        if (! filled($value)) {
-            return 0;
-        }
-
-        if (is_numeric($value)) {
-            return (int) round(((float) $value) * 60);
-        }
-
-        $text = (string) $value;
-        if (preg_match('/(\d+)\s*h(?:ours?)?\s*(\d+)?\s*m?/i', $text, $match)) {
-            return ((int) $match[1]) * 60 + (int) ($match[2] ?? 0);
-        }
-
-        return 0;
-    }
-
-    private function minutesBetweenTimes(string $start, string $end): int
-    {
-        if ($start === '' || $end === '') {
-            return 0;
-        }
-
-        [$startHour, $startMinute] = array_pad(array_map('intval', explode(':', $start)), 2, 0);
-        [$endHour, $endMinute] = array_pad(array_map('intval', explode(':', $end)), 2, 0);
-        $startMinutes = $startHour * 60 + $startMinute;
-        $endMinutes = $endHour * 60 + $endMinute;
-
-        if ($endMinutes < $startMinutes) {
-            $endMinutes += 24 * 60;
-        }
-
-        return max(0, $endMinutes - $startMinutes);
+        return FleetDuration::minutesFromPayload($payload, $start, $end);
     }
 
     private function earliestTime(array $times): string
@@ -628,6 +601,10 @@ class ReportController extends FleetBaseController
 
         $fuelType = $row['fuelType'] ?? $this->fuelTypeLabel($diesel, $gas, $octane, $primaryName, $secondaryName);
 
+        $driverStart = trim((string) ($row['driverStart'] ?? $row['startTime'] ?? ''));
+        $driverEnd = trim((string) ($row['driverEnd'] ?? $row['endTime'] ?? ''));
+        $totalMinutes = FleetDuration::minutesFromPayload($row, $driverStart, $driverEnd);
+
         return [
             'entryId' => (string) ($row['entryId'] ?? $row['rechargeId'] ?? $fallbackCode ?? 'FR-' . now()->format('ymdHis')),
             'date' => Carbon::parse($date)->toDateString(),
@@ -641,9 +618,11 @@ class ReportController extends FleetBaseController
             'driverId' => (string) ($row['driverId'] ?? ''),
             'driver' => (string) ($row['driver'] ?? $row['driverName'] ?? 'Assigned Driver'),
             'driverName' => (string) ($row['driverName'] ?? $row['driver'] ?? ''),
-            'driverStart' => (string) ($row['driverStart'] ?? $row['startTime'] ?? '08:00'),
-            'driverEnd' => (string) ($row['driverEnd'] ?? $row['endTime'] ?? '17:00'),
-            'totalTime' => round((float) ($row['totalTime'] ?? $row['totalHours'] ?? $this->hoursBetween($row['driverStart'] ?? $row['startTime'] ?? '08:00', $row['driverEnd'] ?? $row['endTime'] ?? '17:00')), 2),
+            'driverStart' => $driverStart,
+            'driverEnd' => $driverEnd,
+            'totalMinutes' => $totalMinutes,
+            'totalTime' => FleetDuration::decimalHours($totalMinutes),
+            'workTimeKey' => trim((string) ($row['workTimeKey'] ?? '')),
             'diesel' => round($diesel, 2),
             'gas' => round($gas, 2),
             'octane' => round($octane, 2),
@@ -679,18 +658,22 @@ class ReportController extends FleetBaseController
         return $primaryName ?: 'Fuel';
     }
 
-    private function hoursBetween(string $start, string $end): float
+    private function fallbackWorkTimeKey(array $record): string
     {
-        try {
-            $startTime = Carbon::parse($start);
-            $endTime = Carbon::parse($end);
-            if ($endTime->lessThan($startTime)) {
-                $endTime->addDay();
-            }
-            return round($startTime->diffInMinutes($endTime) / 60, 2);
-        } catch (\Throwable) {
-            return 0;
+        if ((int) ($record['totalMinutes'] ?? 0) <= 0) {
+            return '';
         }
+
+        $identity = [
+            $record['date'] ?? '',
+            ...$this->entityKeys($record, 'contract'),
+            ...$this->entityKeys($record, 'vehicle'),
+            ...$this->entityKeys($record, 'driver'),
+            $record['driverStart'] ?? '',
+            $record['driverEnd'] ?? '',
+        ];
+
+        return 'reported:'.sha1(implode('|', $identity));
     }
 
     private function weekOptions(Collection $records, Carbon $defaultEnd): array

@@ -107,7 +107,7 @@ class FuelPriceController extends FleetBaseController
                 ->filter()
                 ->values();
 
-            FleetFuelPrice::query()->whereNotIn('code', $incomingCodes)->delete();
+            $this->deleteMissingRecords(FleetFuelPrice::query(), $incomingCodes);
 
             foreach ($rows as $row) {
                 $code = (string) ($row['fuelPriceId'] ?? '');

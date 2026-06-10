@@ -304,7 +304,7 @@ class DriverController extends FleetBaseController
     {
         DB::transaction(function () use ($rows) {
             $incomingCodes = collect($rows)->map(fn (array $row) => (string) ($row[$this->idKey] ?? ''))->filter()->values();
-            FleetDriver::query()->whereNotIn('code', $incomingCodes)->delete();
+            $this->deleteMissingRecords(FleetDriver::query(), $incomingCodes);
             foreach ($rows as $row) {
                 $code = (string) ($row[$this->idKey] ?? '');
                 if ($code === '') {

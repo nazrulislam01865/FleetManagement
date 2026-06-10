@@ -6572,7 +6572,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const [sh, sm] = start.split(':').map(Number);
             const [eh, em] = end.split(':').map(Number);
             let minutes = (eh * 60 + em) - (sh * 60 + sm);
-            if (minutes < 0) minutes = 0;
+            if (minutes < 0) minutes += 24 * 60;
             return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
         }
 
@@ -7250,6 +7250,39 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             renderDocumentNames();
         }
 
+        async function deleteDocumentName(documentId) {
+            const endpointTemplate = resources?.document_names?.destroy;
+            const normalizedId = Number(documentId);
+
+            if (!endpointTemplate) {
+                throw new Error('Document Type delete route is missing. Please check routes/web.php.');
+            }
+
+            if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+                throw new Error('This Document Type does not have a valid database ID. Refresh the page and try again.');
+            }
+
+            const endpoint = endpointTemplate.replace('__DOCUMENT_ID__', encodeURIComponent(String(normalizedId)));
+            const response = await fetch(endpoint, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken(),
+                },
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(payload.message || 'Document type could not be deleted.');
+            }
+
+            if (Number(payload.deletedId) !== normalizedId) {
+                throw new Error('The server did not confirm the requested Document Type deletion.');
+            }
+
+            return normalizedId;
+        }
+
         function resetVehicleCategoryForm() {
             setValue('#vehicleCategoryEditingCode', '');
             setValue('#vehicleCategoryMasterName', '');
@@ -7624,7 +7657,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <td>${Number(row.sortOrder || 0)}</td>
                     <td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td>
                     <td class="master-description">${escapeHtml(row.description || '—')}</td>
-                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-document="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-document="${escapeHtml(row.code)}">Delete</button></div></td>
+                    <td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-document="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-document="${Number(row.id || 0)}">Delete</button></div></td>
                 </tr>`;
             }).join('') : '<tr><td colspan="8" class="empty">No document type added yet.</td></tr>';
         }
@@ -8112,7 +8145,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         bindMasterCodeGenerator('#fuelUnitMasterName', '#fuelUnitMasterCode', '#fuelUnitEditingCode');
         bindMasterCodeGenerator('#paymentTypeName', '#paymentTypeCode');
 
-        document.addEventListener('click', (event) => {
+        document.addEventListener('click', async (event) => {
             const editVehicleCategoryBtn = event.target.closest('[data-master-edit-vehicle-category]');
             if (editVehicleCategoryBtn) editVehicleCategory(editVehicleCategoryBtn.dataset.masterEditVehicleCategory);
 
@@ -8152,11 +8185,30 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (editDocumentBtn) editDocument(editDocumentBtn.dataset.masterEditDocument);
 
             const deleteDocumentBtn = event.target.closest('[data-master-delete-document]');
-            if (deleteDocumentBtn && confirm('Delete this document type from master data?')) {
-                documentNames = documentNames.filter((row) => row.code !== deleteDocumentBtn.dataset.masterDeleteDocument);
-                renderAll();
-                saveStore();
-                toast('Document type deleted from database.');
+            if (deleteDocumentBtn) {
+                const documentId = Number(deleteDocumentBtn.dataset.masterDeleteDocument);
+                const deletingRow = documentNames.find((row) => Number(row.id) === documentId);
+                const documentLabel = deletingRow?.name ? ` “${deletingRow.name}”` : '';
+
+                if (confirm(`Delete Document Type${documentLabel}? Only this selected row will be deleted.`)) {
+                    deleteDocumentBtn.disabled = true;
+
+                    try {
+                        const deletedId = await deleteDocumentName(documentId);
+                        documentNames = documentNames.filter((row) => Number(row.id) !== deletedId);
+
+                        if (deletingRow && value('#documentNameEditingCode') === deletingRow.code) {
+                            resetDocumentNameForm();
+                        }
+
+                        renderDocumentNames();
+                        toast('Document type deleted from database.');
+                    } catch (error) {
+                        toast(error.message || 'Document type could not be deleted.');
+                    } finally {
+                        if (deleteDocumentBtn.isConnected) deleteDocumentBtn.disabled = false;
+                    }
+                }
             }
 
             const editLicenceBtn = event.target.closest('[data-master-edit-licence]');

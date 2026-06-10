@@ -149,7 +149,7 @@
             <div class="section-head">
                 <div>
                     <h2>Permission Matrix</h2>
-                    <p>Tick a permission for each role. View opens the page; Manage allows save, sync, upload, and delete actions for that module.</p>
+                    <p>Tick a permission for each role. View opens the page; Manage allows create, edit, save, sync, and upload. Delete Records is protected for Admin User and Super Admin only.</p>
                 </div>
                 <?php if($canManageRoleMatrix): ?>
                     <button type="submit" class="btn primary">Save Role Matrix</button>
@@ -159,7 +159,7 @@
             </div>
 
             <div class="role-matrix-note">
-                Super Admin is protected and always has full access. Create users and assign one of these roles from the <b>Users</b> page.
+                Super Admin is protected and always has full access. The global Delete Records permission is locked to Admin User and Super Admin; it cannot be granted to any other role. Create users and assign roles from the <b>Users</b> page.
             </div>
 
             <div class="table-wrap role-matrix-table-wrap">
@@ -185,13 +185,15 @@
                                         <span><?php echo e($permission->description); ?></span>
                                         <code><?php echo e($permission->key); ?></code>
                                     </td>
-                                    <td><span class="badge <?php echo e($permission->action === 'Manage' ? 'warn' : 'soft'); ?>"><?php echo e($permission->action); ?></span></td>
+                                    <td><span class="badge <?php echo e($permission->action === 'Delete' ? 'danger' : ($permission->action === 'Manage' ? 'warn' : 'soft')); ?>"><?php echo e($permission->action); ?></span></td>
                                     <?php $__currentLoopData = $roles; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $role): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                         <?php
-                                            $checked = $role->isSuperAdmin()
-                                                ? true
-                                                : (bool) ($permissionMatrix[$role->id][$permission->key] ?? false);
-                                            $disabled = ! $canManageRoleMatrix || $role->isSuperAdmin();
+                                            $isDeletePermission = $permission->key === \App\Support\FleetRbac::DELETE_PERMISSION_KEY;
+                                            $deleteRoleAllowed = \App\Support\FleetRbac::roleCanDelete((string) $role->slug);
+                                            $checked = $isDeletePermission
+                                                ? $deleteRoleAllowed
+                                                : ($role->isSuperAdmin() || (bool) ($permissionMatrix[$role->id][$permission->key] ?? false));
+                                            $disabled = ! $canManageRoleMatrix || $role->isSuperAdmin() || $isDeletePermission;
                                         ?>
                                         <td class="role-check-cell">
                                             <label class="role-check <?php echo e($checked ? 'checked' : ''); ?> <?php echo e($disabled ? 'disabled' : ''); ?>">

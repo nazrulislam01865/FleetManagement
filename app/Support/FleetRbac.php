@@ -9,6 +9,19 @@ use Illuminate\Support\Str;
 
 class FleetRbac
 {
+    public const DELETE_PERMISSION_KEY = 'records.delete';
+
+    /** @return array<int, string> */
+    public static function deleteAllowedRoleSlugs(): array
+    {
+        return ['super_admin', 'admin_user'];
+    }
+
+    public static function roleCanDelete(string $roleSlug): bool
+    {
+        return in_array($roleSlug, self::deleteAllowedRoleSlugs(), true);
+    }
+
     /**
      * Core roles kept intentionally small for this fleet project.
      * Super Admin is protected and always receives every permission.
@@ -65,42 +78,43 @@ class FleetRbac
             self::permission('dashboard.view', 'Dashboard', 'View', 'View Dashboard', 'Open the fleet dashboard summary.', 'fleet.dashboard', 10),
 
             self::permission('trips.view', 'Operations', 'View', 'View Trips', 'Open trip records and trip lists.', 'fleet.trips', 20),
-            self::permission('trips.manage', 'Operations', 'Manage', 'Manage Trips', 'Create, update, sync and delete trip records.', 'fleet.trips.sync', 21),
+            self::permission('trips.manage', 'Operations', 'Manage', 'Manage Trips', 'Create, update and sync trip records. Deletion also requires the protected Delete Records permission.', 'fleet.trips.sync', 21),
             self::permission('driver_attendance.view', 'Operations', 'View', 'View Driver Attendance', 'Open driver log / attendance records.', 'fleet.driver-attendance', 30),
-            self::permission('driver_attendance.manage', 'Operations', 'Manage', 'Manage Driver Attendance', 'Create, update, sync and delete driver attendance records.', 'fleet.driver-attendance.sync', 31),
+            self::permission('driver_attendance.manage', 'Operations', 'Manage', 'Manage Driver Attendance', 'Create, update and sync driver attendance records. Deletion also requires the protected Delete Records permission.', 'fleet.driver-attendance.sync', 31),
 
             self::permission('yards.view', 'Fleet Management', 'View', 'View Yards', 'Open parking yard records.', 'fleet.yards', 35),
-            self::permission('yards.manage', 'Fleet Management', 'Manage', 'Manage Yards', 'Create, update and delete parking yard records.', 'fleet.yards.store', 36),
+            self::permission('yards.manage', 'Fleet Management', 'Manage', 'Manage Yards', 'Create and update parking yard records. Deletion also requires the protected Delete Records permission.', 'fleet.yards.store', 36),
 
             self::permission('vehicles.view', 'Fleet Management', 'View', 'View Vehicles', 'Open vehicle records.', 'fleet.vehicles', 40),
-            self::permission('vehicles.manage', 'Fleet Management', 'Manage', 'Manage Vehicles', 'Create, update, sync and delete vehicle records.', 'fleet.vehicles.sync', 41),
+            self::permission('vehicles.manage', 'Fleet Management', 'Manage', 'Manage Vehicles', 'Create, update and sync vehicle records. Deletion also requires the protected Delete Records permission.', 'fleet.vehicles.sync', 41),
             self::permission('fuel_recharge.view', 'Fleet Management', 'View', 'View Fuel Recharge', 'Open fuel recharge records and entry page.', 'fleet.fuel-recharge', 50),
             self::permission('fuel_recharge.manage', 'Fleet Management', 'Manage', 'Manage Fuel Recharge', 'Create, update, sync and submit fuel recharge records.', 'fleet.fuel-recharge.sync', 51),
             self::permission('fuel_prices.view', 'Fleet Management', 'View', 'View Fuel Prices', 'Open fuel price records.', 'fleet.fuel-prices', 60),
-            self::permission('fuel_prices.manage', 'Fleet Management', 'Manage', 'Manage Fuel Prices', 'Create, update, sync and delete fuel price records.', 'fleet.fuel-prices.sync', 61),
+            self::permission('fuel_prices.manage', 'Fleet Management', 'Manage', 'Manage Fuel Prices', 'Create, update and sync fuel price records. Deletion also requires the protected Delete Records permission.', 'fleet.fuel-prices.sync', 61),
 
             self::permission('contracts.view', 'Business', 'View', 'View Contracts', 'Open contract records.', 'fleet.contracts', 70),
-            self::permission('contracts.manage', 'Business', 'Manage', 'Manage Contracts', 'Create, update, sync and delete contract records.', 'fleet.contracts.sync', 71),
+            self::permission('contracts.manage', 'Business', 'Manage', 'Manage Contracts', 'Create, update and sync contract records. Deletion also requires the protected Delete Records permission.', 'fleet.contracts.sync', 71),
             self::permission('clients.view', 'Business', 'View', 'View Clients', 'Open client records.', 'fleet.clients', 80),
-            self::permission('clients.manage', 'Business', 'Manage', 'Manage Clients', 'Create, update, sync and delete client records.', 'fleet.clients.sync', 81),
+            self::permission('clients.manage', 'Business', 'Manage', 'Manage Clients', 'Create, update and sync client records. Deletion also requires the protected Delete Records permission.', 'fleet.clients.sync', 81),
 
             self::permission('drivers.view', 'People & Partners', 'View', 'View Drivers', 'Open driver records.', 'fleet.drivers', 90),
-            self::permission('drivers.manage', 'People & Partners', 'Manage', 'Manage Drivers', 'Create, update, sync and delete driver records.', 'fleet.drivers.sync', 91),
+            self::permission('drivers.manage', 'People & Partners', 'Manage', 'Manage Drivers', 'Create, update and sync driver records. Deletion also requires the protected Delete Records permission.', 'fleet.drivers.sync', 91),
             self::permission('employees.view', 'People & Partners', 'View', 'View Employees', 'Open employee records.', 'fleet.employees', 100),
-            self::permission('employees.manage', 'People & Partners', 'Manage', 'Manage Employees', 'Create, update, sync and delete employee records.', 'fleet.employees.sync', 101),
+            self::permission('employees.manage', 'People & Partners', 'Manage', 'Manage Employees', 'Create, update and sync employee records. Deletion also requires the protected Delete Records permission.', 'fleet.employees.sync', 101),
             self::permission('vendors.view', 'People & Partners', 'View', 'View Vendors & Parties', 'Open vendor and party records.', 'fleet.vendors', 110),
-            self::permission('vendors.manage', 'People & Partners', 'Manage', 'Manage Vendors & Parties', 'Create, update, upload documents, sync and delete vendor/party records.', 'fleet.vendors.sync', 111),
+            self::permission('vendors.manage', 'People & Partners', 'Manage', 'Manage Vendors & Parties', 'Create, update, upload documents and sync vendor/party records. Deletion also requires the protected Delete Records permission.', 'fleet.vendors.sync', 111),
 
             self::permission('dues.view', 'Finance & Reports', 'View', 'View Dues & Payroll', 'Open dues and payroll records.', 'fleet.dues', 118),
             self::permission('dues.manage', 'Finance & Reports', 'Manage', 'Manage Dues & Payroll', 'Generate payroll dues, update payment status and save due records.', 'fleet.dues.sync', 119),
             self::permission('reports.view', 'Finance & Reports', 'View', 'View Reports', 'Open reports and report details.', 'fleet.reports', 120),
 
             self::permission('master_data.view', 'System', 'View', 'View Master Data', 'Open master data setup screens.', 'fleet.master-data', 130),
-            self::permission('master_data.manage', 'System', 'Manage', 'Manage Master Data', 'Create, update, sync and delete master data values.', 'fleet.master-data.sync', 131),
+            self::permission('master_data.manage', 'System', 'Manage', 'Manage Master Data', 'Create, update and sync master data values. Deletion also requires the protected Delete Records permission.', 'fleet.master-data.sync', 131),
             self::permission('users.view', 'System', 'View', 'View Users', 'Open the system user management page.', 'fleet.users', 138),
             self::permission('users.manage', 'System', 'Manage', 'Manage Users', 'Create users and assign roles. Admin User and Super Admin only by default.', 'fleet.users.store', 139),
             self::permission('role_matrix.view', 'System', 'View', 'View Role Matrix', 'Open the user role and permission matrix page.', 'fleet.role-matrix', 140),
             self::permission('role_matrix.manage', 'System', 'Manage', 'Manage Role Matrix', 'Update role permissions and assign roles to users.', 'fleet.role-matrix.update', 141),
+            self::permission(self::DELETE_PERMISSION_KEY, 'System', 'Delete', 'Delete Records', 'Delete business and master-data records. This protected permission is available only to Admin User and Super Admin.', null, 145),
             self::permission('settings.manage', 'System', 'Manage', 'Manage Settings', 'Update application settings including logo.', 'fleet.settings', 150),
         ];
     }
@@ -144,6 +158,7 @@ class FleetRbac
                 'dues.manage',
                 'users.manage',
                 'master_data.manage',
+                self::DELETE_PERMISSION_KEY,
             ]),
             'supervisor' => [
                 'dashboard.view',
@@ -246,13 +261,15 @@ class FleetRbac
                 : ($defaults[$roleSlug] ?? []);
 
             foreach ($permissionIds as $permissionKey => $permissionId) {
-                $allowed = in_array($permissionKey, $allowedKeys, true);
+                $allowed = $permissionKey === self::DELETE_PERMISSION_KEY
+                    ? self::roleCanDelete((string) $roleSlug)
+                    : in_array($permissionKey, $allowedKeys, true);
                 $exists = DB::table('fleet_role_permissions')
                     ->where('role_id', $roleId)
                     ->where('permission_id', $permissionId)
                     ->exists();
 
-                if ($force || ! $exists || $roleSlug === 'super_admin') {
+                if ($force || ! $exists || $roleSlug === 'super_admin' || $permissionKey === self::DELETE_PERMISSION_KEY) {
                     DB::table('fleet_role_permissions')->updateOrInsert(
                         ['role_id' => $roleId, 'permission_id' => $permissionId],
                         ['allowed' => $allowed, 'created_at' => $now, 'updated_at' => $now]

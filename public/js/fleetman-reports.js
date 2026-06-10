@@ -21,6 +21,67 @@
     const num = (value) => Number(value || 0);
     const money = (value) => '৳ ' + num(value).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const tkPerKm = (totalCost, totalKm) => num(totalKm) > 0 ? (num(totalCost) / Math.max(num(totalKm), 1)) : 0;
+
+    function workMinutes(row) {
+        const explicitMinutes = Number(row?.totalMinutes);
+        if (Number.isFinite(explicitMinutes) && explicitMinutes > 0) {
+            return Math.round(explicitMinutes);
+        }
+
+        const decimalHours = Number(row?.totalTime);
+        return Number.isFinite(decimalHours) && decimalHours > 0
+            ? Math.round(decimalHours * 60)
+            : 0;
+    }
+
+    function workTimeKey(row) {
+        const suppliedKey = String(row?.workTimeKey || '').trim();
+        if (suppliedKey) return suppliedKey;
+
+        return [
+            row?.date || '',
+            row?.contractId || row?.contract || '',
+            row?.vehicleId || row?.car || row?.vehicle || '',
+            row?.driverId || row?.driver || '',
+            row?.driverStart || '',
+            row?.driverEnd || '',
+            workMinutes(row),
+        ].join('||').toLowerCase();
+    }
+
+    function allocateUniqueWorkMinutes(rows) {
+        const counted = new Set();
+
+        return (rows || []).map((row) => {
+            const minutes = workMinutes(row);
+            const key = minutes > 0 ? workTimeKey(row) : '';
+            const duplicate = key !== '' && counted.has(key);
+
+            if (key !== '' && !duplicate) counted.add(key);
+
+            return {
+                ...row,
+                reportWorkMinutes: duplicate ? 0 : minutes,
+                duplicateWorkTime: duplicate,
+            };
+        });
+    }
+
+    function countedWorkMinutes(row) {
+        const allocated = Number(row?.reportWorkMinutes);
+        return Number.isFinite(allocated) && allocated >= 0
+            ? Math.round(allocated)
+            : workMinutes(row);
+    }
+
+    function formatWorkMinutes(minutes) {
+        const safeMinutes = Math.max(0, Math.round(Number(minutes) || 0));
+        return `${Math.floor(safeMinutes / 60)}h ${safeMinutes % 60}m`;
+    }
+
+    function decimalWorkHours(minutes) {
+        return Math.max(0, Number(minutes) || 0) / 60;
+    }
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
 
     function uniqueSorted(items) {
@@ -155,7 +216,8 @@
             const totalOctane = sum(ordered, 'octane');
             const totalKm = sum(ordered, 'totalKm');
             const totalCost = sum(ordered, 'totalCost');
-            const totalTime = sum(ordered, 'totalTime');
+            const totalMinutes = ordered.reduce((total, row) => total + countedWorkMinutes(row), 0);
+            const totalTime = decimalWorkHours(totalMinutes);
             const startKm = ordered[0]?.startKm || 0;
             const endKm = ordered[ordered.length - 1]?.endKm || 0;
             const activeDates = new Set(ordered.map((row) => row.date));
@@ -177,6 +239,7 @@
                     };
                 }),
                 activeDays: activeDates.size,
+                totalMinutes,
                 totalTime,
                 totalDiesel,
                 totalGas,
@@ -205,7 +268,7 @@
     }
 
     function renderDaily() {
-        filtered = filterDailyRecords();
+        filtered = allocateUniqueWorkMinutes(filterDailyRecords());
         summaryRows = filtered;
         const rows = selectedPageRows();
         const tbody = $('#tbody');
@@ -218,7 +281,7 @@
                 <td>${escapeHtml(row.driver)}</td>
                 <td class="bordered-cell">${escapeHtml(row.driverStart)}</td>
                 <td class="bordered-cell">${escapeHtml(row.driverEnd)}</td>
-                <td class="bordered-cell">${num(row.totalTime).toFixed(2)}</td>
+                <td class="bordered-cell" title="${row.duplicateWorkTime ? 'This attendance duration is counted once in the first matching fuel entry.' : ''}">${row.duplicateWorkTime ? '—' : formatWorkMinutes(countedWorkMinutes(row))}</td>
                 <td class="bordered-cell">${num(row.diesel).toFixed(2)}</td>
                 <td class="bordered-cell">${money(row.gas)}</td>
                 <td class="bordered-cell">${num(row.octane).toFixed(2)}</td>
@@ -243,7 +306,7 @@
             <h3>${escapeHtml(row.entryId)} <span class="badge ${row.status === 'Submitted' ? 'ok' : 'warn'}">${escapeHtml(row.status)}</span></h3>
             <div><b>${reportDate(row.date)}</b> • ${escapeHtml(row.contract)} • ${escapeHtml(row.car)} • ${escapeHtml(row.driver)}</div>
             <div class="mini-grid">
-                <div><b>Work Time</b><br>${escapeHtml(row.driverStart)} - ${escapeHtml(row.driverEnd)}<br>${num(row.totalTime).toFixed(2)} hrs</div>
+                <div><b>Work Time</b><br>${escapeHtml(row.driverStart)} - ${escapeHtml(row.driverEnd)}<br>${row.duplicateWorkTime ? 'Counted in another fuel entry' : formatWorkMinutes(countedWorkMinutes(row))}</div>
                 <div><b>Total KM</b><br>${num(row.totalKm).toFixed(0)}</div>
                 <div><b>Tk(KM)</b><br>${money(row.tkKm || tkPerKm(row.totalCost, row.totalKm))}</div>
                 <div><b>Diesel</b><br>${num(row.diesel).toFixed(2)} L</div>
@@ -258,7 +321,7 @@
 
     function updateDailyKpis(rows) {
         setText('#kpiRows', rows.length);
-        setText('#kpiHours', sum(rows, 'totalTime').toFixed(2));
+        setText('#kpiHours', formatWorkMinutes(rows.reduce((total, row) => total + countedWorkMinutes(row), 0)));
         setText('#kpiDiesel', sum(rows, 'diesel').toFixed(2));
         setText('#kpiGas', money(sum(rows, 'gas')));
         setText('#kpiKm', sum(rows, 'totalKm').toFixed(0));
@@ -269,8 +332,8 @@
         const week = selectedWeek();
         if (!week) return;
         const rows = records.filter((row) => row.date >= week.start && row.date <= week.end && baseRecordFilter(row));
-        filtered = rows;
-        summaryRows = groupRows(rows, week.days, 'WFR');
+        filtered = allocateUniqueWorkMinutes(rows);
+        summaryRows = groupRows(filtered, week.days, 'WFR');
         buildWeeklyHeader(week);
         const pageRows = selectedPageRows();
         const tbody = $('#tbody');
@@ -280,7 +343,7 @@
                 <td>${escapeHtml(row.contract)}</td>
                 <td>${escapeHtml(row.car)}</td>
                 <td>${escapeHtml(row.driver)}</td>
-                <td style="text-align:right">${num(row.totalTime).toFixed(2)}</td>
+                <td style="text-align:right">${formatWorkMinutes(row.totalMinutes)}</td>
                 ${row.daily.map((day) => `<td class="date-cell">${num(day.diesel).toFixed(2)}</td><td class="date-cell">${money(day.gas)}</td><td class="date-cell">${num(day.octane).toFixed(2)}</td>`).join('')}
                 <td style="text-align:right">${num(row.totalDiesel).toFixed(2)}</td>
                 <td style="text-align:right">${money(row.totalGas)}</td>
@@ -324,7 +387,7 @@
 
     function updateWeeklyKpis(rows) {
         setText('#kpiRows', rows.length);
-        setText('#kpiHours', sum(rows, 'totalTime').toFixed(2));
+        setText('#kpiHours', formatWorkMinutes(sum(rows, 'totalMinutes')));
         setText('#kpiDiesel', sum(rows, 'totalDiesel').toFixed(2));
         setText('#kpiGas', money(sum(rows, 'totalGas')));
         setText('#kpiOctane', sum(rows, 'totalOctane').toFixed(2));
@@ -335,13 +398,13 @@
         const month = selectedMonth();
         if (!month) return;
         const rows = records.filter((row) => row.date >= month.start && row.date <= month.end && baseRecordFilter(row));
-        filtered = rows;
+        filtered = allocateUniqueWorkMinutes(rows);
         const days = Array.from({ length: Number(month.days || 0) }, (_, index) => {
             const day = String(index + 1).padStart(2, '0');
             const date = `${month.value}-${day}`;
             return { date, label: shortDate(date) };
         });
-        summaryRows = groupRows(rows, days, 'MFR').map((row) => ({ ...row, month: month.value, monthLabel: month.label }));
+        summaryRows = groupRows(filtered, days, 'MFR').map((row) => ({ ...row, month: month.value, monthLabel: month.label }));
         const pageRows = selectedPageRows();
         const tbody = $('#tbody');
         if (tbody) {
@@ -352,7 +415,7 @@
                 <td>${escapeHtml(row.car)}</td>
                 <td>${escapeHtml(row.driver)}</td>
                 <td class="bordered-cell">${row.activeDays}</td>
-                <td class="bordered-cell">${num(row.totalTime).toFixed(2)}</td>
+                <td class="bordered-cell">${formatWorkMinutes(row.totalMinutes)}</td>
                 <td class="bordered-cell">${num(row.totalDiesel).toFixed(2)}</td>
                 <td class="bordered-cell">${money(row.totalGas)}</td>
                 <td class="bordered-cell">${num(row.totalOctane).toFixed(2)}</td>
@@ -377,7 +440,7 @@
             <h3>${escapeHtml(row.summaryId)} <span class="badge ${row.status === 'Submitted' ? 'ok' : 'warn'}">${escapeHtml(row.status)}</span></h3>
             <div><b>${escapeHtml(row.contract)}</b> • ${escapeHtml(row.car)} • ${escapeHtml(row.driver)}</div>
             <div class="mini-grid">
-                <div><b>Hours</b><br>${num(row.totalTime).toFixed(2)}</div>
+                <div><b>Hours</b><br>${formatWorkMinutes(row.totalMinutes)}</div>
                 <div><b>Total KM</b><br>${num(row.totalKm).toFixed(0)}</div>
                 <div><b>Tk(KM)</b><br>${money(row.tkKm || tkPerKm(row.totalCost, row.totalKm))}</div>
                 <div><b>Diesel</b><br>${num(row.totalDiesel).toFixed(2)} L</div>
@@ -396,7 +459,7 @@
             <div><b>${escapeHtml(row.monthLabel)}</b> • ${escapeHtml(row.contract)} • ${escapeHtml(row.car)} • ${escapeHtml(row.driver)}</div>
             <div class="mini-grid">
                 <div><b>Active Days</b><br>${row.activeDays}</div>
-                <div><b>Total Hours</b><br>${num(row.totalTime).toFixed(2)}</div>
+                <div><b>Total Hours</b><br>${formatWorkMinutes(row.totalMinutes)}</div>
                 <div><b>Diesel</b><br>${num(row.totalDiesel).toFixed(2)} L</div>
                 <div><b>Gas Cost</b><br>${money(row.totalGas)}</div>
                 <div><b>Octane</b><br>${num(row.totalOctane).toFixed(2)} L</div>
@@ -409,7 +472,7 @@
     function updateMonthlyKpis(rows) {
         setText('#kpiRows', rows.length);
         setText('#kpiDays', rows.reduce((total, row) => total + row.activeDays, 0));
-        setText('#kpiHours', sum(rows, 'totalTime').toFixed(2));
+        setText('#kpiHours', formatWorkMinutes(sum(rows, 'totalMinutes')));
         setText('#kpiDiesel', sum(rows, 'totalDiesel').toFixed(2));
         setText('#kpiGas', money(sum(rows, 'totalGas')));
         setText('#kpiKm', sum(rows, 'totalKm').toFixed(0));
@@ -436,14 +499,14 @@
         if (page === 'daily') {
             return [
                 ['Entry ID', 'Date', 'Contract', 'Car', 'Driver', 'Driver Start', 'Driver End', 'Total Time (hrs)', 'Diesel (L)', 'CNG/LPG Cost', 'Octane (L)', 'Start KM', 'End KM', 'Total KM', 'Tk(KM)', 'Mileage (KM/L)', 'Draft/Submitted', 'Submitted By'],
-                ...filtered.map((row) => [row.entryId, reportDate(row.date), row.contract, row.car, row.driver, row.driverStart, row.driverEnd, row.totalTime, row.diesel, row.gas, row.octane, row.startKm, row.endKm, row.totalKm, row.tkKm || tkPerKm(row.totalCost, row.totalKm), row.mileage, row.status, row.submittedBy]),
+                ...filtered.map((row) => [row.entryId, reportDate(row.date), row.contract, row.car, row.driver, row.driverStart, row.driverEnd, decimalWorkHours(countedWorkMinutes(row)).toFixed(2), row.diesel, row.gas, row.octane, row.startKm, row.endKm, row.totalKm, row.tkKm || tkPerKm(row.totalCost, row.totalKm), row.mileage, row.status, row.submittedBy]),
             ];
         }
         if (page === 'weekly') {
             const week = selectedWeek();
             return [
                 ['Entry ID', 'Contract', 'Car', 'Driver', 'Total Time', ...week.days.flatMap((day) => [`${day.label} Diesel (L)`, `${day.label} CNG/LPG Cost`, `${day.label} Octane (L)`]), 'Total Diesel', 'Total Gas Cost', 'Total Octane', 'Start KM', 'End KM', 'Total KM', 'Tk(KM)', 'Mileage', 'Status', 'Submitted By'],
-                ...summaryRows.map((row) => [row.summaryId, row.contract, row.car, row.driver, row.totalTime, ...row.daily.flatMap((day) => [day.diesel, day.gas, day.octane]), row.totalDiesel, row.totalGas, row.totalOctane, row.startKm, row.endKm, row.totalKm, row.tkKm, row.avgMileage, row.status, row.submittedBy]),
+                ...summaryRows.map((row) => [row.summaryId, row.contract, row.car, row.driver, decimalWorkHours(row.totalMinutes).toFixed(2), ...row.daily.flatMap((day) => [day.diesel, day.gas, day.octane]), row.totalDiesel, row.totalGas, row.totalOctane, row.startKm, row.endKm, row.totalKm, row.tkKm, row.avgMileage, row.status, row.submittedBy]),
             ];
         }
         return monthlySummaryRows();
@@ -452,7 +515,7 @@
     function monthlySummaryRows() {
         return [
             ['Summary ID', 'Month', 'Contract', 'Car', 'Driver', 'Active Days', 'Total Hours', 'Diesel (L)', 'CNG/LPG Cost (BDT)', 'Octane (L)', 'Month Start KM', 'Month End KM', 'Total KM', 'Tk(KM)', 'Avg Mileage', 'Last Status', 'Submitted By'],
-            ...summaryRows.map((row) => [row.summaryId, row.monthLabel, row.contract, row.car, row.driver, row.activeDays, row.totalTime, row.totalDiesel, row.totalGas, row.totalOctane, row.startKm, row.endKm, row.totalKm, row.tkKm, row.avgMileage, row.status, row.submittedBy]),
+            ...summaryRows.map((row) => [row.summaryId, row.monthLabel, row.contract, row.car, row.driver, row.activeDays, decimalWorkHours(row.totalMinutes).toFixed(2), row.totalDiesel, row.totalGas, row.totalOctane, row.startKm, row.endKm, row.totalKm, row.tkKm, row.avgMileage, row.status, row.submittedBy]),
         ];
     }
 
@@ -491,12 +554,12 @@
             html += `</tr>`;
             summaryRows.forEach((row) => {
                 html += `<tr>`;
-                [row.summaryId, row.contract, row.car, row.driver, num(row.totalTime).toFixed(2)].forEach((cell) => { html += `<td>${escapeHtml(cell)}</td>`; });
+                [row.summaryId, row.contract, row.car, row.driver, decimalWorkHours(row.totalMinutes).toFixed(2)].forEach((cell) => { html += `<td>${escapeHtml(cell)}</td>`; });
                 row.daily.forEach((day) => { html += `<td style="text-align:right;border-left:2px solid #a6d9f5;">${num(day.diesel).toFixed(2)}</td><td style="text-align:right;">${num(day.gas).toFixed(2)}</td><td style="text-align:right;border-right:2px solid #a6d9f5;">${num(day.octane).toFixed(2)}</td>`; });
                 [num(row.totalDiesel).toFixed(2), num(row.totalGas).toFixed(2), num(row.totalOctane).toFixed(2), row.startKm, row.endKm, row.totalKm, money(row.tkKm), num(row.avgMileage).toFixed(2), row.submittedBy].forEach((cell) => { html += `<td style="text-align:right;">${escapeHtml(cell)}</td>`; });
                 html += `</tr>`;
             });
-            html += `<tr style="font-weight:bold;background:#eef7ff;"><td colspan="4">Total</td><td>${sum(summaryRows, 'totalTime').toFixed(2)}</td>`;
+            html += `<tr style="font-weight:bold;background:#eef7ff;"><td colspan="4">Total</td><td>${decimalWorkHours(sum(summaryRows, 'totalMinutes')).toFixed(2)}</td>`;
             days.forEach((day, index) => {
                 const diesel = summaryRows.reduce((total, row) => total + num(row.daily[index]?.diesel), 0).toFixed(2);
                 const gas = summaryRows.reduce((total, row) => total + num(row.daily[index]?.gas), 0).toFixed(2);

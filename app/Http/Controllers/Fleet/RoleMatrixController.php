@@ -102,9 +102,9 @@ class RoleMatrixController extends FleetBaseController
                     ->all();
 
                 foreach ($permissions as $permission) {
-                    $allowed = $role->isSuperAdmin()
-                        ? true
-                        : in_array($permission->key, $allowedKeys, true);
+                    $allowed = $permission->key === FleetRbac::DELETE_PERMISSION_KEY
+                        ? FleetRbac::roleCanDelete((string) $role->slug)
+                        : ($role->isSuperAdmin() || in_array($permission->key, $allowedKeys, true));
 
                     DB::table('fleet_role_permissions')->updateOrInsert(
                         ['role_id' => $role->id, 'permission_id' => $permission->id],
@@ -209,9 +209,9 @@ class RoleMatrixController extends FleetBaseController
 
         foreach ($users as $user) {
             foreach ($permissions as $permission) {
-                $allowed = $role->isSuperAdmin()
-                    ? true
-                    : (bool) ($allowedByPermissionId[$permission->id] ?? false);
+                $allowed = $permission->key === FleetRbac::DELETE_PERMISSION_KEY
+                    ? FleetRbac::roleCanDelete((string) $role->slug)
+                    : ($role->isSuperAdmin() || (bool) ($allowedByPermissionId[$permission->id] ?? false));
 
                 DB::table('fleet_user_permissions')->updateOrInsert(
                     ['user_id' => $user->id, 'permission_id' => $permission->id],
@@ -241,9 +241,9 @@ class RoleMatrixController extends FleetBaseController
             DB::table('fleet_user_permissions')->updateOrInsert(
                 ['user_id' => $user->id, 'permission_id' => $permission->id],
                 [
-                    'allowed' => $role->isSuperAdmin()
-                        ? true
-                        : (bool) ($allowedByPermissionId[$permission->id] ?? false),
+                    'allowed' => $permission->key === FleetRbac::DELETE_PERMISSION_KEY
+                        ? FleetRbac::roleCanDelete((string) $role->slug)
+                        : ($role->isSuperAdmin() || (bool) ($allowedByPermissionId[$permission->id] ?? false)),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]

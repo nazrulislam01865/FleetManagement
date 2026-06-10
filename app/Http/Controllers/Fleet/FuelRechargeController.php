@@ -494,7 +494,7 @@ class FuelRechargeController extends FleetBaseController
                 ->filter()
                 ->values();
 
-            FleetFuelRecharge::query()->whereNotIn('code', $incomingCodes)->delete();
+            $this->deleteMissingRecords(FleetFuelRecharge::query(), $incomingCodes);
 
             foreach ($rows as $row) {
                 $code = (string) ($row[$this->idKey] ?? '');
