@@ -5009,7 +5009,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         const uploadManager = window.FleetmanTemporaryUploads;
         const phonePattern = /^\d{11}$/;
         const nidPattern = /^\d{1,17}$/;
-        const licensePattern = /^[A-Za-z0-9]{14,15}$/;
         const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
         const licenseWarnDays = 180;
         let docRowCounter = 0;
@@ -5275,8 +5274,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 ['#driverFullName', 'Full Name is required.'],
                 ['#driverFatherName', "Father's Name is required."],
                 ['#driverMotherName', "Mother's Name is required."],
-                ['#driverWhatsapp', 'WhatsApp Number is required.'],
-                ['#driverEmail', 'Email is required.'],
                 ['#driverDob', 'Date of Birth is required.'],
                 ['#driverAge', 'Age could not be calculated.'],
                 ['#driverNid', 'NID is required.'],
@@ -5315,11 +5312,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const nid = $('#driverNid');
             if (nid?.value && !nidPattern.test(nid.value)) {
                 markDriverInvalid(nid, 'NID must contain digits only and cannot exceed 17 digits.');
-                valid = false;
-            }
-            const license = $('#driverLicenseNo');
-            if (license?.value && !licensePattern.test(license.value)) {
-                markDriverInvalid(license, 'Driving License No. must be 14 or 15 alphanumeric characters.');
                 valid = false;
             }
 
@@ -5519,7 +5511,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (!event.target.closest('#driverAddPage')) return;
             if (event.target.matches('#driverNid')) event.target.value = event.target.value.replace(/\D/g, '').slice(0, 17);
             if (event.target.matches('#driverWhatsapp, .driverContactPhone')) event.target.value = event.target.value.replace(/\D/g, '').slice(0, 11);
-            if (event.target.matches('#driverLicenseNo')) event.target.value = event.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 15);
             if (event.target.matches('#driverDob')) calculateAge();
             clearDriverFieldError(event.target);
         });

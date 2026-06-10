@@ -22,8 +22,8 @@
                         <x-fleetman.input id="driverFullName" label="Full Name" required placeholder="Example: Md. Karim Hossain" />
                         <x-fleetman.input id="driverFatherName" label="Father's Name" required placeholder="Example: Md. Abdul Mannan" />
                         <x-fleetman.input id="driverMotherName" label="Mother's Name" required placeholder="Example: Mst. Amena Begum" />
-                        <x-fleetman.input id="driverWhatsapp" label="WhatsApp Number" type="tel" placeholder="01XXXXXXXXX" required inputmode="numeric" maxlength="11" pattern="[0-9]{11}" />
-                        <x-fleetman.input id="driverEmail" label="Email" type="email" placeholder="Example: driver@email.com" required />
+                        <x-fleetman.input id="driverWhatsapp" label="WhatsApp Number" type="tel" placeholder="Optional: 01XXXXXXXXX" inputmode="numeric" maxlength="11" pattern="[0-9]{11}" />
+                        <x-fleetman.input id="driverEmail" label="Email" type="email" placeholder="Optional: driver@email.com" />
                         <x-fleetman.input id="driverDob" label="Date of Birth" type="date" required />
                         <x-fleetman.input id="driverAge" label="Age" type="number" placeholder="Calculated automatically" required readonly min="0" max="120" />
                         <x-fleetman.input id="driverNid" label="NID" required placeholder="Maximum 17 digits" inputmode="numeric" maxlength="17" pattern="[0-9]{1,17}" />
@@ -38,7 +38,7 @@
 
                 <x-fleetman.section-card title="3. License & Work Setup">
                     <div class="grid3">
-                        <x-fleetman.input id="driverLicenseNo" label="Driving License No." required placeholder="14 or 15 alphanumeric characters" minlength="14" maxlength="15" pattern="[A-Za-z0-9]{14,15}" />
+                        <x-fleetman.input id="driverLicenseNo" label="Driving License No." required placeholder="Enter driving license number" />
                         <x-fleetman.select id="driverLicenseType" label="License Type" required :options="$fleetman['options']['driver_license_types']" placeholder="Select license type" />
                         <x-fleetman.input id="driverLicenseValidity" label="License Validity Date" type="date" required />
                         <x-fleetman.input id="driverSalary" label="Salary" type="number" required placeholder="Example: 25000" min="0" step="0.01" />
