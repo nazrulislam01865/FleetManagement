@@ -312,6 +312,48 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
     return { show, close, canViewDetails };
 })();
 
+window.FleetmanEntityAvatar = window.FleetmanEntityAvatar || (() => {
+    'use strict';
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
+
+    function fileUrl(file = {}) {
+        if (typeof file === 'string') {
+            const value = file.trim();
+            if (!value) return '';
+            if (/^https?:\/\//i.test(value) || value.startsWith('/')) return value;
+            file = { filePath: value };
+        }
+
+        if (!file || typeof file !== 'object' || Array.isArray(file)) return '';
+
+        const path = String(file.filePath || file.path || '').replace(/^public\//, '').replace(/^storage\//, '').replace(/^\/+/, '');
+        const template = String(window.FLEETMAN?.resources?.uploads?.file_template || '');
+        if (path && template) {
+            const encodedPath = path.split('/').map((part) => encodeURIComponent(part)).join('/');
+            return template.replace('__PATH__', encodedPath);
+        }
+
+        return String(file.previewUrl || file.fileUrl || file.url || '');
+    }
+
+    function html(file = {}, settings = {}) {
+        const fallback = settings.fallback || '👤';
+        const alt = settings.alt || 'Record image';
+        const allowedSizes = new Set(['table', 'compact', 'large']);
+        const size = allowedSizes.has(settings.size) ? settings.size : 'table';
+        const extraClass = String(settings.className || '').replace(/[^a-zA-Z0-9 _-]/g, '').trim();
+        const url = fileUrl(file);
+        const image = url
+            ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" loading="lazy" decoding="async" onerror="this.remove()">`
+            : '';
+
+        return `<span class="entity-avatar entity-avatar-${size}${extraClass ? ` ${escapeHtml(extraClass)}` : ''}">${image}<span class="entity-avatar-fallback" aria-hidden="true">${escapeHtml(fallback)}</span></span>`;
+    }
+
+    return { fileUrl, html };
+})();
+
 window.FleetmanUniqueDocumentSelects = window.FleetmanUniqueDocumentSelects || (() => {
     'use strict';
 
@@ -1247,16 +1289,26 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     });
                 }
 
+                const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+                const payload = contentType.includes('application/json')
+                    ? await response.json().catch(() => null)
+                    : null;
+
                 if (!response.ok) {
-                    let message = 'Vehicle could not be saved.';
-                    try {
-                        const error = await response.json();
-                        message = error.message || Object.values(error.errors || {}).flat().join(' ') || message;
-                    } catch (_) {}
-                    throw new Error(message);
+                    const validationMessage = payload?.errors
+                        ? Object.values(payload.errors).flat().join(' ')
+                        : '';
+                    const sessionMessage = [401, 419].includes(response.status)
+                        ? 'Your session has expired. Please log in again before saving.'
+                        : '';
+                    throw new Error(payload?.message || validationMessage || sessionMessage || 'Vehicle could not be saved.');
                 }
 
-                return await response.json().catch(() => ({ ok: true }));
+                if (!payload || payload.ok !== true || !Array.isArray(payload.rows)) {
+                    throw new Error('The server did not confirm that the vehicle was saved. Please refresh and try again.');
+                }
+
+                return payload;
             } catch (error) {
                 toast(error.message || 'Vehicle could not be saved.');
                 return { ok: false, syncFailed: true, message: error.message };
@@ -1513,7 +1565,15 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return;
             }
 
-            if (Array.isArray(result?.rows)) vehicles = result.rows;
+            const savedVehicleRows = Array.isArray(result?.rows) ? result.rows : [];
+            if (!savedVehicleRows.some((savedRow) => String(savedRow?.id || '') === String(vehicle.id || ''))) {
+                vehicles = previousVehicles;
+                renderTable();
+                toast('The vehicle was not found in the database response, so it was not added to the list.');
+                return;
+            }
+
+            vehicles = savedVehicleRows;
             renderTable();
             toast('Vehicle saved successfully.');
             setVisible('vehicleListPage');
@@ -1647,10 +1707,15 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 const docsWithFiles = docs.filter((doc) => doc.file?.filePath || doc.file?.fileUrl).length;
                 const imageUrl = uploadManager.permanentUrl(vehicle.image || {});
                 const imageLink = imageUrl ? `<br><small><a href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">View image</a></small>` : '';
+                const avatar = window.FleetmanEntityAvatar.html(vehicle.image || {}, {
+                    fallback: '🚗',
+                    alt: `${vehicle.name || 'Vehicle'} image`,
+                    size: 'table',
+                });
                 return `
                 <tr>
                     <td>${escapeHtml(window.FleetmanFormatCreatedAt(vehicle.createdAt || vehicle.created_at))}</td>
-                    <td><div class="vehicle-cell"><div class="vehicle-icon">🚗</div><div><b>${escapeHtml(vehicle.name)}</b><br><small>${escapeHtml(vehicle.id)} · ${escapeHtml(vehicle.model)}</small>${imageLink}</div></div></td>
+                    <td><div class="vehicle-cell">${avatar}<div><b>${escapeHtml(vehicle.name)}</b><br><small>${escapeHtml(vehicle.id)} · ${escapeHtml(vehicle.model)}</small>${imageLink}</div></div></td>
                     <td>${escapeHtml(vehicle.regNo)}</td>
                     <td>${escapeHtml(vehicle.category)}<br><small>${escapeHtml(vehicle.subCategory || '')}</small></td>
                     <td>${(vehicle.fuels || []).map((item) => `<span class="badge soft">${escapeHtml(item.priority)}: ${escapeHtml(item.type)} · ${escapeHtml(item.rate || '0')}</span>`).join('')}</td>
@@ -3624,17 +3689,26 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 body: JSON.stringify({ rows: rows || [] }),
             });
 
+            const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+            const payload = contentType.includes('application/json')
+                ? await response.json().catch(() => null)
+                : null;
+
             if (!response.ok) {
-                let message = 'Database sync failed. Please check required fields and server logs.';
-                try {
-                    const error = await response.json();
-                    message = error.message || Object.values(error.errors || {}).flat().join(' ') || message;
-                } catch (_) {}
-                throw new Error(message);
+                const validationMessage = payload?.errors
+                    ? Object.values(payload.errors).flat().join(' ')
+                    : '';
+                const sessionMessage = [401, 419].includes(response.status)
+                    ? 'Your session has expired. Please log in again before saving.'
+                    : '';
+                throw new Error(payload?.message || validationMessage || sessionMessage || 'Database sync failed. Please check required fields and server logs.');
             }
 
-            const payload = await response.json().catch(() => ({ ok: true }));
-            if (Array.isArray(payload.rows) && Array.isArray(rows)) {
+            if (!payload || payload.ok !== true || !Array.isArray(payload.rows)) {
+                throw new Error('The server did not confirm that the record was saved. Please refresh and try again.');
+            }
+
+            if (Array.isArray(rows)) {
                 rows.splice(0, rows.length, ...payload.rows);
             }
             return payload;
@@ -5434,7 +5508,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             upsert(row);
             const result = await syncDrivers(drivers);
             if (result?.syncFailed || result?.ok === false) { drivers = previous; renderList(); return; }
-            if (Array.isArray(result?.rows)) drivers = result.rows;
+            const savedDriverRows = Array.isArray(result?.rows) ? result.rows : [];
+            if (!savedDriverRows.some((savedRow) => String(savedRow?.driverId || '') === String(row.driverId || ''))) {
+                drivers = previous;
+                renderList();
+                toast('The driver was not found in the database response, so it was not added to the list.');
+                return;
+            }
+            drivers = savedDriverRows;
             renderList();
             toast(statusOverride==='Draft'?'Draft saved.':'Driver saved. Redirecting to driver list.');
             setVisible('driverListPage');
@@ -5473,7 +5554,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function rowHtml(row){
             const exp=isExpiringSoon(row);
             const statusClass=row.status==='Active'?'ok':row.status==='Draft'?'warn':row.status==='Blacklisted'?'danger':'soft';
-            return `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><div class="driver-cell"><div class="driver-icon">🧑‍✈️</div><div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT/Hour: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`;
+            const avatar = window.FleetmanEntityAvatar.html(row.photo || {}, {
+                fallback: '🧑‍✈️',
+                alt: `${row.fullName || 'Driver'} photo`,
+                size: 'table',
+            });
+            return `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><div class="driver-cell">${avatar}<div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT/Hour: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`;
         }
 
         function renderList(){
@@ -6118,11 +6204,19 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const previous = JSON.parse(JSON.stringify(employees || []));
             upsert(row);
             const result = await saveStore();
-            if (result?.syncFailed) {
+            if (result?.syncFailed || result?.ok === false) {
                 employees = previous;
+                renderList();
                 return;
             }
-            if (result?.rows) employees = result.rows;
+            const savedEmployeeRows = Array.isArray(result?.rows) ? result.rows : [];
+            if (!savedEmployeeRows.some((savedRow) => String(savedRow?.employeeId || '') === String(row.employeeId || ''))) {
+                employees = previous;
+                renderList();
+                toast('The employee was not found in the database response, so it was not added to the list.');
+                return;
+            }
+            employees = savedEmployeeRows;
             toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Employee saved. Redirecting to employee list.');
             setTimeout(() => { renderList(); setVisible('employeeListPage'); }, 450);
         }
@@ -6180,9 +6274,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function rowHtml(row) {
             const docCount = (row.documents || []).length;
+            const avatar = window.FleetmanEntityAvatar.html(row.photo || {}, {
+                fallback: '👤',
+                alt: `${row.fullName || 'Employee'} photo`,
+                size: 'table',
+            });
             return `<tr>
                 <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
-                <td><div class="employee-cell"><div class="employee-icon">👤</div><div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.employeeId)}</small></div></div></td>
+                <td><div class="employee-cell">${avatar}<div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.employeeId)}</small></div></div></td>
                 <td>${formatContacts(row)}<br><small style="color:#667085">${escapeHtml(row.email || '')}</small></td>
                 <td>${escapeHtml(row.designation || '-')}</td>
                 <td>${escapeHtml(row.joiningDate || '-')}</td>

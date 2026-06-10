@@ -237,7 +237,7 @@ abstract class FleetBaseController extends Controller
     /**
      * Full-table sync endpoints may delete records by omitting them from the
      * submitted rows. Protect that server-side so UI changes or crafted POST
-     * requests cannot bypass the Admin/Super Admin delete rule.
+     * requests cannot bypass the Delete Records permission.
      */
     protected function deleteMissingRecords(Builder $query, iterable $incomingCodes, string $column = 'code'): void
     {
@@ -260,9 +260,88 @@ abstract class FleetBaseController extends Controller
         $allowed = $user && method_exists($user, 'canDeleteFleetRecords')
             && $user->canDeleteFleetRecords();
 
-        abort_unless($allowed, 403, 'Only Admin User and Super Admin can delete records.');
+        abort_unless($allowed, 403, 'You do not have Delete Records permission. A Super Admin can grant it from Role Matrix.');
 
         $deleteQuery->delete();
+    }
+
+    /**
+     * Return the indexes of rows that are new or whose submitted payload is
+     * different from the payload currently stored in the database.
+     *
+     * The browser sends the complete table on every save. Validating every
+     * historical row again makes an unrelated new record fail whenever an old
+     * row contains a value that is no longer present in master data. Restrict
+     * strict field validation to the row being created or edited while still
+     * allowing collection-level duplicate checks across the complete payload.
+     *
+     * @param  class-string<Model>  $modelClass
+     * @return array<int, int|string>
+     */
+    protected function changedRowIndexesForSync(array $rows, string $modelClass, string $idKey): array
+    {
+        $storedPayloads = $modelClass::query()
+            ->get(['code', 'payload'])
+            ->mapWithKeys(function (Model $record): array {
+                $payload = is_array($record->payload) ? $record->payload : [];
+
+                return [(string) $record->code => $this->comparableSyncPayload($payload)];
+            })
+            ->all();
+
+        $changed = [];
+        foreach ($rows as $index => $row) {
+            if (! is_array($row)) {
+                $changed[] = $index;
+                continue;
+            }
+
+            $code = trim((string) ($row[$idKey] ?? ''));
+            if ($code === '' || ! array_key_exists($code, $storedPayloads)) {
+                $changed[] = $index;
+                continue;
+            }
+
+            if ($this->comparableSyncPayload($row) != $storedPayloads[$code]) {
+                $changed[] = $index;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Keep the original row indexes so validation messages still point to the
+     * correct browser row and direct-upload file index.
+     */
+    protected function syncRowsAtIndexes(array $rows, array $indexes): array
+    {
+        if ($indexes === []) {
+            return [];
+        }
+
+        return array_intersect_key($rows, array_fill_keys($indexes, true));
+    }
+
+    private function comparableSyncPayload(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        foreach (['createdAt', 'updatedAt', 'created_at', 'updated_at'] as $metadataKey) {
+            unset($value[$metadataKey]);
+        }
+
+        foreach ($value as $key => $item) {
+            $value[$key] = $this->comparableSyncPayload($item);
+        }
+
+        if (! array_is_list($value)) {
+            ksort($value);
+        }
+
+        return $value;
     }
 
     protected function validateUniqueDocumentNames(array $rows, string $documentKey = 'documents'): void

@@ -37,8 +37,9 @@ class EmployeeController extends FleetBaseController
             throw ValidationException::withMessages(['rows' => 'The employee rows payload is invalid.']);
         }
 
-        $this->validateEmployeeRows($rows, $request);
-        $this->validateUniqueDocumentNames($rows);
+        $strictValidationIndexes = $this->changedRowIndexesForSync($rows, FleetEmployee::class, $this->idKey);
+        $this->validateEmployeeRows($rows, $request, $strictValidationIndexes);
+        $this->validateUniqueDocumentNames($this->syncRowsAtIndexes($rows, $strictValidationIndexes));
         $storedPaths = [];
         $userId = (int) $request->user()->id;
 
@@ -145,7 +146,7 @@ class EmployeeController extends FleetBaseController
         return response()->json(['ok' => true, 'rows' => $this->recordsFor(FleetEmployee::class)]);
     }
 
-    private function validateEmployeeRows(array $rows, Request $request): void
+    private function validateEmployeeRows(array $rows, Request $request, ?array $strictValidationIndexes = null): void
     {
         $errors = [];
         $seenIds = [];
@@ -155,6 +156,9 @@ class EmployeeController extends FleetBaseController
         $documentReminders = $this->values('document_reminder');
         $salaryTenures = $this->values('employee_salary_tenure');
         $statuses = $this->values('employee_status');
+        $strictValidationLookup = $strictValidationIndexes === null
+            ? null
+            : array_fill_keys($strictValidationIndexes, true);
 
         foreach ($rows as $index => $row) {
             if (! is_array($row)) {
@@ -167,7 +171,9 @@ class EmployeeController extends FleetBaseController
             $this->trackUniqueEmployeeValue($seenIds, $errors, $employeeId, "rows.{$index}.employeeId", 'Employee ID');
             $this->trackUniqueEmployeeValue($seenNids, $errors, $nid, "rows.{$index}.nid", 'NID');
 
-            if ((int) ($row['employeeValidationVersion'] ?? 0) < 1 || strcasecmp((string) ($row['status'] ?? ''), 'Draft') === 0) {
+            if (($strictValidationLookup !== null && ! isset($strictValidationLookup[$index]))
+                || (int) ($row['employeeValidationVersion'] ?? 0) < 1
+                || strcasecmp((string) ($row['status'] ?? ''), 'Draft') === 0) {
                 continue;
             }
 

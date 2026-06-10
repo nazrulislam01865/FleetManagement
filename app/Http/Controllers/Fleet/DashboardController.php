@@ -6,7 +6,6 @@ use App\Models\Fleet\FleetClient;
 use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetDriverAttendance;
 use App\Models\Fleet\FleetEmployee;
-use App\Models\Fleet\FleetFuelPrice;
 use App\Models\Fleet\FleetFuelRecharge;
 use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
@@ -41,7 +40,6 @@ class DashboardController extends FleetBaseController
         $vehicles = $can('vehicles.view') ? $this->rows(FleetVehicle::class) : [];
         $drivers = $can('drivers.view') ? $this->rows(FleetDriver::class) : [];
         $trips = $can('trips.view') ? $this->rows(FleetTrip::class) : [];
-        $fuelPrices = $can('fuel_prices.view') ? $this->rows(FleetFuelPrice::class) : [];
         $fuelRecharges = $can('fuel_recharge.view') ? $this->rows(FleetFuelRecharge::class) : [];
         $clients = $can('clients.view') ? $this->rows(FleetClient::class) : [];
         $attendance = $can('driver_attendance.view') ? $this->rows(FleetDriverAttendance::class) : [];
@@ -85,7 +83,9 @@ class DashboardController extends FleetBaseController
         })->count();
         $totalPayroll = collect($drivers)->sum(fn (array $row) => (float) ($row['salary'] ?? 0))
             + collect($employees)->sum(fn (array $row) => (float) ($row['salary'] ?? 0));
-        $latestFuelPrice = collect($fuelPrices)->sortByDesc('effectiveDate')->first();
+        $totalFuelExpense = collect($fuelRecharges)
+            ->filter(fn (array $row): bool => strcasecmp(trim((string) ($row['status'] ?? '')), 'Submitted') === 0)
+            ->sum(fn (array $row): float => (float) ($row['totalAmount'] ?? 0));
         $expiringDrivers = collect($drivers)->filter(function (array $row) {
             $date = $row['licenseValidity'] ?? null;
             if (! $date) {
@@ -144,16 +144,17 @@ class DashboardController extends FleetBaseController
                 'trip_paid' => $totalTripPaid,
                 'trip_balance' => $totalTripBalance,
                 'payroll' => $totalPayroll,
-                'fuel_rate' => $latestFuelPrice ?: ['fuelType' => 'Fuel', 'price' => 0],
+                'fuel_expense' => $totalFuelExpense,
                 'attendance_km' => $totalAttendanceKm,
             ],
             'recent' => [
                 'notifications' => $notifications,
                 'fuel_recharges' => array_slice($fuelRecharges, 0, 5),
-                'vehicles' => array_slice($vehicles, 0, 5),
+                'vehicles' => $this->recentRowsWithMedia($vehicles, 'image'),
                 'trips' => array_slice($trips, 0, 5),
-                'drivers' => array_slice($drivers, 0, 5),
+                'drivers' => $this->recentRowsWithMedia($drivers, 'photo'),
                 'clients' => array_slice($clients, 0, 5),
+                'employees' => $this->recentRowsWithMedia($employees, 'photo'),
             ],
             'access' => [
                 'vehicles' => $can('vehicles.view'),
@@ -172,6 +173,72 @@ class DashboardController extends FleetBaseController
                 ['title' => 'Total attendance distance', 'value' => number_format($totalAttendanceKm, 2).' km', 'description' => 'Distance from driver attendance logs.'],
             ],
         ];
+    }
+
+    private function recentRowsWithMedia(array $rows, string $mediaKey): array
+    {
+        return collect($rows)
+            ->take(5)
+            ->map(function (array $row) use ($mediaKey): array {
+                $row['_dashboardMediaUrl'] = $this->dashboardMediaUrl($row[$mediaKey] ?? null);
+
+                return $row;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function dashboardMediaUrl(mixed $file): string
+    {
+        if (is_string($file)) {
+            $value = trim($file);
+            if ($value === '') {
+                return '';
+            }
+
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                $file = $decoded;
+            } elseif (preg_match('#^https?://#i', $value) || str_starts_with($value, '/')) {
+                return $value;
+            } else {
+                $file = ['filePath' => $value];
+            }
+        }
+
+        if (! is_array($file)) {
+            return '';
+        }
+
+        foreach (['file', 'media', 'upload'] as $nestedKey) {
+            if (! isset($file['filePath']) && ! isset($file['path']) && is_array($file[$nestedKey] ?? null)) {
+                $file = array_merge($file[$nestedKey], $file);
+            }
+        }
+
+        $path = trim((string) (
+            $file['filePath']
+            ?? $file['file_path']
+            ?? $file['storagePath']
+            ?? $file['storage_path']
+            ?? $file['path']
+            ?? ''
+        ));
+
+        if ($path !== '') {
+            $path = preg_replace('#^(public/|storage/)#', '', ltrim($path, '/')) ?? $path;
+
+            return route('fleet.files.show', ['path' => $path], false);
+        }
+
+        foreach (['fileUrl', 'file_url', 'previewUrl', 'preview_url', 'url'] as $urlKey) {
+            $url = trim((string) ($file[$urlKey] ?? ''));
+            if ($url !== '') {
+                return $url;
+            }
+        }
+
+        return '';
     }
 
     /**

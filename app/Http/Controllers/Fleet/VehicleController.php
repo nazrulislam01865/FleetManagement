@@ -44,9 +44,10 @@ class VehicleController extends FleetBaseController
             ]);
         }
 
+        $strictValidationIndexes = $this->changedRowIndexesForSync($rows, FleetVehicle::class, $this->idKey);
         $rows = $this->normalizeVehicleRows($rows);
-        $this->validateVehicleRows($rows, $request);
-        $this->validateUniqueDocumentNames($rows, 'docs');
+        $this->validateVehicleRows($rows, $request, $strictValidationIndexes);
+        $this->validateUniqueDocumentNames($this->syncRowsAtIndexes($rows, $strictValidationIndexes), 'docs');
         $storedPaths = [];
         $userId = (int) $request->user()->id;
 
@@ -229,7 +230,7 @@ class VehicleController extends FleetBaseController
         return $rows;
     }
 
-    private function validateVehicleRows(array $rows, Request $request): void
+    private function validateVehicleRows(array $rows, Request $request, ?array $strictValidationIndexes = null): void
     {
         $errors = [];
         $vehicleVendors = $this->vehicleVendorValues();
@@ -240,6 +241,9 @@ class VehicleController extends FleetBaseController
         $paymentCycles = config('fleetman.options.rental_payment_cycles', ['Daily', 'Weekly', 'Monthly', 'Contract']);
         $documentNames = $this->documentNameValues('Vehicles', 'document_template');
         $documentReminders = $this->values('document_reminder');
+        $strictValidationLookup = $strictValidationIndexes === null
+            ? null
+            : array_fill_keys($strictValidationIndexes, true);
 
         foreach ($rows as $index => $row) {
             if (! is_array($row)) {
@@ -247,9 +251,10 @@ class VehicleController extends FleetBaseController
                 continue;
             }
 
-            // Older records remain readable and deletable. Every new or edited
-            // row is marked by the current form and receives full validation.
-            if ((int) ($row['vehicleValidationVersion'] ?? 0) < 1) {
+            // Older and unchanged records remain readable and deletable. Only
+            // the row being created or edited receives current master-data validation.
+            if (($strictValidationLookup !== null && ! isset($strictValidationLookup[$index]))
+                || (int) ($row['vehicleValidationVersion'] ?? 0) < 1) {
                 continue;
             }
 

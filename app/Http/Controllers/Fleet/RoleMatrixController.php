@@ -87,14 +87,18 @@ class RoleMatrixController extends FleetBaseController
         ]);
 
         $permissionInput = $validated['permissions'] ?? [];
+        $canManageDeletePermission = $request->user()?->isFleetSuperAdmin() ?? false;
 
-        DB::transaction(function () use ($permissionInput): void {
+        DB::transaction(function () use ($permissionInput, $canManageDeletePermission): void {
             $permissions = FleetPermission::query()->orderBy('sort_order')->get();
             $validPermissionKeys = $permissions->pluck('key')->map(fn ($key) => (string) $key)->all();
             $roles = FleetRole::query()->where('is_active', true)->orderBy('sort_order')->get();
             $now = now();
 
             foreach ($roles as $role) {
+                $existingAllowedByPermissionId = DB::table('fleet_role_permissions')
+                    ->where('role_id', $role->id)
+                    ->pluck('allowed', 'permission_id');
                 $allowedKeys = collect($permissionInput[$role->id] ?? [])
                     ->map(fn ($key) => (string) $key)
                     ->filter(fn (string $key): bool => in_array($key, $validPermissionKeys, true))
@@ -102,9 +106,14 @@ class RoleMatrixController extends FleetBaseController
                     ->all();
 
                 foreach ($permissions as $permission) {
-                    $allowed = $permission->key === FleetRbac::DELETE_PERMISSION_KEY
-                        ? FleetRbac::roleCanDelete((string) $role->slug)
-                        : ($role->isSuperAdmin() || in_array($permission->key, $allowedKeys, true));
+                    if ($permission->key === FleetRbac::DELETE_PERMISSION_KEY) {
+                        $allowed = $role->isSuperAdmin()
+                            || ($canManageDeletePermission
+                                ? in_array($permission->key, $allowedKeys, true)
+                                : (bool) ($existingAllowedByPermissionId[$permission->id] ?? false));
+                    } else {
+                        $allowed = $role->isSuperAdmin() || in_array($permission->key, $allowedKeys, true);
+                    }
 
                     DB::table('fleet_role_permissions')->updateOrInsert(
                         ['role_id' => $role->id, 'permission_id' => $permission->id],
@@ -197,6 +206,7 @@ class RoleMatrixController extends FleetBaseController
             'permissionMatrix' => $matrix,
             'roles' => $roles,
             'canManageRoleMatrix' => auth()->user()?->canFleet('role_matrix.manage') ?? false,
+            'canManageDeletePermission' => auth()->user()?->isFleetSuperAdmin() ?? false,
         ]);
     }
 
@@ -209,9 +219,8 @@ class RoleMatrixController extends FleetBaseController
 
         foreach ($users as $user) {
             foreach ($permissions as $permission) {
-                $allowed = $permission->key === FleetRbac::DELETE_PERMISSION_KEY
-                    ? FleetRbac::roleCanDelete((string) $role->slug)
-                    : ($role->isSuperAdmin() || (bool) ($allowedByPermissionId[$permission->id] ?? false));
+                $allowed = $role->isSuperAdmin()
+                    || (bool) ($allowedByPermissionId[$permission->id] ?? false);
 
                 DB::table('fleet_user_permissions')->updateOrInsert(
                     ['user_id' => $user->id, 'permission_id' => $permission->id],
@@ -241,9 +250,8 @@ class RoleMatrixController extends FleetBaseController
             DB::table('fleet_user_permissions')->updateOrInsert(
                 ['user_id' => $user->id, 'permission_id' => $permission->id],
                 [
-                    'allowed' => $permission->key === FleetRbac::DELETE_PERMISSION_KEY
-                        ? FleetRbac::roleCanDelete((string) $role->slug)
-                        : ($role->isSuperAdmin() || (bool) ($allowedByPermissionId[$permission->id] ?? false)),
+                    'allowed' => $role->isSuperAdmin()
+                        || (bool) ($allowedByPermissionId[$permission->id] ?? false),
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]

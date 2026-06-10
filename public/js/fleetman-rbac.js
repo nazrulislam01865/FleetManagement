@@ -56,7 +56,7 @@
         if (!scope) return;
 
         if (isDeleteControl(scope)) {
-            muteElement(scope, 'Only Admin User and Super Admin can delete records.');
+            muteElement(scope, 'You do not have Delete Records permission. A Super Admin can grant it from Role Matrix.');
         }
 
         scope.querySelectorAll('button, a, input[type="submit"], form').forEach((element) => {
@@ -64,12 +64,12 @@
 
             if (element.matches('form')) {
                 element.querySelectorAll('button, input[type="submit"]').forEach((button) =>
-                    muteElement(button, 'Only Admin User and Super Admin can delete records.')
+                    muteElement(button, 'You do not have Delete Records permission. A Super Admin can grant it from Role Matrix.')
                 );
                 return;
             }
 
-            muteElement(element, 'Only Admin User and Super Admin can delete records.');
+            muteElement(element, 'You do not have Delete Records permission. A Super Admin can grant it from Role Matrix.');
         });
     }
 

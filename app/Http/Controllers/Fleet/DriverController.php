@@ -37,8 +37,9 @@ class DriverController extends FleetBaseController
             throw ValidationException::withMessages(['rows' => 'The driver rows payload is invalid.']);
         }
 
-        $this->validateDriverRows($rows, $request);
-        $this->validateUniqueDocumentNames($rows);
+        $strictValidationIndexes = $this->changedRowIndexesForSync($rows, FleetDriver::class, $this->idKey);
+        $this->validateDriverRows($rows, $request, $strictValidationIndexes);
+        $this->validateUniqueDocumentNames($this->syncRowsAtIndexes($rows, $strictValidationIndexes));
         $storedPaths = [];
         $userId = (int) $request->user()->id;
 
@@ -145,7 +146,7 @@ class DriverController extends FleetBaseController
         return response()->json(['ok' => true, 'rows' => $this->recordsFor(FleetDriver::class)]);
     }
 
-    private function validateDriverRows(array &$rows, Request $request): void
+    private function validateDriverRows(array &$rows, Request $request, ?array $strictValidationIndexes = null): void
     {
         $errors = [];
         $seenIds = [];
@@ -159,6 +160,9 @@ class DriverController extends FleetBaseController
         $statuses = $this->values('driver_status');
         $duties = collect($this->choiceValues('driver_duty_type'))->pluck('value')->all();
         $reminders = $this->values('document_reminder');
+        $strictValidationLookup = $strictValidationIndexes === null
+            ? null
+            : array_fill_keys($strictValidationIndexes, true);
 
         foreach ($rows as $index => &$row) {
             if (! is_array($row)) {
@@ -174,7 +178,9 @@ class DriverController extends FleetBaseController
             $this->trackUniqueDriverValue($seenNids, $errors, $nid, "rows.{$index}.nid", 'NID');
             $this->trackUniqueDriverValue($seenLicences, $errors, $licence, "rows.{$index}.licenseNo", 'Driving License No.');
 
-            if ((int) ($row['driverValidationVersion'] ?? 0) < 1 || strcasecmp((string) ($row['status'] ?? ''), 'Draft') === 0) {
+            if (($strictValidationLookup !== null && ! isset($strictValidationLookup[$index]))
+                || (int) ($row['driverValidationVersion'] ?? 0) < 1
+                || strcasecmp((string) ($row['status'] ?? ''), 'Draft') === 0) {
                 continue;
             }
 

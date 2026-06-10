@@ -9,7 +9,6 @@
         $finance = $fleetman['dashboard']['finance'] ?? [];
         $recent = $fleetman['dashboard']['recent'] ?? [];
         $warnings = $fleetman['dashboard']['warnings'] ?? [];
-        $latestFuel = $finance['fuel_rate'] ?? null;
         $access = $fleetman['dashboard']['access'] ?? [];
         $canFleet = static fn (string $permission): bool => auth()->user()?->canFleet($permission) ?? false;
     @endphp
@@ -82,8 +81,8 @@
                 <div class="finance-box"><small>Driver + Employee Salary</small><b>৳ {{ number_format($finance['payroll'] ?? 0) }}</b></div>
                 <div class="finance-box"><small>Attendance Distance</small><b>{{ number_format($finance['attendance_km'] ?? 0) }} km</b></div>
                 <div class="finance-box">
-                    <small>Latest Fuel Rate</small>
-                    <b>{{ $latestFuel ? (($latestFuel['fuelType'] ?? 'Fuel') . ' ৳' . number_format((float) ($latestFuel['price'] ?? 0), 2)) : '-' }}</b>
+                    <small>Total Fuel Expense</small>
+                    <b>৳ {{ number_format((float) ($finance['fuel_expense'] ?? 0), 2) }}</b>
                 </div>
             </div>
         </x-fleetman.section-card>
@@ -181,7 +180,12 @@
                 @else
                 @forelse(($recent['vehicles'] ?? []) as $vehicle)
                     <a href="{{ route('fleet.vehicles') }}" class="compact-row">
-                        <div class="compact-icon">🚗</div>
+                        <x-fleetman.entity-avatar
+                            :file="$vehicle['_dashboardMediaUrl'] ?? ($vehicle['image'] ?? null)"
+                            fallback="🚗"
+                            :alt="($vehicle['name'] ?? 'Vehicle').' image'"
+                            size="compact"
+                        />
                         <div><b>{{ $vehicle['name'] ?? '-' }}</b><span>{{ $vehicle['id'] ?? '-' }} / {{ $vehicle['regNo'] ?? '-' }}</span></div>
                         <span class="badge soft">{{ $vehicle['category'] ?? 'Vehicle' }}</span>
                     </a>
@@ -201,7 +205,12 @@
                 @else
                 @forelse(($recent['drivers'] ?? []) as $driver)
                     <a href="{{ route('fleet.drivers') }}" class="compact-row">
-                        <div class="compact-icon">🧑‍✈️</div>
+                        <x-fleetman.entity-avatar
+                            :file="$driver['_dashboardMediaUrl'] ?? ($driver['photo'] ?? null)"
+                            fallback="🧑‍✈️"
+                            :alt="($driver['fullName'] ?? 'Driver').' photo'"
+                            size="compact"
+                        />
                         <div><b>{{ $driver['fullName'] ?? '-' }}</b><span>{{ $driver['driverId'] ?? '-' }} / {{ $driver['contact'] ?? '-' }}</span></div>
                         <span class="badge {{ ($driver['status'] ?? '') === 'Active' ? 'ok' : 'soft' }}">{{ $driver['status'] ?? '-' }}</span>
                     </a>
@@ -225,6 +234,30 @@
                     </a>
                 @empty
                     <div class="empty compact-empty">No clients found.</div>
+                @endforelse
+                @endif
+            </div>
+        </x-fleetman.section-card>
+
+
+        <x-fleetman.section-card title="Recent Employees" class="dashboard-panel">
+            <div class="compact-list">
+                @if(!($access['employees'] ?? false))
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                @else
+                @forelse(($recent['employees'] ?? []) as $employee)
+                    <a href="{{ route('fleet.employees') }}" class="compact-row">
+                        <x-fleetman.entity-avatar
+                            :file="$employee['_dashboardMediaUrl'] ?? ($employee['photo'] ?? null)"
+                            fallback="👤"
+                            :alt="($employee['fullName'] ?? 'Employee').' photo'"
+                            size="compact"
+                        />
+                        <div><b>{{ $employee['fullName'] ?? '-' }}</b><span>{{ $employee['employeeId'] ?? '-' }} / {{ $employee['designation'] ?? '-' }}</span></div>
+                        <span class="badge {{ ($employee['status'] ?? '') === 'Active' ? 'ok' : 'soft' }}">{{ $employee['status'] ?? '-' }}</span>
+                    </a>
+                @empty
+                    <div class="empty compact-empty">No employees found.</div>
                 @endforelse
                 @endif
             </div>

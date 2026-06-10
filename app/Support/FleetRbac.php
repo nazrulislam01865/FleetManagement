@@ -14,12 +14,31 @@ class FleetRbac
     /** @return array<int, string> */
     public static function deleteAllowedRoleSlugs(): array
     {
-        return ['super_admin', 'admin_user'];
+        return ['super_admin'];
     }
 
     public static function roleCanDelete(string $roleSlug): bool
     {
-        return in_array($roleSlug, self::deleteAllowedRoleSlugs(), true);
+        $roleSlug = trim($roleSlug);
+
+        if (in_array($roleSlug, self::deleteAllowedRoleSlugs(), true)) {
+            return true;
+        }
+
+        if (! Schema::hasTable('fleet_roles')
+            || ! Schema::hasTable('fleet_permissions')
+            || ! Schema::hasTable('fleet_role_permissions')) {
+            return false;
+        }
+
+        return DB::table('fleet_role_permissions')
+            ->join('fleet_roles', 'fleet_roles.id', '=', 'fleet_role_permissions.role_id')
+            ->join('fleet_permissions', 'fleet_permissions.id', '=', 'fleet_role_permissions.permission_id')
+            ->where('fleet_roles.slug', $roleSlug)
+            ->where('fleet_roles.is_active', true)
+            ->where('fleet_permissions.key', self::DELETE_PERMISSION_KEY)
+            ->where('fleet_role_permissions.allowed', true)
+            ->exists();
     }
 
     /**
@@ -114,7 +133,7 @@ class FleetRbac
             self::permission('users.manage', 'System', 'Manage', 'Manage Users', 'Create users and assign roles. Admin User and Super Admin only by default.', 'fleet.users.store', 139),
             self::permission('role_matrix.view', 'System', 'View', 'View Role Matrix', 'Open the user role and permission matrix page.', 'fleet.role-matrix', 140),
             self::permission('role_matrix.manage', 'System', 'Manage', 'Manage Role Matrix', 'Update role permissions and assign roles to users.', 'fleet.role-matrix.update', 141),
-            self::permission(self::DELETE_PERMISSION_KEY, 'System', 'Delete', 'Delete Records', 'Delete business and master-data records. This protected permission is available only to Admin User and Super Admin.', null, 145),
+            self::permission(self::DELETE_PERMISSION_KEY, 'System', 'Delete', 'Delete Records', 'Delete business and master-data records. Super Admin has this access by default and may grant or revoke it for other roles from this matrix.', null, 145),
             self::permission('settings.manage', 'System', 'Manage', 'Manage Settings', 'Update application settings including logo.', 'fleet.settings', 150),
         ];
     }
@@ -158,7 +177,6 @@ class FleetRbac
                 'dues.manage',
                 'users.manage',
                 'master_data.manage',
-                self::DELETE_PERMISSION_KEY,
             ]),
             'supervisor' => [
                 'dashboard.view',
@@ -261,15 +279,15 @@ class FleetRbac
                 : ($defaults[$roleSlug] ?? []);
 
             foreach ($permissionIds as $permissionKey => $permissionId) {
-                $allowed = $permissionKey === self::DELETE_PERMISSION_KEY
-                    ? self::roleCanDelete((string) $roleSlug)
+                $allowed = $roleSlug === 'super_admin'
+                    ? true
                     : in_array($permissionKey, $allowedKeys, true);
                 $exists = DB::table('fleet_role_permissions')
                     ->where('role_id', $roleId)
                     ->where('permission_id', $permissionId)
                     ->exists();
 
-                if ($force || ! $exists || $roleSlug === 'super_admin' || $permissionKey === self::DELETE_PERMISSION_KEY) {
+                if ($force || ! $exists || $roleSlug === 'super_admin') {
                     DB::table('fleet_role_permissions')->updateOrInsert(
                         ['role_id' => $roleId, 'permission_id' => $permissionId],
                         ['allowed' => $allowed, 'created_at' => $now, 'updated_at' => $now]

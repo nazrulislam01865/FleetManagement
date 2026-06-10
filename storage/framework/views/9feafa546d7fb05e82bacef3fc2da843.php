@@ -7,7 +7,6 @@
         $finance = $fleetman['dashboard']['finance'] ?? [];
         $recent = $fleetman['dashboard']['recent'] ?? [];
         $warnings = $fleetman['dashboard']['warnings'] ?? [];
-        $latestFuel = $finance['fuel_rate'] ?? null;
         $access = $fleetman['dashboard']['access'] ?? [];
         $canFleet = static fn (string $permission): bool => auth()->user()?->canFleet($permission) ?? false;
     ?>
@@ -108,8 +107,8 @@
                 <div class="finance-box"><small>Driver + Employee Salary</small><b>৳ <?php echo e(number_format($finance['payroll'] ?? 0)); ?></b></div>
                 <div class="finance-box"><small>Attendance Distance</small><b><?php echo e(number_format($finance['attendance_km'] ?? 0)); ?> km</b></div>
                 <div class="finance-box">
-                    <small>Latest Fuel Rate</small>
-                    <b><?php echo e($latestFuel ? (($latestFuel['fuelType'] ?? 'Fuel') . ' ৳' . number_format((float) ($latestFuel['price'] ?? 0), 2)) : '-'); ?></b>
+                    <small>Total Fuel Expense</small>
+                    <b>৳ <?php echo e(number_format((float) ($finance['fuel_expense'] ?? 0), 2)); ?></b>
                 </div>
             </div>
          <?php echo $__env->renderComponent(); ?>
@@ -303,7 +302,26 @@
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['vehicles'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $vehicle): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.vehicles')); ?>" class="compact-row">
-                        <div class="compact-icon">🚗</div>
+                        <?php if (isset($component)) { $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.entity-avatar','data' => ['file' => $vehicle['_dashboardMediaUrl'] ?? ($vehicle['image'] ?? null),'fallback' => '🚗','alt' => ($vehicle['name'] ?? 'Vehicle').' image','size' => 'compact']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.entity-avatar'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['file' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($vehicle['_dashboardMediaUrl'] ?? ($vehicle['image'] ?? null)),'fallback' => '🚗','alt' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(($vehicle['name'] ?? 'Vehicle').' image'),'size' => 'compact']); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733)): ?>
+<?php $attributes = $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733; ?>
+<?php unset($__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal697ea74cffe7bdef02e879ddb0d6a733)): ?>
+<?php $component = $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733; ?>
+<?php unset($__componentOriginal697ea74cffe7bdef02e879ddb0d6a733); ?>
+<?php endif; ?>
                         <div><b><?php echo e($vehicle['name'] ?? '-'); ?></b><span><?php echo e($vehicle['id'] ?? '-'); ?> / <?php echo e($vehicle['regNo'] ?? '-'); ?></span></div>
                         <span class="badge soft"><?php echo e($vehicle['category'] ?? 'Vehicle'); ?></span>
                     </a>
@@ -341,7 +359,26 @@
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['drivers'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $driver): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e(route('fleet.drivers')); ?>" class="compact-row">
-                        <div class="compact-icon">🧑‍✈️</div>
+                        <?php if (isset($component)) { $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.entity-avatar','data' => ['file' => $driver['_dashboardMediaUrl'] ?? ($driver['photo'] ?? null),'fallback' => '🧑‍✈️','alt' => ($driver['fullName'] ?? 'Driver').' photo','size' => 'compact']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.entity-avatar'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['file' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($driver['_dashboardMediaUrl'] ?? ($driver['photo'] ?? null)),'fallback' => '🧑‍✈️','alt' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(($driver['fullName'] ?? 'Driver').' photo'),'size' => 'compact']); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733)): ?>
+<?php $attributes = $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733; ?>
+<?php unset($__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal697ea74cffe7bdef02e879ddb0d6a733)): ?>
+<?php $component = $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733; ?>
+<?php unset($__componentOriginal697ea74cffe7bdef02e879ddb0d6a733); ?>
+<?php endif; ?>
                         <div><b><?php echo e($driver['fullName'] ?? '-'); ?></b><span><?php echo e($driver['driverId'] ?? '-'); ?> / <?php echo e($driver['contact'] ?? '-'); ?></span></div>
                         <span class="badge <?php echo e(($driver['status'] ?? '') === 'Active' ? 'ok' : 'soft'); ?>"><?php echo e($driver['status'] ?? '-'); ?></span>
                     </a>
@@ -383,6 +420,62 @@
                     </a>
                 <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
                     <div class="empty compact-empty">No clients found.</div>
+                <?php endif; ?>
+                <?php endif; ?>
+            </div>
+         <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $attributes = $__attributesOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $component = $__componentOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__componentOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+
+
+        <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => 'Recent Employees','class' => 'dashboard-panel']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.section-card'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['title' => 'Recent Employees','class' => 'dashboard-panel']); ?>
+            <div class="compact-list">
+                <?php if(!($access['employees'] ?? false)): ?>
+                    <div class="empty compact-empty">🔒 Access not granted for your role.</div>
+                <?php else: ?>
+                <?php $__empty_1 = true; $__currentLoopData = ($recent['employees'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $employee): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
+                    <a href="<?php echo e(route('fleet.employees')); ?>" class="compact-row">
+                        <?php if (isset($component)) { $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.entity-avatar','data' => ['file' => $employee['_dashboardMediaUrl'] ?? ($employee['photo'] ?? null),'fallback' => '👤','alt' => ($employee['fullName'] ?? 'Employee').' photo','size' => 'compact']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.entity-avatar'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['file' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($employee['_dashboardMediaUrl'] ?? ($employee['photo'] ?? null)),'fallback' => '👤','alt' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(($employee['fullName'] ?? 'Employee').' photo'),'size' => 'compact']); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733)): ?>
+<?php $attributes = $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733; ?>
+<?php unset($__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal697ea74cffe7bdef02e879ddb0d6a733)): ?>
+<?php $component = $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733; ?>
+<?php unset($__componentOriginal697ea74cffe7bdef02e879ddb0d6a733); ?>
+<?php endif; ?>
+                        <div><b><?php echo e($employee['fullName'] ?? '-'); ?></b><span><?php echo e($employee['employeeId'] ?? '-'); ?> / <?php echo e($employee['designation'] ?? '-'); ?></span></div>
+                        <span class="badge <?php echo e(($employee['status'] ?? '') === 'Active' ? 'ok' : 'soft'); ?>"><?php echo e($employee['status'] ?? '-'); ?></span>
+                    </a>
+                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?>
+                    <div class="empty compact-empty">No employees found.</div>
                 <?php endif; ?>
                 <?php endif; ?>
             </div>

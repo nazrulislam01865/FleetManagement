@@ -197,6 +197,28 @@
             .'</section>';
     };
 
+    $recordMedia = null;
+    $recordFallback = '';
+    $recordMediaAlt = $recordTitle.' image';
+    $showEntityMedia = in_array(($detail['list_route'] ?? ''), [
+        'fleet.vehicles',
+        'fleet.drivers',
+        'fleet.employees',
+    ], true);
+
+    if (($detail['list_route'] ?? '') === 'fleet.vehicles') {
+        $recordMedia = $recordPayload['image'] ?? null;
+        $recordFallback = '🚗';
+    } elseif (($detail['list_route'] ?? '') === 'fleet.drivers') {
+        $recordMedia = $recordPayload['photo'] ?? null;
+        $recordFallback = '🧑‍✈️';
+        $recordMediaAlt = $recordTitle.' photo';
+    } elseif (($detail['list_route'] ?? '') === 'fleet.employees') {
+        $recordMedia = $recordPayload['photo'] ?? null;
+        $recordFallback = '👤';
+        $recordMediaAlt = $recordTitle.' photo';
+    }
+
     $primaryFields = '';
     $nestedSections = '';
     foreach ($recordPayload as $key => $value) {
@@ -225,7 +247,22 @@
     />
 
     <section class="fleet-detail-section">
-        <h3>{{ $recordTitle }}</h3>
+        @if($showEntityMedia)
+            <div class="fleet-detail-summary">
+                <x-fleetman.entity-avatar
+                    :file="$recordMedia"
+                    :fallback="$recordFallback"
+                    :alt="$recordMediaAlt"
+                    size="large"
+                />
+                <div>
+                    <h3>{{ $recordTitle }}</h3>
+                    <p>{{ $detail['title'] ?? 'Record Details' }}</p>
+                </div>
+            </div>
+        @else
+            <h3>{{ $recordTitle }}</h3>
+        @endif
         <div class="fleet-detail-grid">
             {!! $renderField('Record Code', $record->code) !!}
             {!! $renderField('Record Name', $record->name) !!}

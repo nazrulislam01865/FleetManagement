@@ -85,12 +85,16 @@ class User extends Authenticatable
     }
 
     /**
-     * Deleting business records is intentionally role-protected. It cannot be
-     * granted to supervisors, operators or custom roles through user overrides.
+     * Delete access is role-based. Super Admin always has it, while any other
+     * active role must be explicitly granted Delete Records from Role Matrix.
      */
     public function canDeleteFleetRecords(): bool
     {
-        if (! Schema::hasTable('users') || ! Schema::hasColumn('users', 'fleet_role_id') || ! Schema::hasTable('fleet_roles')) {
+        if (! Schema::hasTable('users')
+            || ! Schema::hasColumn('users', 'fleet_role_id')
+            || ! Schema::hasTable('fleet_roles')
+            || ! Schema::hasTable('fleet_permissions')
+            || ! Schema::hasTable('fleet_role_permissions')) {
             return true;
         }
 
@@ -101,7 +105,7 @@ class User extends Authenticatable
         $role = $this->fleetRole;
 
         return (bool) ($role?->is_active)
-            && in_array((string) $role?->slug, FleetRbac::deleteAllowedRoleSlugs(), true);
+            && FleetRbac::roleCanDelete((string) $role?->slug);
     }
 
     public function userPermissions()
