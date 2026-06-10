@@ -72,7 +72,7 @@
             <div class="yard-empty-note" id="yardZonesEmpty">No zone added. The yard can be saved without zones.</div>
         </x-fleetman.section-card>
 
-        <x-fleetman.section-card title="Documents (Optional)">
+        <x-fleetman.section-card title="Documents (Optional)" class="document-section-card">
             <x-slot:action>
                 <button type="button" class="btn secondary" id="addYardDocumentBtn">＋ Add Document</button>
             </x-slot:action>

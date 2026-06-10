@@ -527,14 +527,14 @@
                 
                 <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '6. Documents']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '6. Documents','class' => 'document-section-card']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => '6. Documents']); ?>
+<?php $component->withAttributes(['title' => '6. Documents','class' => 'document-section-card']); ?>
                      <?php $__env->slot('action', null, []); ?> <button type="button" class="btn secondary" id="addEmployeeDocumentBtn">+ Add document</button> <?php $__env->endSlot(); ?>
                     <div id="employeeDocuments"></div>
                  <?php echo $__env->renderComponent(); ?>

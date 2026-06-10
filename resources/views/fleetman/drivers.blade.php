@@ -70,7 +70,7 @@
                     <div class="photo-box driver-photo-box"><div class="field" style="flex:1"><label for="driverPhoto">Driver Photo <span class="req">*</span></label><input id="driverPhoto" type="file" accept="image/jpeg,image/png,image/webp" required aria-required="true"><input id="driverPhotoData" type="hidden"><div class="temp-upload-progress hidden" id="driverPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta" id="driverPhotoInfo"></div><div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. The image preview appears below after upload.</div></div></div>
                 </x-fleetman.section-card>
 
-                <x-fleetman.section-card title="6. Documents" id="driverDocumentsSection">
+                <x-fleetman.section-card title="6. Documents" id="driverDocumentsSection" class="document-section-card">
                     <x-slot:action><button type="button" class="btn secondary" id="addDriverDocumentBtn">+ Add document</button></x-slot:action>
                     <div id="driverDocuments"></div>
                 </x-fleetman.section-card>

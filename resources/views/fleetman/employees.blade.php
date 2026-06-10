@@ -78,7 +78,7 @@
                 </x-fleetman.section-card>
 
                 {{-- Section 6: Documents (dynamic multi-upload) --}}
-                <x-fleetman.section-card title="6. Documents">
+                <x-fleetman.section-card title="6. Documents" class="document-section-card">
                     <x-slot:action><button type="button" class="btn secondary" id="addEmployeeDocumentBtn">+ Add document</button></x-slot:action>
                     <div id="employeeDocuments"></div>
                 </x-fleetman.section-card>

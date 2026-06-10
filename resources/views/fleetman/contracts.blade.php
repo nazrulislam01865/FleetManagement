@@ -86,7 +86,7 @@
             <div id="contractAssignments"></div>
         </section>
 
-        <section class="card">
+        <section class="card document-section-card">
             <div class="section-head">
                 <div>
                     <h2>Documents</h2>

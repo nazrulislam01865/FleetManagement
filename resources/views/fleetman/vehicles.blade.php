@@ -102,7 +102,7 @@
                     <div id="vehicleFuelRows"></div>
                 </div>
 
-                <div class="card">
+                <div class="card document-section-card">
                     <div class="section-head">
                         <div>
                             <h2>4. Documents</h2>

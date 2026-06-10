@@ -88,6 +88,7 @@
 
                 <x-fleetman.section-card
                     title="3. Documents"
+                    class="document-section-card"
                 >
                     <x-slot:action>
                         <button type="button" class="btn secondary" id="addPartyDocumentBtn">+ Add document</button>

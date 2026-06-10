@@ -812,3 +812,145 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
     min-width:150px;
     white-space:nowrap;
 }
+
+/* Responsive document sections on phones and narrow tablets. */
+.document-section-card,
+.document-section-card .section-head,
+.document-section-card .section-head > *,
+.document-section-card [id$="Documents"],
+.document-section-card #vehicleDocRows,
+.document-section-card .fleet-document-row,
+.document-section-card .fleet-document-row > .field {
+    min-width:0;
+    max-width:100%;
+}
+
+.document-section-card .fleet-document-row input,
+.document-section-card .fleet-document-row select,
+.document-section-card .fleet-document-row textarea,
+.document-section-card .fleet-document-row input[type="file"] {
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+}
+
+.document-section-card .fleet-document-row input[type="file"] {
+    overflow:hidden!important;
+    white-space:nowrap!important;
+    text-overflow:ellipsis!important;
+}
+
+.document-section-card .fleet-document-row .upload-meta,
+.document-section-card .fleet-document-row .hint,
+.document-section-card .fleet-document-row .temp-upload-progress,
+.document-section-card .fleet-document-row .temp-upload-file,
+.document-section-card .fleet-document-row .temp-upload-file-link {
+    width:100%;
+    min-width:0;
+    max-width:100%;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+}
+
+@media(max-width:900px){
+    .document-section-card{
+        overflow:hidden;
+    }
+    .document-section-card .section-head{
+        align-items:flex-start;
+        flex-direction:column;
+    }
+    .document-section-card .section-head > *,
+    .document-section-card .section-head .btn{
+        width:100%;
+    }
+    .document-section-card .fleet-document-row{
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr)!important;
+        grid-template-areas:none!important;
+        width:100%!important;
+        margin-left:0!important;
+        margin-right:0!important;
+    }
+    .document-section-card .fleet-document-row > .field,
+    .document-section-card .fleet-document-row > .remove-row{
+        grid-area:auto!important;
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
+    }
+    .document-section-card .fleet-document-row > .remove-row{
+        margin-top:0!important;
+    }
+}
+
+@media(max-width:600px){
+    .document-section-card{
+        padding:14px!important;
+        border-radius:15px;
+    }
+    .document-section-card .section-head{
+        gap:10px;
+        margin-bottom:12px;
+    }
+    .document-section-card .section-head h2{
+        font-size:17px;
+        line-height:1.3;
+    }
+    .document-section-card .fleet-document-row{
+        gap:12px!important;
+        padding:12px!important;
+        border-radius:14px!important;
+    }
+    .document-section-card .fleet-document-row .field label{
+        min-height:auto;
+        margin-bottom:6px;
+        line-height:1.35;
+        overflow-wrap:anywhere;
+    }
+    .document-section-card .fleet-document-row input,
+    .document-section-card .fleet-document-row select,
+    .document-section-card .fleet-document-row textarea,
+    .document-section-card .fleet-document-row input[type="file"]{
+        min-height:44px!important;
+        font-size:14px!important;
+    }
+    .document-section-card .fleet-document-row input[type="file"]{
+        padding:7px 8px!important;
+    }
+    .document-section-card .fleet-document-row input[type="file"]::file-selector-button{
+        max-width:48%;
+        margin-right:8px!important;
+        padding:6px 8px!important;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+    }
+    .document-section-card .fleet-document-row .hint,
+    .document-section-card .fleet-document-row .upload-meta{
+        font-size:11px;
+        line-height:1.45;
+    }
+    .document-section-card .fleet-document-row .temp-upload-file{
+        align-items:flex-start;
+        flex-direction:column;
+        gap:5px;
+        padding:8px 9px;
+    }
+    .document-section-card .fleet-document-row > .remove-row{
+        min-height:44px!important;
+    }
+}
+
+@media(max-width:380px){
+    .document-section-card{
+        padding:11px!important;
+    }
+    .document-section-card .fleet-document-row{
+        padding:10px!important;
+    }
+    .document-section-card .fleet-document-row input[type="file"]::file-selector-button{
+        max-width:44%;
+        font-size:12px;
+    }
+}
