@@ -281,6 +281,7 @@ return [
             'items' => [
                 ['key' => 'users', 'label' => 'Users', 'icon' => '👤', 'route' => 'fleet.users', 'permission' => 'users.view'],
                 ['key' => 'role-matrix', 'label' => 'Role Matrix', 'icon' => '🛡️', 'route' => 'fleet.role-matrix', 'permission' => 'role_matrix.view'],
+                ['key' => 'release-tracker', 'label' => 'Release Tracker', 'icon' => '🚀', 'route' => 'fleet.release-tracker', 'super_admin_only' => true],
                 [
                     'key' => 'master-data',
                     'label' => 'Master Data',

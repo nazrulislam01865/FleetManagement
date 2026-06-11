@@ -16,6 +16,7 @@ use App\Http\Controllers\Fleet\TemporaryUploadController;
 use App\Http\Controllers\Fleet\MasterDataController;
 use App\Http\Controllers\Fleet\NotificationController;
 use App\Http\Controllers\Fleet\ReportController;
+use App\Http\Controllers\Fleet\ReleaseTrackerController;
 use App\Http\Controllers\Fleet\RoleMatrixController;
 use App\Http\Controllers\Fleet\TripController;
 use App\Http\Controllers\Fleet\UserManagementController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Fleet\YardController;
 use App\Http\Middleware\EnsureFleetDeleteAccess;
 use App\Http\Middleware\EnsureFleetManageAccess;
 use App\Http\Middleware\EnsureFleetPermission;
+use App\Http\Middleware\EnsureFleetSuperAdmin;
 use App\Support\FleetRbac;
 use Illuminate\Support\Facades\Route;
 
@@ -320,6 +322,17 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::post('/role-matrix', [RoleMatrixController::class, 'update'])
         ->middleware(EnsureFleetPermission::class.':role_matrix.manage')
         ->name('role-matrix.update');
+
+    Route::middleware(EnsureFleetSuperAdmin::class)->group(function () {
+        Route::get('/release-tracker', [ReleaseTrackerController::class, 'index'])
+            ->name('release-tracker');
+        Route::post('/release-tracker', [ReleaseTrackerController::class, 'store'])
+            ->name('release-tracker.store');
+        Route::put('/release-tracker/{release}', [ReleaseTrackerController::class, 'update'])
+            ->name('release-tracker.update');
+        Route::delete('/release-tracker/{release}', [ReleaseTrackerController::class, 'destroy'])
+            ->name('release-tracker.destroy');
+    });
 
     Route::get('/reports', [ReportController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':reports.view')

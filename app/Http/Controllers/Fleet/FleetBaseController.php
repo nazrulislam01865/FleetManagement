@@ -418,6 +418,7 @@ abstract class FleetBaseController extends Controller
         return collect($groups)
             ->map(function (array $group): array {
                 $items = collect($group['items'] ?? [])
+                    ->filter(fn (array $item): bool => $this->menuItemVisible($item))
                     ->filter(function (array $item): bool {
                         return ! empty($item['route']) || count($item['children'] ?? []) > 0;
                     })
@@ -426,6 +427,7 @@ abstract class FleetBaseController extends Controller
                         $item['allowed'] = $itemAllowed;
 
                         $children = collect($item['children'] ?? [])
+                            ->filter(fn (array $child): bool => $this->menuItemVisible($child))
                             ->filter(fn (array $child): bool => ! empty($child['route']))
                             ->map(function (array $child) use ($itemAllowed): array {
                                 // Child options also require access to the parent/list module.
@@ -454,6 +456,21 @@ abstract class FleetBaseController extends Controller
             ->filter(fn (array $group): bool => count($group['items'] ?? []) > 0)
             ->values()
             ->all();
+    }
+
+    protected function menuItemVisible(array $item): bool
+    {
+        if (! ($item['super_admin_only'] ?? false)) {
+            return true;
+        }
+
+        $user = auth()->user();
+        $role = $user?->fleetRole;
+
+        return (bool) ($user
+            && $user->isAccountActive()
+            && $role?->slug === 'super_admin'
+            && $role?->is_active);
     }
 
     protected function menuItemAllowed(array $item): bool
