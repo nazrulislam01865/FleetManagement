@@ -3696,12 +3696,19 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             if (!response.ok) {
                 const validationMessage = payload?.errors
-                    ? Object.values(payload.errors).flat().join(' ')
+                    ? Object.values(payload.errors).flat().filter(Boolean).join(' ')
                     : '';
                 const sessionMessage = [401, 419].includes(response.status)
                     ? 'Your session has expired. Please log in again before saving.'
                     : '';
-                throw new Error(payload?.message || validationMessage || sessionMessage || 'Database sync failed. Please check required fields and server logs.');
+                const serverMessage = validationMessage
+                    || sessionMessage
+                    || payload?.message
+                    || `The server could not save this record (HTTP ${response.status}). Please try again.`;
+                const reference = payload?.error_reference
+                    ? ` Reference: ${payload.error_reference}`
+                    : '';
+                throw new Error(`${serverMessage}${reference}`);
             }
 
             if (!payload || payload.ok !== true || !Array.isArray(payload.rows)) {
@@ -3713,8 +3720,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
             return payload;
         } catch (error) {
-            toast(error.message || 'Saved locally in screen state, but database sync failed. Check server connection.');
-            return { ok: false, syncFailed: true, message: error.message };
+            const message = error instanceof TypeError
+                ? 'The server could not be reached. Check the internet connection and try again.'
+                : (error?.message || 'The record could not be saved because of an unexpected server error.');
+            toast(message);
+            return { ok: false, syncFailed: true, message };
         }
     }
     const tripMasters = data.tripMasters || { vehicles: [], drivers: [] };

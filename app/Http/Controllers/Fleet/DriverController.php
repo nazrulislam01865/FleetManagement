@@ -6,10 +6,12 @@ use App\Models\Fleet\FleetDriver;
 use App\Services\FleetTemporaryUploadService;
 use App\Support\FleetDocumentUploadPolicy;
 use Carbon\Carbon;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -30,20 +32,32 @@ class DriverController extends FleetBaseController
 
     public function sync(Request $request): JsonResponse
     {
-        $uploads = app(FleetTemporaryUploadService::class);
-        $rowsInput = $request->input('rows', []);
-        $rows = is_string($rowsInput) ? json_decode($rowsInput, true) : $rowsInput;
-        if (! is_array($rows)) {
-            throw ValidationException::withMessages(['rows' => 'The driver rows payload is invalid.']);
-        }
-
-        $strictValidationIndexes = $this->changedRowIndexesForSync($rows, FleetDriver::class, $this->idKey);
-        $this->validateDriverRows($rows, $request, $strictValidationIndexes);
-        $this->validateUniqueDocumentNames($this->syncRowsAtIndexes($rows, $strictValidationIndexes));
         $storedPaths = [];
-        $userId = (int) $request->user()->id;
 
         try {
+            $uploads = app(FleetTemporaryUploadService::class);
+            $rowsInput = $request->input('rows', []);
+            $rows = is_string($rowsInput) ? json_decode($rowsInput, true) : $rowsInput;
+
+            if (! is_array($rows)) {
+                throw ValidationException::withMessages([
+                    'rows' => 'The driver data sent to the server is invalid. Please refresh the page and try again.',
+                ]);
+            }
+
+            $strictValidationIndexes = $this->changedRowIndexesForSync(
+                $rows,
+                FleetDriver::class,
+                $this->idKey
+            );
+
+            $this->validateDriverRows($rows, $request, $strictValidationIndexes);
+            $this->validateUniqueDocumentNames(
+                $this->syncRowsAtIndexes($rows, $strictValidationIndexes)
+            );
+
+            $userId = (int) $request->user()->id;
+
             foreach ($rows as $driverIndex => &$driver) {
                 if (! is_array($driver)) {
                     continue;
@@ -51,6 +65,7 @@ class DriverController extends FleetBaseController
 
                 $driverId = $this->driverFolderName($driver);
                 $photo = $driver['photo'] ?? [];
+
                 if (is_array($photo) && filled($photo['tempToken'] ?? null)) {
                     $driver['photo'] = $uploads->claim(
                         $photo,
@@ -66,6 +81,7 @@ class DriverController extends FleetBaseController
 
                 foreach (($driver['documents'] ?? []) as $documentIndex => $document) {
                     $file = is_array($document) ? ($document['file'] ?? []) : [];
+
                     if (is_array($file) && filled($file['tempToken'] ?? null)) {
                         $driver['documents'][$documentIndex]['file'] = $uploads->claim(
                             $file,
@@ -90,6 +106,7 @@ class DriverController extends FleetBaseController
                     ['photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:100']],
                     ['photo.max' => 'The driver photo must not exceed 100 KB.']
                 );
+
                 if ($validator->fails()) {
                     throw new ValidationException($validator);
                 }
@@ -120,6 +137,7 @@ class DriverController extends FleetBaseController
                         ['document' => FleetDocumentUploadPolicy::rules()],
                         FleetDocumentUploadPolicy::messages('document')
                     );
+
                     if ($validator->fails()) {
                         throw new ValidationException($validator);
                     }
@@ -127,23 +145,235 @@ class DriverController extends FleetBaseController
                     $driverId = $this->driverFolderName($rows[$driverIndex] ?? []);
                     $storedPath = $file->store("fleet/drivers/{$driverId}/documents", 'public');
                     $storedPaths[] = $storedPath;
-                    $rows[$driverIndex]['documents'][$documentIndex]['file'] = $uploads->permanentPayload($storedPath, [
-                        'originalName' => $file->getClientOriginalName(),
-                        'mimeType' => $file->getClientMimeType(),
-                        'sizeBytes' => $file->getSize(),
-                    ]);
+                    $rows[$driverIndex]['documents'][$documentIndex]['file'] = $uploads->permanentPayload(
+                        $storedPath,
+                        [
+                            'originalName' => $file->getClientOriginalName(),
+                            'mimeType' => $file->getClientMimeType(),
+                            'sizeBytes' => $file->getSize(),
+                        ]
+                    );
                 }
             }
 
             $this->persistRows($rows);
-        } catch (Throwable $exception) {
-            if ($storedPaths !== []) {
-                Storage::disk('public')->delete($storedPaths);
-            }
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Driver saved successfully.',
+                'rows' => $this->recordsFor(FleetDriver::class),
+            ]);
+        } catch (ValidationException $exception) {
+            $this->deleteStoredDriverFiles($storedPaths);
             throw $exception;
+        } catch (Throwable $exception) {
+            $this->deleteStoredDriverFiles($storedPaths);
+
+            return $this->driverSyncFailureResponse($request, $exception);
+        }
+    }
+
+    private function deleteStoredDriverFiles(array $storedPaths): void
+    {
+        if ($storedPaths === []) {
+            return;
         }
 
-        return response()->json(['ok' => true, 'rows' => $this->recordsFor(FleetDriver::class)]);
+        try {
+            Storage::disk('public')->delete(array_values(array_unique($storedPaths)));
+        } catch (Throwable $cleanupException) {
+            Log::warning('Failed to remove driver files after an unsuccessful save.', [
+                'paths' => array_values(array_unique($storedPaths)),
+                'exception_class' => $cleanupException::class,
+                'exception_message' => $cleanupException->getMessage(),
+            ]);
+        }
+    }
+
+    private function driverSyncFailureResponse(
+        Request $request,
+        Throwable $exception
+    ): JsonResponse {
+        $reference = 'DRV-'
+            .now('Asia/Dhaka')->format('Ymd-His')
+            .'-'
+            .Str::upper(Str::random(6));
+
+        [$message, $status] = $this->meaningfulDriverSyncError($exception);
+        $queryException = $this->findQueryException($exception);
+
+        $context = [
+            'error_reference' => $reference,
+            'user_id' => $request->user()?->id,
+            'route' => $request->route()?->getName(),
+            'method' => $request->method(),
+            'path' => $request->path(),
+            'ip_address' => $request->ip(),
+            'exception_class' => $exception::class,
+            'exception_message' => $exception->getMessage(),
+            'exception_file' => $exception->getFile(),
+            'exception_line' => $exception->getLine(),
+        ];
+
+        if ($queryException instanceof QueryException) {
+            $context = array_merge($context, [
+                'database_connection' => $queryException->getConnectionName(),
+                'sql_state' => $queryException->errorInfo[0] ?? null,
+                'database_error_code' => $queryException->errorInfo[1] ?? null,
+                'database_error_message' => $queryException->errorInfo[2]
+                    ?? $queryException->getPrevious()?->getMessage()
+                    ?? $queryException->getMessage(),
+                // SQL placeholders are logged, but bindings are intentionally excluded.
+                'sql' => $queryException->getSql(),
+                'trace' => $queryException->getTraceAsString(),
+            ]);
+
+            Log::channel('database')->error(
+                'Driver database save failed.',
+                $context
+            );
+        } else {
+            $context['trace'] = $exception->getTraceAsString();
+
+            Log::error(
+                'Driver save failed because of a non-database error.',
+                $context
+            );
+        }
+
+        return response()->json([
+            'ok' => false,
+            'message' => $message,
+            'error_reference' => $reference,
+        ], $status);
+    }
+
+    private function meaningfulDriverSyncError(Throwable $exception): array
+    {
+        $queryException = $this->findQueryException($exception);
+        $message = strtolower($exception->getMessage().' '.$exception->getPrevious()?->getMessage());
+
+        if ($queryException instanceof QueryException) {
+            $databaseCode = (int) ($queryException->errorInfo[1] ?? 0);
+            $sqlState = strtoupper((string) ($queryException->errorInfo[0] ?? ''));
+
+            if (
+                in_array($databaseCode, [2002, 2003, 2006, 2013], true)
+                || str_contains($message, 'connection refused')
+                || str_contains($message, 'server has gone away')
+                || str_contains($message, 'lost connection')
+                || str_contains($message, 'connection timed out')
+            ) {
+                return [
+                    'The server temporarily lost its database connection, so the driver was not saved. Please try again.',
+                    503,
+                ];
+            }
+
+            if ($databaseCode === 1062 || $sqlState === '23000' && str_contains($message, 'duplicate')) {
+                return [
+                    'A driver already exists with the same Driver ID, NID, licence number, or another unique value. Please correct the duplicate information and save again.',
+                    409,
+                ];
+            }
+
+            if (in_array($databaseCode, [1205, 1213], true)) {
+                return [
+                    'The database was busy processing another update. No driver was saved. Please try again.',
+                    503,
+                ];
+            }
+
+            if (in_array($databaseCode, [1054, 1146], true)) {
+                return [
+                    'The production database structure is not up to date. Please run the pending database migrations and try again.',
+                    500,
+                ];
+            }
+
+            if (in_array($databaseCode, [1048, 1366, 1406], true)) {
+                return [
+                    'One of the submitted driver values is missing or is not accepted by the database. Please review the entered information and try again.',
+                    422,
+                ];
+            }
+
+            if (in_array($databaseCode, [1451, 1452], true)) {
+                return [
+                    'The driver could not be saved because one of the selected related records no longer exists or is still in use. Refresh the page and select the value again.',
+                    409,
+                ];
+            }
+
+            if (
+                $databaseCode === 1114
+                || str_contains($message, 'no space left on device')
+                || str_contains($message, 'disk full')
+            ) {
+                return [
+                    'The server does not currently have enough storage space to save this driver. Please contact the Super Admin.',
+                    507,
+                ];
+            }
+
+            return [
+                'The database rejected the driver information. No data was saved. Please try again or give the error reference to the Super Admin.',
+                500,
+            ];
+        }
+
+        if (
+            str_contains($message, 'temporary upload')
+            || str_contains($message, 'temp token')
+            || str_contains($message, 'upload has expired')
+            || str_contains($message, 'upload token')
+        ) {
+            return [
+                'A temporary photo or document upload expired before the driver was saved. Please upload the affected file again.',
+                422,
+            ];
+        }
+
+        if (
+            str_contains($message, 'permission denied')
+            || str_contains($message, 'unable to write')
+            || str_contains($message, 'failed to open stream')
+            || str_contains($message, 'read-only file system')
+        ) {
+            return [
+                'The server could not store the driver photo or document because of a storage permission problem. Please contact the Super Admin.',
+                500,
+            ];
+        }
+
+        if (
+            str_contains($message, 'post content-length')
+            || str_contains($message, 'request entity too large')
+            || str_contains($message, 'payload too large')
+        ) {
+            return [
+                'The driver photo or document request is larger than the server allows. Reduce the file size and try again.',
+                413,
+            ];
+        }
+
+        return [
+            'The driver could not be saved because of an unexpected server error. No data was saved. Please give the error reference to the Super Admin.',
+            500,
+        ];
+    }
+
+    private function findQueryException(Throwable $exception): ?QueryException
+    {
+        do {
+            if ($exception instanceof QueryException) {
+                return $exception;
+            }
+
+            $exception = $exception->getPrevious();
+        } while ($exception instanceof Throwable);
+
+        return null;
     }
 
     private function validateDriverRows(array &$rows, Request $request, ?array $strictValidationIndexes = null): void

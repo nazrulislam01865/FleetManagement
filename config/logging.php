@@ -73,6 +73,22 @@ return [
             'replace_placeholders' => true,
         ],
 
+        'database' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/database.log'),
+            'level' => env('DB_LOG_LEVEL', 'error'),
+            'days' => env('DB_LOG_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
+        'slow_query' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/slow-query.log'),
+            'level' => 'warning',
+            'days' => env('DB_SLOW_LOG_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

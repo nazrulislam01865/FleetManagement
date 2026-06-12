@@ -132,6 +132,23 @@ return [
         'update_date_on_publish' => true,
     ],
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Database Monitoring
+    |--------------------------------------------------------------------------
+    |
+    | Slow-query monitoring is handled by AppServiceProvider. SQL bindings are
+    | deliberately excluded from logs so NID, phone, email and other private
+    | values are not written to disk.
+    |
+    */
+
+    'monitoring' => [
+        'slow_query_log' => (bool) env('DB_SLOW_QUERY_LOG', true),
+        'slow_query_ms' => (int) env('DB_SLOW_QUERY_MS', 750),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Redis Databases
