@@ -33,6 +33,7 @@ class DriverController extends FleetBaseController
     public function sync(Request $request): JsonResponse
     {
         $storedPaths = [];
+        $temporaryTokens = [];
 
         try {
             $uploads = app(FleetTemporaryUploadService::class);
@@ -57,6 +58,7 @@ class DriverController extends FleetBaseController
             );
 
             $userId = (int) $request->user()->id;
+            $temporaryTokens = $this->validateDriverTemporaryUploads($rows, $uploads, $userId);
 
             foreach ($rows as $driverIndex => &$driver) {
                 if (! is_array($driver)) {
@@ -73,7 +75,8 @@ class DriverController extends FleetBaseController
                         "fleet/drivers/{$driverId}/photo",
                         ['jpg', 'jpeg', 'png', 'webp'],
                         100,
-                        true
+                        true,
+                        false
                     );
                     $driver['photoName'] = $driver['photo']['originalName'];
                     $storedPaths[] = $driver['photo']['filePath'];
@@ -88,7 +91,9 @@ class DriverController extends FleetBaseController
                             $userId,
                             "fleet/drivers/{$driverId}/documents",
                             FleetDocumentUploadPolicy::EXTENSIONS,
-                            FleetDocumentUploadPolicy::MAX_KILOBYTES
+                            FleetDocumentUploadPolicy::MAX_KILOBYTES,
+                            false,
+                            false
                         );
                         $storedPaths[] = $driver['documents'][$documentIndex]['file']['filePath'];
                     }
@@ -157,11 +162,16 @@ class DriverController extends FleetBaseController
             }
 
             $this->persistRows($rows);
+            $savedRows = $this->recordsFor(FleetDriver::class);
+
+            // Consume temporary uploads only after every file and database row
+            // has been saved successfully. Failed saves therefore remain retryable.
+            $this->deleteDriverTemporaryUploads($uploads, $temporaryTokens, $userId);
 
             return response()->json([
                 'ok' => true,
                 'message' => 'Driver saved successfully.',
-                'rows' => $this->recordsFor(FleetDriver::class),
+                'rows' => $savedRows,
             ]);
         } catch (ValidationException $exception) {
             $this->deleteStoredDriverFiles($storedPaths);
@@ -170,6 +180,88 @@ class DriverController extends FleetBaseController
             $this->deleteStoredDriverFiles($storedPaths);
 
             return $this->driverSyncFailureResponse($request, $exception);
+        }
+    }
+
+    /**
+     * Validate every temporary file before copying any of them. This prevents a
+     * stale photo/document token from causing a partially finalized driver save.
+     *
+     * @return array<int, string>
+     */
+    private function validateDriverTemporaryUploads(
+        array $rows,
+        FleetTemporaryUploadService $uploads,
+        int $userId
+    ): array {
+        $errors = [];
+        $tokens = [];
+
+        foreach ($rows as $driverIndex => $driver) {
+            if (! is_array($driver)) {
+                continue;
+            }
+
+            $photo = is_array($driver['photo'] ?? null) ? $driver['photo'] : [];
+            $photoToken = trim((string) ($photo['tempToken'] ?? ''));
+
+            if ($photoToken !== '') {
+                try {
+                    $uploads->validateClaim($photo, $userId);
+                    $tokens[] = $photoToken;
+                } catch (ValidationException) {
+                    $errors["rows.{$driverIndex}.photo"] = 'The uploaded Driver Photo is no longer available. Please upload the photo again.';
+                }
+            }
+
+            foreach ((array) ($driver['documents'] ?? []) as $documentIndex => $document) {
+                if (! is_array($document)) {
+                    continue;
+                }
+
+                $file = is_array($document['file'] ?? null) ? $document['file'] : [];
+                $token = trim((string) ($file['tempToken'] ?? ''));
+
+                if ($token === '') {
+                    continue;
+                }
+
+                try {
+                    $uploads->validateClaim($file, $userId);
+                    $tokens[] = $token;
+                } catch (ValidationException) {
+                    $name = trim((string) ($document['name'] ?? ''));
+                    $label = $name !== '' ? "{$name} document" : 'driver document';
+                    $errors["rows.{$driverIndex}.documents.{$documentIndex}.file"] = "The uploaded {$label} is no longer available. Please upload the document again.";
+                }
+            }
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+
+        return array_values(array_unique($tokens));
+    }
+
+    private function deleteDriverTemporaryUploads(
+        FleetTemporaryUploadService $uploads,
+        array $tokens,
+        int $userId
+    ): void {
+        foreach (array_values(array_unique($tokens)) as $token) {
+            try {
+                $uploads->delete((string) $token, $userId);
+            } catch (Throwable $cleanupException) {
+                // The driver has already been saved. A failed temporary cleanup
+                // must never turn a successful save into an error for the user.
+                Log::warning('Failed to remove a temporary driver upload after save.', [
+                    'user_id' => $userId,
+                    'temp_token_suffix' => substr((string) $token, -8),
+                    'exception_class' => $cleanupException::class,
+                    'exception_message' => $cleanupException->getMessage(),
+                ]);
+            }
         }
     }
 

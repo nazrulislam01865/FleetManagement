@@ -228,16 +228,21 @@ class FleetTemporaryUploadService
         string $destination,
         array $allowedExtensions,
         int $maxKilobytes,
-        bool $imageOnly = false
+        bool $imageOnly = false,
+        bool $consumeTemporaryUpload = true
     ): array {
-        $token = (string) ($temporaryFile['tempToken'] ?? '');
+        $token = trim((string) ($temporaryFile['tempToken'] ?? ''));
         if ($token === '') {
             throw ValidationException::withMessages([
                 'file' => 'The temporary upload token is missing. Please choose the file again.',
             ]);
         }
 
-        $metadata = $this->metadata($token, $userId);
+        // Preserve the existing behavior for all other modules. Driver saves opt
+        // into retry-safe claiming and receive a validation error for stale files.
+        $metadata = $consumeTemporaryUpload
+            ? $this->metadata($token, $userId)
+            : $this->validateClaim($temporaryFile, $userId);
         $extension = strtolower(pathinfo((string) ($metadata['originalName'] ?? $metadata['fileName'] ?? ''), PATHINFO_EXTENSION));
         $allowedExtensions = array_map('strtolower', $allowedExtensions);
         $sizeBytes = (int) ($metadata['sizeBytes'] ?? 0);
@@ -281,9 +286,55 @@ class FleetTemporaryUploadService
             fclose($stream);
         }
 
-        $this->delete($token, $userId);
+        if ($consumeTemporaryUpload) {
+            $this->delete($token, $userId);
+        }
 
         return $this->permanentPayload($storedPath, $metadata);
+    }
+
+    /**
+     * Validate that a temporary upload still exists and belongs to the user.
+     *
+     * Unlike metadata(), this method returns a validation error instead of a
+     * generic 404 so form submissions can explain exactly what the user must do.
+     */
+    public function validateClaim(array $temporaryFile, int $userId): array
+    {
+        $token = trim((string) ($temporaryFile['tempToken'] ?? ''));
+
+        if ($token === '' || ! preg_match('/^[a-z0-9]{40}$/', $token)) {
+            throw ValidationException::withMessages([
+                'file' => 'The uploaded file reference is invalid. Please choose the file again.',
+            ]);
+        }
+
+        $manifestPath = self::TEMP_ROOT."/{$userId}/{$token}/manifest.json";
+        $disk = Storage::disk('local');
+
+        if (! $disk->exists($manifestPath)) {
+            throw ValidationException::withMessages([
+                'file' => 'The uploaded file is no longer available on the server. Please choose the file again.',
+            ]);
+        }
+
+        $metadata = json_decode((string) $disk->get($manifestPath), true);
+        if (! is_array($metadata) || (int) ($metadata['userId'] ?? 0) !== $userId) {
+            throw ValidationException::withMessages([
+                'file' => 'The uploaded file reference is invalid for this user. Please choose the file again.',
+            ]);
+        }
+
+        $path = trim((string) ($metadata['tempPath'] ?? ''));
+        if ($path === '' || ! $disk->exists($path)) {
+            throw ValidationException::withMessages([
+                'file' => 'The uploaded file is no longer available on the server. Please choose the file again.',
+            ]);
+        }
+
+        $metadata['tempToken'] = $token;
+
+        return $metadata;
     }
 
     public function delete(string $token, int $userId): void

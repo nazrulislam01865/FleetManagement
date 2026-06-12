@@ -61,7 +61,7 @@
                     <div class="grid3">
                         <div class="field"><label for="vehicleId">Vehicle ID <span class="req">*</span></label><input id="vehicleId" readonly></div>
                         <div class="field"><label for="vehicleName">Vehicle Name <span class="req">*</span></label><input id="vehicleName" placeholder="Example: Dhaka Pickup 01" required></div>
-                        <div class="field"><label for="regNo">Registration Number <span class="req">*</span></label><input id="regNo" maxlength="14" pattern="[A-Za-z]{3}-[A-Za-z]{2}-[0-9]{2}-[0-9]{4}" placeholder="Example: DHA-AB-12-3456" required></div>
+                        <div class="field"><label for="regNo">Registration Number <span class="req">*</span></label><input id="regNo" placeholder="Example: DHAKA METRO-GA 12-3456" title="The characters @ # $ % ^ & * ( ) ! ` ~ are not allowed." required></div>
                         <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4b244ece64768724078120db372595a2 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'vendor','label' => 'Vendor / Owner','options' => $fleetman['options']['vehicle_vendors'],'placeholder' => 'Select vendor/owner']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

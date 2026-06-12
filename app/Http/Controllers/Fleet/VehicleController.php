@@ -261,7 +261,7 @@ class VehicleController extends FleetBaseController
             $rules = [
                 'id' => ['required', 'string', 'max:100'],
                 'name' => ['required', 'string', 'max:255'],
-                'regNo' => ['required', 'regex:/^[A-Z]{3}-[A-Z]{2}-\d{2}-\d{4}$/'],
+                'regNo' => ['required', 'string', 'not_regex:/[@#$%^&*()!`~]/'],
                 'vendor' => ['nullable', Rule::in($vehicleVendors)],
                 'model' => ['required', 'string', 'max:255'],
                 'color' => ['nullable', 'string', 'max:100'],
@@ -289,7 +289,7 @@ class VehicleController extends FleetBaseController
             ];
 
             $validator = Validator::make($row, $rules, [
-                'regNo.regex' => 'Registration Number must use the format ABC-AB-12-3456.',
+                'regNo.not_regex' => 'Registration Number cannot contain these special characters: @ # $ % ^ & * ( ) ! ` ~.',
                 'vendor.in' => 'Select an active vehicle or driver service vendor / owner.',
                 'engineNo.regex' => 'Engine Number must contain exactly 17 letters or digits.',
                 'driver.in' => 'Select a valid driver.',

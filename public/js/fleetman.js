@@ -1419,8 +1419,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
 
             const regInput = $('#regNo');
-            if (regInput?.value.trim() && !/^[A-Za-z]{3}-[A-Za-z]{2}-\d{2}-\d{4}$/.test(regInput.value.trim())) {
-                invalidate(regInput, 'Use the format ABC-AB-12-3456.');
+            if (regInput?.value.trim() && /[@#$%^&*()!`~]/.test(regInput.value.trim())) {
+                invalidate(regInput, 'Registration Number cannot contain: @ # $ % ^ & * ( ) ! ` ~.');
             }
 
             const engineInput = $('#engineNo');
