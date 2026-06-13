@@ -267,7 +267,7 @@ class VehicleController extends FleetBaseController
                 'vendor' => ['nullable', Rule::in($vehicleVendors)],
                 'model' => ['required', 'string', 'max:255'],
                 'color' => ['nullable', 'string', 'max:100'],
-                'engineNo' => ['required', 'string'],
+                'engineNo' => ['required', 'string', 'max:22'],
                 'mileage' => ['nullable', 'numeric', 'min:0'],
                 'odo' => ['nullable', 'numeric', 'min:0'],
                 'category' => ['required', Rule::in($categories)],

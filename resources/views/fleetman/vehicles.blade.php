@@ -34,7 +34,7 @@
                         <x-fleetman.select id="vendor" label="Vendor / Owner" :options="$fleetman['options']['vehicle_vendors']" placeholder="Select vendor/owner" />
                         <div class="field"><label for="model">Model <span class="req">*</span></label><input id="model" placeholder="Example: Toyota Hiace 2021" required></div>
                         <div class="field"><label for="color">Color</label><input id="color" placeholder="Example: White"></div>
-                        <div class="field"><label for="engineNo">Engine Number <span class="req">*</span></label><input id="engineNo" placeholder="Enter engine number" required></div>
+                        <div class="field"><label for="engineNo">Engine Number <span class="req">*</span></label><input id="engineNo" maxlength="22" placeholder="Enter engine number (maximum 22 characters)" required></div>
                         <div class="field"><label for="mileage">Regular Mileage Target</label><input id="mileage" type="number" placeholder="Example: 8.5"></div>
                         <div class="field"><label for="odo">Current Odometer</label><input id="odo" type="number" placeholder="Example: 45230"></div>
                     </div>

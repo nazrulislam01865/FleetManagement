@@ -1433,6 +1433,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 invalidate(regInput, 'Registration Number cannot contain: @ # $ % ^ & * ( ) ! ` ~.');
             }
 
+            const engineInput = $('#engineNo');
+            if (engineInput?.value.trim().length > 22) {
+                invalidate(engineInput, 'Engine Number cannot be more than 22 characters.');
+            }
+
             const driver = $('#driver');
             const validDriverValues = new Set(
                 $$('#vehicleDriverList option').map((option) => String(option.value || '').trim())
