@@ -177,10 +177,10 @@
 
                     <div id="tripClientVisitField" class="field searchable hidden" style="margin-top:16px">
                         <div class="search-label">
-                            <label for="tripClient">Client <span class="req">*</span></label>
+                            <label for="tripClient">Client (Optional)</label>
                             <span class="search-tag">Searchable</span>
                         </div>
-                        <input id="tripClient" list="tripClientList" placeholder="Type client ID, name, phone, or email" autocomplete="off">
+                        <input id="tripClient" list="tripClientList" placeholder="Optional: type client ID, name, phone, or email" autocomplete="off">
                         <datalist id="tripClientList"></datalist>
                     </div>
                  <?php echo $__env->renderComponent(); ?>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\ActiveLoginSession;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -12,6 +13,10 @@ use Symfony\Component\HttpFoundation\Response;
 class EnforceUserInactivityTimeout
 {
     private const SESSION_KEY = 'fleetman.last_activity_at';
+
+    public function __construct(private readonly ActiveLoginSession $activeLoginSession)
+    {
+    }
 
     /**
      * Log authenticated users out after the configured period of inactivity
@@ -29,6 +34,10 @@ class EnforceUserInactivityTimeout
 
         if ($user && method_exists($user, 'isAccountActive') && ! $user->isAccountActive()) {
             return $this->expireDisabledAccount($request, $user->accountStatusLabel());
+        }
+
+        if ($user && ! $this->activeLoginSession->isCurrent($request, $user)) {
+            return $this->expireReplacedSession($request);
         }
 
         $now = now()->timestamp;
@@ -52,7 +61,8 @@ class EnforceUserInactivityTimeout
         return $this->logoutWithMessage(
             $request,
             'Your session expired after 15 minutes of inactivity. Please sign in again.',
-            'Your session expired after 15 minutes of inactivity.'
+            'Your session expired after 15 minutes of inactivity.',
+            true
         );
     }
 
@@ -61,12 +71,31 @@ class EnforceUserInactivityTimeout
         return $this->logoutWithMessage(
             $request,
             'Your account is currently '.$statusLabel.'. Contact a Super Admin to restore active access.',
-            'Your account is currently '.$statusLabel.'.'
+            'Your account is currently '.$statusLabel.'.',
+            true
         );
     }
 
-    private function logoutWithMessage(Request $request, string $flashMessage, string $jsonMessage): JsonResponse|RedirectResponse
+    private function expireReplacedSession(Request $request): JsonResponse|RedirectResponse
     {
+        return $this->logoutWithMessage(
+            $request,
+            'You were logged out because this account was signed in on another device or browser. Only one active login is allowed per user. If this was not you, change your password immediately.',
+            'You were logged out because this account was signed in on another device or browser. Only one active login is allowed per user.',
+            false
+        );
+    }
+
+    private function logoutWithMessage(
+        Request $request,
+        string $flashMessage,
+        string $jsonMessage,
+        bool $releaseActiveSession
+    ): JsonResponse|RedirectResponse {
+        if ($releaseActiveSession) {
+            $this->activeLoginSession->release($request, $request->user());
+        }
+
         Auth::logout();
 
         $request->session()->invalidate();

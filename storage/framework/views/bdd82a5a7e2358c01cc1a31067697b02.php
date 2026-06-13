@@ -84,7 +84,7 @@
 <?php endif; ?>
                         <div class="field"><label for="model">Model <span class="req">*</span></label><input id="model" placeholder="Example: Toyota Hiace 2021" required></div>
                         <div class="field"><label for="color">Color</label><input id="color" placeholder="Example: White"></div>
-                        <div class="field"><label for="engineNo">Engine Number <span class="req">*</span></label><input id="engineNo" maxlength="17" pattern="[A-Za-z0-9]{17}" placeholder="Exactly 17 letters or digits" required></div>
+                        <div class="field"><label for="engineNo">Engine Number <span class="req">*</span></label><input id="engineNo" placeholder="Enter engine number" required></div>
                         <div class="field"><label for="mileage">Regular Mileage Target</label><input id="mileage" type="number" placeholder="Example: 8.5"></div>
                         <div class="field"><label for="odo">Current Odometer</label><input id="odo" type="number" placeholder="Example: 45230"></div>
                     </div>
@@ -173,10 +173,10 @@
 <?php endif; ?>
                         <div class="field searchable">
                             <div class="search-label">
-                                <label for="driver">Driver <span class="req">*</span></label>
+                                <label for="driver">Driver <small>(Optional)</small></label>
                                 <span class="search-tag">Searchable</span>
                             </div>
-                            <input id="driver" list="vehicleDriverList" placeholder="Type to search and select a driver" autocomplete="off" required aria-required="true">
+                            <input id="driver" list="vehicleDriverList" placeholder="Type to search and select a driver (optional)" autocomplete="off">
                             <datalist id="vehicleDriverList">
                                 <?php $__currentLoopData = $fleetman['options']['drivers']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $driverOptionValue => $driverOptionLabel): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                     <?php

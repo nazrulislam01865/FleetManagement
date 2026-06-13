@@ -148,7 +148,12 @@
                 <tbody>
                     @forelse ($paymentTypes as $paymentType)
                         <tr>
-                            <td>{{ optional($paymentType->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</td>
+                            <td>
+                                <div class="created-at-cell">
+                                    <span class="created-at-date">{{ optional($paymentType->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</span>
+                                    <small class="created-at-creator">Created by: {{ $paymentType->creatorName ?? 'System / Legacy' }}</small>
+                                </div>
+                            </td>
                             <td><b>{{ $paymentType->name }}</b></td>
                             <td><span class="master-code">{{ $paymentType->code }}</span></td>
                             <td>{{ $paymentType->sort_order }}</td>

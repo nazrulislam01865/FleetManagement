@@ -6,6 +6,7 @@ use App\Models\Fleet\FleetPermission;
 use App\Models\Fleet\FleetRole;
 use App\Models\User;
 use App\Support\FleetRbac;
+use App\Services\FleetRecordOwnershipService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -41,7 +42,7 @@ class UserManagementController extends FleetBaseController
             'fleet_role_id' => ['required', 'integer', Rule::in($roleIds)],
         ]);
 
-        DB::transaction(function () use ($validated): void {
+        $createdUser = DB::transaction(function () use ($validated): User {
             $attributes = [
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -59,7 +60,15 @@ class UserManagementController extends FleetBaseController
             if ($role) {
                 $this->syncUserPermissionsFromRole($user, $role);
             }
+
+            return $user;
         });
+
+        app(FleetRecordOwnershipService::class)->claimRecord(
+            'users',
+            (string) $createdUser->id,
+            (int) $request->user()->id
+        );
 
         return redirect()
             ->route('fleet.users')
@@ -170,6 +179,16 @@ class UserManagementController extends FleetBaseController
             ->orderBy('name')
             ->orderBy('email')
             ->get();
+        $creatorNames = app(FleetRecordOwnershipService::class)->creatorNames(
+            'users',
+            $users->pluck('id')->map(fn ($id): string => (string) $id)->all()
+        );
+        $users->each(function (User $user) use ($creatorNames): void {
+            $user->setAttribute(
+                'creatorName',
+                $creatorNames[(string) $user->id] ?? 'System / Legacy'
+            );
+        });
 
         $actor = auth()->user();
         $roleOptions = $this->assignableRoles($actor);
@@ -245,6 +264,16 @@ class UserManagementController extends FleetBaseController
         }
 
         $query->delete();
+
+        if (Schema::hasColumn('users', 'active_session_id')) {
+            $activeSessionId = (int) $actor->id === (int) $user->id && $request->hasSession()
+                ? (string) $request->session()->getId()
+                : null;
+
+            $user->forceFill([
+                'active_session_id' => $activeSessionId,
+            ])->saveQuietly();
+        }
     }
 
     private function wouldRemoveLastActiveSuperAdmin(User $user, FleetRole $newRole, string $newStatus): bool

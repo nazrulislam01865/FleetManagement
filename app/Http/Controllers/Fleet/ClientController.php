@@ -126,7 +126,7 @@ class ClientController extends FleetBaseController
                     [
                         'name' => $row['clientName'] ?? $code,
                         'status' => $row['status'] ?? null,
-                        'payload' => $row,
+                        'payload' => $this->withoutRecordMetadata($row),
                     ]
                 );
             }

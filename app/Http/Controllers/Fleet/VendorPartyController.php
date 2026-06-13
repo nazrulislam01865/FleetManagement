@@ -318,7 +318,7 @@ class VendorPartyController extends FleetBaseController
                     [
                         'name' => $row[$nameKey] ?? $code,
                         'status' => $row[$statusKey] ?? null,
-                        'payload' => $row,
+                        'payload' => $this->withoutRecordMetadata($row),
                     ]
                 );
             }

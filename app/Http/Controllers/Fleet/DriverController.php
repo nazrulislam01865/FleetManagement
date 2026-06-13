@@ -640,7 +640,7 @@ class DriverController extends FleetBaseController
                 FleetDriver::updateOrCreate(['code' => $code], [
                     'name' => $row[$this->nameKey] ?? $code,
                     'status' => $row[$this->statusKey] ?? null,
-                    'payload' => $row,
+                    'payload' => $this->withoutRecordMetadata($row),
                 ]);
             }
         });

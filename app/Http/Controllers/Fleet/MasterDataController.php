@@ -14,6 +14,7 @@ use App\Models\Fleet\FleetVehicleCategory;
 use App\Models\Fleet\FleetVehicleSubCategory;
 use App\Models\Fleet\FleetFuelType;
 use App\Models\Fleet\FleetFuelUnit;
+use App\Services\FleetRecordOwnershipService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -146,10 +147,10 @@ class MasterDataController extends FleetBaseController
             'masterSection' => 'payment_types',
             'masterTitle' => 'Payment Type Master',
             'masterSubtitle' => 'Manage payment methods used in the Add Trip payment-method dropdown.',
-            'paymentTypeRows' => FleetPaymentType::query()
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(),
+            'paymentTypeRows' => $this->modelsWithCreator(
+                FleetPaymentType::query()->orderBy('sort_order')->orderBy('name')->get(),
+                'master.payment_types'
+            ),
             'editingPaymentType' => $editingPaymentType,
         ]));
     }
@@ -168,10 +169,10 @@ class MasterDataController extends FleetBaseController
             'masterSection' => 'vendor_contractor_types',
             'masterTitle' => 'Vendor / Contractor Type Master',
             'masterSubtitle' => 'Manage vendor and contractor types used to filter vehicle and driver-related selections.',
-            'vendorContractorTypeRows' => FleetVendorContractorType::query()
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(),
+            'vendorContractorTypeRows' => $this->modelsWithCreator(
+                FleetVendorContractorType::query()->orderBy('sort_order')->orderBy('name')->get(),
+                'master.vendor_contractor_types'
+            ),
             'editingVendorContractorType' => $editingVendorContractorType,
         ]));
     }
@@ -180,7 +181,12 @@ class MasterDataController extends FleetBaseController
     {
         $validated = $this->validateVendorContractorType($request);
 
-        FleetVendorContractorType::query()->create($validated);
+        $record = FleetVendorContractorType::query()->create($validated);
+        app(FleetRecordOwnershipService::class)->claimRecord(
+            'master.vendor_contractor_types',
+            (string) $record->code,
+            (int) $request->user()->id
+        );
 
         return redirect()
             ->route('fleet.master-data.vendor-contractor-types')
@@ -189,9 +195,16 @@ class MasterDataController extends FleetBaseController
 
     public function updateVendorContractorType(Request $request, FleetVendorContractorType $vendorContractorType): RedirectResponse
     {
+        $oldCode = (string) $vendorContractorType->code;
         $validated = $this->validateVendorContractorType($request, $vendorContractorType);
 
         $vendorContractorType->update($validated);
+        app(FleetRecordOwnershipService::class)->moveRecord(
+            'master.vendor_contractor_types',
+            $oldCode,
+            (string) $vendorContractorType->code,
+            (int) $request->user()->id
+        );
 
         return redirect()
             ->route('fleet.master-data.vendor-contractor-types')
@@ -200,7 +213,9 @@ class MasterDataController extends FleetBaseController
 
     public function destroyVendorContractorType(FleetVendorContractorType $vendorContractorType): RedirectResponse
     {
+        $code = (string) $vendorContractorType->code;
         $vendorContractorType->delete();
+        app(FleetRecordOwnershipService::class)->forgetRecord('master.vendor_contractor_types', $code);
 
         return redirect()
             ->route('fleet.master-data.vendor-contractor-types')
@@ -211,7 +226,12 @@ class MasterDataController extends FleetBaseController
     {
         $validated = $this->validatePaymentType($request);
 
-        FleetPaymentType::query()->create($validated);
+        $record = FleetPaymentType::query()->create($validated);
+        app(FleetRecordOwnershipService::class)->claimRecord(
+            'master.payment_types',
+            (string) $record->code,
+            (int) $request->user()->id
+        );
 
         return redirect()
             ->route('fleet.master-data.payment-types')
@@ -220,9 +240,16 @@ class MasterDataController extends FleetBaseController
 
     public function updatePaymentType(Request $request, FleetPaymentType $paymentType): RedirectResponse
     {
+        $oldCode = (string) $paymentType->code;
         $validated = $this->validatePaymentType($request, $paymentType);
 
         $paymentType->update($validated);
+        app(FleetRecordOwnershipService::class)->moveRecord(
+            'master.payment_types',
+            $oldCode,
+            (string) $paymentType->code,
+            (int) $request->user()->id
+        );
 
         return redirect()
             ->route('fleet.master-data.payment-types')
@@ -231,7 +258,9 @@ class MasterDataController extends FleetBaseController
 
     public function destroyPaymentType(FleetPaymentType $paymentType): RedirectResponse
     {
+        $code = (string) $paymentType->code;
         $paymentType->delete();
+        app(FleetRecordOwnershipService::class)->forgetRecord('master.payment_types', $code);
 
         return redirect()
             ->route('fleet.master-data.payment-types')
@@ -269,7 +298,7 @@ class MasterDataController extends FleetBaseController
             ? $this->codeFrom((string) $validated['editingCode'])
             : null;
 
-        DB::transaction(function () use ($row, $documentTypes, $documentType, $editingCode): void {
+        $savedDocument = DB::transaction(function () use ($row, $documentTypes, $documentType, $editingCode): FleetDocumentName {
             $attributes = [
                 'code' => $row['code'],
                 'name' => $row['name'],
@@ -307,7 +336,16 @@ class MasterDataController extends FleetBaseController
             $documentName ??= new FleetDocumentName();
             $documentName->fill($attributes);
             $documentName->save();
+
+            return $documentName->refresh();
         });
+
+        app(FleetRecordOwnershipService::class)->moveRecord(
+            'master.document_names',
+            (string) ($editingCode ?? ''),
+            (string) $savedDocument->code,
+            (int) $request->user()->id
+        );
 
         return response()->json([
             'ok' => true,
@@ -318,8 +356,10 @@ class MasterDataController extends FleetBaseController
     public function destroyDocumentName(FleetDocumentName $documentName): JsonResponse
     {
         $deletedId = (int) $documentName->getKey();
+        $code = (string) $documentName->code;
 
         $documentName->delete();
+        app(FleetRecordOwnershipService::class)->forgetRecord('master.document_names', $code);
 
         return response()->json([
             'ok' => true,
@@ -357,6 +397,8 @@ class MasterDataController extends FleetBaseController
             'fuel_units.*' => ['array'],
         ]);
 
+        $ownershipSnapshot = $this->masterOwnershipSnapshot($validated);
+
         DB::transaction(function () use ($validated) {
             $this->syncMasterTable(FleetVehicleCategory::class, $validated['vehicle_categories']);
             $this->syncVehicleSubCategories($validated['vehicle_sub_categories']);
@@ -371,6 +413,8 @@ class MasterDataController extends FleetBaseController
             $this->syncMasterTable(FleetFuelType::class, $validated['fuel_types']);
             $this->syncMasterTable(FleetFuelUnit::class, $validated['fuel_units']);
         });
+
+        $this->syncMasterOwnership($ownershipSnapshot, (int) $request->user()->id);
 
         return response()->json([
             'ok' => true,
@@ -415,11 +459,18 @@ class MasterDataController extends FleetBaseController
 
     private function masterRows(string $modelClass): array
     {
-        return $modelClass::query()
+        $rows = $modelClass::query()
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get()
-            ->map(function (Model $row): array {
+            ->get();
+        $resource = $this->masterOwnershipResource($modelClass);
+        $creatorNames = app(FleetRecordOwnershipService::class)->creatorNames(
+            $resource,
+            $rows->pluck('code')->all()
+        );
+
+        return $rows
+            ->map(function (Model $row) use ($creatorNames): array {
                 $legacyDocumentType = $row->getAttribute('document_type') ?: null;
                 $documentTypes = null;
 
@@ -442,6 +493,7 @@ class MasterDataController extends FleetBaseController
                     'status' => $row->is_active ? 'Active' : 'Inactive',
                     'createdAt' => optional($row->created_at)->toIso8601String(),
                     'updatedAt' => optional($row->updated_at)->toIso8601String(),
+                    'creatorName' => $creatorNames[(string) $row->code] ?? 'System / Legacy',
                 ];
             })
             ->values()
@@ -453,12 +505,17 @@ class MasterDataController extends FleetBaseController
         $categoryNames = FleetVehicleCategory::query()
             ->pluck('name', 'code')
             ->all();
-
-        return FleetVehicleSubCategory::query()
+        $rows = FleetVehicleSubCategory::query()
             ->orderBy('vehicle_category_code')
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get()
+            ->get();
+        $creatorNames = app(FleetRecordOwnershipService::class)->creatorNames(
+            'master.vehicle_sub_categories',
+            $rows->pluck('code')->all()
+        );
+
+        return $rows
             ->map(fn (FleetVehicleSubCategory $row) => [
                 'id' => $row->id,
                 'code' => $row->code,
@@ -471,9 +528,128 @@ class MasterDataController extends FleetBaseController
                 'status' => $row->is_active ? 'Active' : 'Inactive',
                 'createdAt' => optional($row->created_at)->toIso8601String(),
                 'updatedAt' => optional($row->updated_at)->toIso8601String(),
+                'creatorName' => $creatorNames[(string) $row->code] ?? 'System / Legacy',
             ])
             ->values()
             ->all();
+    }
+
+    private function modelsWithCreator(iterable $rows, string $resource)
+    {
+        $collection = collect($rows)->values();
+        $creatorNames = app(FleetRecordOwnershipService::class)->creatorNames(
+            $resource,
+            $collection->pluck('code')->all()
+        );
+
+        return $collection->each(function (Model $row) use ($creatorNames): void {
+            $row->setAttribute(
+                'creatorName',
+                $creatorNames[(string) $row->getAttribute('code')] ?? 'System / Legacy'
+            );
+        });
+    }
+
+    private function masterOwnershipResource(string $modelClass): string
+    {
+        return match ($modelClass) {
+            FleetVehicleCategory::class => 'master.vehicle_categories',
+            FleetVehicleSubCategory::class => 'master.vehicle_sub_categories',
+            FleetPartyType::class => 'master.party_types',
+            FleetDocumentName::class => 'master.document_names',
+            FleetLicenceType::class => 'master.licence_types',
+            FleetDriverContactType::class => 'master.driver_contact_types',
+            FleetClientType::class => 'master.client_types',
+            FleetContactMethod::class => 'master.contact_methods',
+            FleetFuelType::class => 'master.fuel_types',
+            FleetFuelUnit::class => 'master.fuel_units',
+            FleetPaymentType::class => 'master.payment_types',
+            FleetVendorContractorType::class => 'master.vendor_contractor_types',
+            default => 'master.unknown',
+        };
+    }
+
+    /**
+     * Capture master-data codes before bulk persistence so creator ownership is
+     * assigned only to genuinely new rows and removed only for real deletions.
+     * Existing legacy rows remain System / Legacy when they are merely edited.
+     *
+     * @return array<int, array{resource:string,created:array<int,string>,deleted:array<int,string>}>
+     */
+    private function masterOwnershipSnapshot(array $validated): array
+    {
+        $definitions = [
+            'vehicle_categories' => ['master.vehicle_categories', FleetVehicleCategory::class, false, true],
+            'vehicle_sub_categories' => ['master.vehicle_sub_categories', FleetVehicleSubCategory::class, true, true],
+            'party_types' => ['master.party_types', FleetPartyType::class, false, true],
+            // Document rows are upsert-only in this endpoint; dedicated delete
+            // routes handle deletion and ownership cleanup.
+            'document_names' => ['master.document_names', FleetDocumentName::class, false, false],
+            'licence_types' => ['master.licence_types', FleetLicenceType::class, false, true],
+            'driver_contact_types' => ['master.driver_contact_types', FleetDriverContactType::class, false, true],
+            'client_types' => ['master.client_types', FleetClientType::class, false, true],
+            'contact_methods' => ['master.contact_methods', FleetContactMethod::class, false, true],
+            'fuel_types' => ['master.fuel_types', FleetFuelType::class, false, true],
+            'fuel_units' => ['master.fuel_units', FleetFuelUnit::class, false, true],
+        ];
+
+        $snapshot = [];
+        foreach ($definitions as $requestKey => [$resource, $modelClass, $isSubCategory, $deleteMissing]) {
+            if (! array_key_exists($requestKey, $validated)) {
+                continue;
+            }
+
+            $incomingCodes = collect($validated[$requestKey])
+                ->filter(fn ($row): bool => is_array($row))
+                ->map(function (array $row) use ($isSubCategory): ?string {
+                    $clean = $isSubCategory
+                        ? $this->cleanVehicleSubCategoryRow($row)
+                        : $this->cleanMasterRow($row);
+
+                    return $clean['code'] ?? null;
+                })
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            $existingCodes = $modelClass::query()
+                ->pluck('code')
+                ->map(fn ($code): string => trim((string) $code))
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+
+            $snapshot[] = [
+                'resource' => $resource,
+                'created' => array_values(array_diff($incomingCodes, $existingCodes)),
+                'deleted' => $deleteMissing
+                    ? array_values(array_diff($existingCodes, $incomingCodes))
+                    : [],
+            ];
+        }
+
+        return $snapshot;
+    }
+
+    private function syncMasterOwnership(array $snapshot, int $userId): void
+    {
+        $ownership = app(FleetRecordOwnershipService::class);
+
+        foreach ($snapshot as $change) {
+            $resource = (string) ($change['resource'] ?? '');
+            if ($resource === '') {
+                continue;
+            }
+
+            foreach ((array) ($change['created'] ?? []) as $code) {
+                $ownership->claimRecord($resource, (string) $code, $userId);
+            }
+            foreach ((array) ($change['deleted'] ?? []) as $code) {
+                $ownership->forgetRecord($resource, (string) $code);
+            }
+        }
     }
 
     private function syncMasterTable(string $modelClass, array $rows): void

@@ -452,7 +452,7 @@
         const body = $('#yardTableBody');
         body.innerHTML = pageRows.length ? pageRows.map((record) => `
             <tr>
-                <td>${escapeHtml(formatCreatedAt(record.createdAt || record.created_at))}</td>
+                <td>${window.FleetmanCreatedAtCell(record.createdAt || record.created_at, record.creatorName || record.createdBy)}</td>
                 <td><b>${escapeHtml(record.yardId || '—')}</b></td>
                 <td class="yard-name-cell"><b>${escapeHtml(record.yardName || 'Unnamed Yard')}</b><br><small>${escapeHtml(record.address || 'No address')}</small></td>
                 <td>${escapeHtml(record.supervisor || '—')}</td>

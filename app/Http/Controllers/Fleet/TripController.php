@@ -87,13 +87,15 @@ class TripController extends FleetBaseController
                     && (string) ($existing['clientId'] ?? '') === (string) ($row['clientId'] ?? '')
                     && (string) ($existing['client'] ?? '') === (string) ($row['client'] ?? '');
 
-                $requiresClientSelection = (int) ($row['tripValidationVersion'] ?? 0) >= 2;
-                if ($requiresClientSelection && $this->isClientVisit((string) ($row['purpose'] ?? ''))) {
-                    if (blank($row['clientId'] ?? null) || blank($row['client'] ?? null)) {
-                        $validator->errors()->add("rows.$index.client", 'Select a client for a Client Visit trip.');
-                    } elseif (! in_array((string) $row['clientId'], $clientIds, true) && ! $sameHistoricalClient) {
-                        $validator->errors()->add("rows.$index.client", 'Select a valid client from the saved client suggestions.');
-                    }
+                $usesCurrentTripValidation = (int) ($row['tripValidationVersion'] ?? 0) >= 2;
+                $hasClientValue = filled($row['clientId'] ?? null) || filled($row['client'] ?? null);
+                if ($usesCurrentTripValidation
+                    && $this->isClientVisit((string) ($row['purpose'] ?? ''))
+                    && $hasClientValue
+                    && (blank($row['clientId'] ?? null)
+                        || blank($row['client'] ?? null)
+                        || (! in_array((string) $row['clientId'], $clientIds, true) && ! $sameHistoricalClient))) {
+                    $validator->errors()->add("rows.$index.client", 'Select a valid client from the saved client suggestions or leave the field blank.');
                 }
 
                 $odoStart = $row['odoStart'] ?? null;

@@ -140,7 +140,7 @@
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${window.FleetmanFormatCreatedAt(due.created_at || due.createdAt)}</td>
+                    <td>${window.FleetmanCreatedAtCell(due.created_at || due.createdAt, due.creatorName || due.createdBy)}</td>
                     <td>${due.code}</td>
                     <td><span class="badge" style="background:#f3f4f6;color:#374151;padding:4px 8px;border-radius:4px;font-size:12px;">${due.type}</span></td>
                     <td>${due.party_type}: <b>${due.party_id || 'N/A'}</b></td>

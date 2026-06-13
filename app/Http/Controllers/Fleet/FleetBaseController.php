@@ -25,6 +25,7 @@ use App\Models\Fleet\FleetVendorParty;
 use App\Models\Fleet\FleetYard;
 use App\Models\Fleet\FleetVendorContractorType;
 use App\Support\FleetRbac;
+use App\Services\FleetRecordOwnershipService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -87,6 +88,7 @@ abstract class FleetBaseController extends Controller
             'record' => $record,
             'recordPayload' => $payload,
             'recordTitle' => $recordTitle !== '' ? $recordTitle : $record->code,
+            'recordCreatorName' => $this->creatorNameForRecord($this->resource, (string) $record->code),
             'detail' => $detail,
         ];
 
@@ -222,7 +224,7 @@ abstract class FleetBaseController extends Controller
                     [
                         'name' => $row[$nameKey] ?? $code,
                         'status' => $row[$statusKey] ?? null,
-                        'payload' => $row,
+                        'payload' => $this->withoutRecordMetadata($row),
                     ]
                 );
             }
@@ -329,7 +331,7 @@ abstract class FleetBaseController extends Controller
             return $value;
         }
 
-        foreach (['createdAt', 'updatedAt', 'created_at', 'updated_at'] as $metadataKey) {
+        foreach (['createdAt', 'updatedAt', 'created_at', 'updated_at', 'creatorName', 'createdBy', 'created_by'] as $metadataKey) {
             unset($value[$metadataKey]);
         }
 
@@ -342,6 +344,18 @@ abstract class FleetBaseController extends Controller
         }
 
         return $value;
+    }
+
+    protected function withoutRecordMetadata(array $row): array
+    {
+        foreach ([
+            'createdAt', 'updatedAt', 'created_at', 'updated_at',
+            'creatorName', 'createdBy', 'created_by',
+        ] as $metadataKey) {
+            unset($row[$metadataKey]);
+        }
+
+        return $row;
     }
 
     protected function validateUniqueDocumentNames(array $rows, string $documentKey = 'documents'): void
@@ -1166,18 +1180,127 @@ abstract class FleetBaseController extends Controller
 
     protected function recordsFor(string $modelClass): array
     {
-        return $modelClass::query()
+        $rows = $modelClass::query()
             ->latest('id')
-            ->get()
-            ->map(function (Model $row): array {
+            ->get();
+
+        return $this->recordPayloadsWithCreator(
+            $rows,
+            $this->ownershipResourceForModel($modelClass)
+        );
+    }
+
+    /**
+     * Add database timestamps and the immutable original creator to each
+     * browser payload without storing audit metadata inside the JSON payload.
+     */
+    protected function recordPayloadsWithCreator(iterable $rows, string $resource): array
+    {
+        $collection = collect($rows)->values();
+        $creatorNames = app(FleetRecordOwnershipService::class)->creatorNames(
+            $resource,
+            $collection->pluck('code')->all()
+        );
+
+        return $collection
+            ->map(function (Model $row) use ($resource, $creatorNames): array {
                 $payload = is_array($row->payload) ? $row->payload : [];
+                $code = (string) $row->code;
                 $payload['createdAt'] = optional($row->created_at)->toIso8601String();
                 $payload['updatedAt'] = optional($row->updated_at)->toIso8601String();
+                $payload['creatorName'] = $creatorNames[$code]
+                    ?? $this->pendingCreatorName($resource, $code)
+                    ?? 'System / Legacy';
 
                 return $payload;
             })
             ->values()
             ->all();
+    }
+
+    protected function creatorNameForRecord(string $resource, string $code): string
+    {
+        return app(FleetRecordOwnershipService::class)->creatorName($resource, $code)
+            ?? $this->pendingCreatorName($resource, $code)
+            ?? 'System / Legacy';
+    }
+
+    /**
+     * During a successful AJAX save, ownership middleware runs after the
+     * controller response is built. This fallback lets the just-created row
+     * display its creator immediately; middleware then persists the same owner.
+     */
+    protected function pendingCreatorName(string $resource, string $code): ?string
+    {
+        $request = request();
+        $user = $request->user();
+        if (! $user || trim($code) === '') {
+            return null;
+        }
+
+        $routeName = (string) $request->route()?->getName();
+        $syncRoutes = [
+            'fleet.vehicles.sync' => ['vehicles', 'id'],
+            'fleet.fuel-prices.sync' => ['fuel_prices', 'fuelPriceId'],
+            'fleet.fuel-recharge.sync' => ['fuel_recharges', 'rechargeId'],
+            'fleet.vendors.sync' => ['parties', 'partyId'],
+            'fleet.trips.sync' => ['trips', 'tripId'],
+            'fleet.drivers.sync' => ['drivers', 'driverId'],
+            'fleet.driver-attendance.sync' => ['driver_attendance', 'logId'],
+            'fleet.employees.sync' => ['employees', 'employeeId'],
+            'fleet.contracts.sync' => ['contracts', 'contractId'],
+            'fleet.clients.sync' => ['clients', 'clientId'],
+            'fleet.dues.sync' => ['dues', 'code'],
+        ];
+
+        if (isset($syncRoutes[$routeName])) {
+            [$routeResource] = $syncRoutes[$routeName];
+            if ($routeResource !== $resource) {
+                return null;
+            }
+
+            $createdCodes = collect((array) $request->attributes->get('fleet_mutation_snapshot', []))
+                ->get('created', []);
+
+            return collect((array) $createdCodes)
+                ->map(fn ($createdCode): string => trim((string) $createdCode))
+                ->contains($code)
+                    ? (string) $user->name
+                    : null;
+        }
+
+        if ($routeName === 'fleet.driver-attendance.store' && $resource === 'driver_attendance') {
+            $snapshot = (array) $request->attributes->get('fleet_mutation_snapshot', []);
+            $isNew = ! (bool) ($snapshot['record_exists'] ?? true);
+
+            return $isNew && trim((string) data_get($request->input('row', []), 'logId')) === $code
+                ? (string) $user->name
+                : null;
+        }
+
+        if ($routeName === 'fleet.yards.store' && $resource === 'yards') {
+            return (string) $user->name;
+        }
+
+        return null;
+    }
+
+    protected function ownershipResourceForModel(string $modelClass): string
+    {
+        return match ($modelClass) {
+            FleetYard::class => 'yards',
+            FleetVehicle::class => 'vehicles',
+            FleetFuelPrice::class => 'fuel_prices',
+            FleetFuelRecharge::class => 'fuel_recharges',
+            FleetVendorParty::class => 'parties',
+            FleetTrip::class => 'trips',
+            FleetDriver::class => 'drivers',
+            FleetClient::class => 'clients',
+            FleetDriverAttendance::class => 'driver_attendance',
+            FleetEmployee::class => 'employees',
+            FleetContract::class => 'contracts',
+            default => $this->resource,
+        };
     }
 
 
@@ -1187,19 +1310,12 @@ abstract class FleetBaseController extends Controller
             return [];
         }
 
-        return FleetContract::query()
+        $rows = FleetContract::query()
             ->whereNotIn('status', ['fuel_recharge', 'attendance'])
             ->latest('id')
-            ->get()
-            ->map(function (FleetContract $row): array {
-                $payload = is_array($row->payload) ? $row->payload : [];
-                $payload['createdAt'] = optional($row->created_at)->toIso8601String();
-                $payload['updatedAt'] = optional($row->updated_at)->toIso8601String();
+            ->get();
 
-                return $payload;
-            })
-            ->values()
-            ->all();
+        return $this->recordPayloadsWithCreator($rows, 'contracts');
     }
 
     protected function contractMastersFromDatabase(): array

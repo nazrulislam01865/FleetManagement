@@ -78,6 +78,7 @@ class CaptureFleetActivityNotifications
     public function handle(Request $request, Closure $next): Response
     {
         $mutationSnapshot = $this->captureMutationSnapshot($request);
+        $request->attributes->set('fleet_mutation_snapshot', $mutationSnapshot);
         $response = $next($request);
 
         if ($response instanceof JsonResponse) {
@@ -90,7 +91,7 @@ class CaptureFleetActivityNotifications
 
         try {
             // Ownership tracking remains unchanged for every successful data request.
-            $this->ownership->capture($request);
+            $this->ownership->capture($request, $mutationSnapshot);
 
             foreach ($this->crudEvents($request, $mutationSnapshot) as $event) {
                 $this->sendActivityNotification(
@@ -341,7 +342,7 @@ class CaptureFleetActivityNotifications
             return $value;
         }
 
-        foreach (['createdAt', 'updatedAt', 'created_at', 'updated_at'] as $metadataKey) {
+        foreach (['createdAt', 'updatedAt', 'created_at', 'updated_at', 'creatorName', 'createdBy', 'created_by'] as $metadataKey) {
             unset($value[$metadataKey]);
         }
 

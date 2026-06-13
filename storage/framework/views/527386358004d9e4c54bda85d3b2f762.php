@@ -250,7 +250,12 @@ unset($__errorArgs, $__bag); ?>
                 <tbody>
                     <?php $__empty_1 = true; $__currentLoopData = $paymentTypes; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $paymentType): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                         <tr>
-                            <td><?php echo e(optional($paymentType->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A')); ?></td>
+                            <td>
+                                <div class="created-at-cell">
+                                    <span class="created-at-date"><?php echo e(optional($paymentType->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A')); ?></span>
+                                    <small class="created-at-creator">Created by: <?php echo e($paymentType->creatorName ?? 'System / Legacy'); ?></small>
+                                </div>
+                            </td>
                             <td><b><?php echo e($paymentType->name); ?></b></td>
                             <td><span class="master-code"><?php echo e($paymentType->code); ?></span></td>
                             <td><?php echo e($paymentType->sort_order); ?></td>

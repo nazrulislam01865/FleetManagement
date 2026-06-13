@@ -20,10 +20,120 @@ class FleetRecordOwnershipService
         'fleet.employees.sync' => ['employees', 'employeeId'],
         'fleet.contracts.sync' => ['contracts', 'contractId'],
         'fleet.clients.sync' => ['clients', 'clientId'],
-        'fleet.dues.sync' => ['dues', 'dueId'],
+        'fleet.dues.sync' => ['dues', 'code', false],
     ];
 
-    public function capture(Request $request): void
+    /**
+     * Return creator names keyed by record code without adding N+1 queries.
+     *
+     * @return array<string, string>
+     */
+    public function creatorNames(string $resource, iterable $codes): array
+    {
+        if (! Schema::hasTable('fleet_record_owners') || ! Schema::hasTable('users')) {
+            return [];
+        }
+
+        $normalizedCodes = collect($codes)
+            ->map(fn ($code): string => trim((string) $code))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($normalizedCodes->isEmpty()) {
+            return [];
+        }
+
+        return DB::table('fleet_record_owners as owners')
+            ->join('users', 'users.id', '=', 'owners.user_id')
+            ->where('owners.resource_type', $resource)
+            ->whereIn('owners.resource_code', $normalizedCodes->all())
+            ->pluck('users.name', 'owners.resource_code')
+            ->map(fn ($name): string => trim((string) $name))
+            ->all();
+    }
+
+    public function creatorName(string $resource, string $code): ?string
+    {
+        $name = $this->creatorNames($resource, [$code])[$code] ?? null;
+
+        return filled($name) ? (string) $name : null;
+    }
+
+    public function claimRecord(string $resource, string $code, int $userId): void
+    {
+        if (! Schema::hasTable('fleet_record_owners')) {
+            return;
+        }
+
+        $this->claim($resource, trim($code), $userId);
+    }
+
+    public function forgetRecord(string $resource, string $code): void
+    {
+        if (! Schema::hasTable('fleet_record_owners')) {
+            return;
+        }
+
+        $this->forget($resource, trim($code));
+    }
+
+    public function syncResource(string $resource, iterable $codes, int $userId): void
+    {
+        if (! Schema::hasTable('fleet_record_owners')) {
+            return;
+        }
+
+        $this->syncOwners(
+            $resource,
+            collect($codes)->map(fn ($code): string => trim((string) $code))->filter()->unique()->values()->all(),
+            $userId
+        );
+    }
+
+    /**
+     * Preserve the original creator when an editable master-data code changes.
+     */
+    public function moveRecord(string $resource, string $oldCode, string $newCode, int $fallbackUserId): void
+    {
+        if (! Schema::hasTable('fleet_record_owners')) {
+            return;
+        }
+
+        $oldCode = trim($oldCode);
+        $newCode = trim($newCode);
+
+        if ($newCode === '') {
+            return;
+        }
+
+        if ($oldCode === '') {
+            $this->claim($resource, $newCode, $fallbackUserId);
+            return;
+        }
+
+        if ($oldCode === $newCode) {
+            return;
+        }
+
+        DB::transaction(function () use ($resource, $oldCode, $newCode): void {
+            $originalUserId = DB::table('fleet_record_owners')
+                ->where('resource_type', $resource)
+                ->where('resource_code', $oldCode)
+                ->value('user_id');
+
+            DB::table('fleet_record_owners')
+                ->where('resource_type', $resource)
+                ->where('resource_code', $oldCode)
+                ->delete();
+
+            if ($originalUserId) {
+                $this->claim($resource, $newCode, (int) $originalUserId);
+            }
+        });
+    }
+
+    public function capture(Request $request, ?array $mutationSnapshot = null): void
     {
         if (! Schema::hasTable('fleet_record_owners') || ! $request->user() instanceof User) {
             return;
@@ -33,7 +143,21 @@ class FleetRecordOwnershipService
         $userId = (int) $request->user()->id;
 
         if (isset(self::SYNC_RESOURCES[$routeName])) {
-            [$resource, $idKey] = self::SYNC_RESOURCES[$routeName];
+            [$resource, $idKey, $replaceAll] = array_pad(self::SYNC_RESOURCES[$routeName], 3, true);
+
+            // The activity middleware already compared the database state with
+            // the incoming rows. Use that result so an edit never assigns an
+            // untracked legacy record to the editor as its original creator.
+            if (is_array($mutationSnapshot)) {
+                foreach ((array) ($mutationSnapshot['created'] ?? []) as $code) {
+                    $this->claim($resource, trim((string) $code), $userId);
+                }
+                foreach ((array) ($mutationSnapshot['deleted'] ?? []) as $code) {
+                    $this->forget($resource, trim((string) $code));
+                }
+                return;
+            }
+
             $codes = collect((array) $request->input('rows', []))
                 ->filter(fn ($row): bool => is_array($row))
                 ->map(fn (array $row): string => trim((string) ($row[$idKey] ?? '')))
@@ -42,7 +166,13 @@ class FleetRecordOwnershipService
                 ->values()
                 ->all();
 
-            $this->syncOwners($resource, $codes, $userId);
+            if ($replaceAll) {
+                $this->syncOwners($resource, $codes, $userId);
+            } else {
+                foreach ($codes as $code) {
+                    $this->claim($resource, $code, $userId);
+                }
+            }
             return;
         }
 
@@ -56,10 +186,8 @@ class FleetRecordOwnershipService
         }
 
         if ($routeName === 'fleet.yards.update') {
-            $code = trim((string) $request->route('code'));
-            if ($code !== '') {
-                $this->claim('yards', $code, $userId);
-            }
+            // Updates preserve the original creator. Legacy rows remain
+            // explicitly untracked instead of being assigned to the editor.
             return;
         }
 

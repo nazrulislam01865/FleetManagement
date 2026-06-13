@@ -18,7 +18,11 @@
     @if (session('status'))
         @php
             $statusMessage = (string) session('status');
-            $isSessionExpired = str_contains(strtolower($statusMessage), 'session expired');
+            $normalizedStatus = strtolower($statusMessage);
+            $isSessionExpired = str_contains($normalizedStatus, 'session expired')
+                || str_contains($normalizedStatus, 'signed in from another device')
+                || str_contains($normalizedStatus, 'previous session was logged out')
+                || str_contains($normalizedStatus, 'only one active login is allowed');
         @endphp
         <div class="{{ $isSessionExpired ? 'login-error' : 'login-success' }}" role="{{ $isSessionExpired ? 'alert' : 'status' }}">
             {{ $statusMessage }}

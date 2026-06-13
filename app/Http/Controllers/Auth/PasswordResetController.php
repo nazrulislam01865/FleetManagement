@@ -8,7 +8,9 @@ use App\Support\FleetBrand;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
@@ -63,11 +65,20 @@ class PasswordResetController extends Controller
         $status = Password::reset(
             $credentials,
             function (User $user, string $password): void {
-                $user->forceFill([
+                $attributes = [
                     'password' => Hash::make($password),
-                ])->setRememberToken(Str::random(60));
+                ];
 
+                if (Schema::hasColumn('users', 'active_session_id')) {
+                    $attributes['active_session_id'] = null;
+                }
+
+                $user->forceFill($attributes)->setRememberToken(Str::random(60));
                 $user->save();
+
+                if (Schema::hasTable('sessions') && Schema::hasColumn('sessions', 'user_id')) {
+                    DB::table('sessions')->where('user_id', $user->id)->delete();
+                }
 
                 event(new PasswordReset($user));
             }

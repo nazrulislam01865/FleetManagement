@@ -120,7 +120,7 @@ class FuelPriceController extends FleetBaseController
                     [
                         'name' => $row['name'] ?? $code,
                         'status' => $row['status'] ?? null,
-                        'payload' => $row,
+                        'payload' => $this->withoutRecordMetadata($row),
                     ]
                 );
             }

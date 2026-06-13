@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\ActiveLoginSession;
 use App\Support\FleetBrand;
 use App\Support\FleetRbac;
 use Illuminate\Http\JsonResponse;
@@ -31,7 +32,7 @@ class LoginController extends Controller
         ]);
     }
 
-    public function login(Request $request): RedirectResponse
+    public function login(Request $request, ActiveLoginSession $activeLoginSession): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'email'],
@@ -49,7 +50,17 @@ class LoginController extends Controller
             $request->session()->regenerate();
             $request->session()->put('fleetman.last_activity_at', now()->timestamp);
 
-            return redirect()->route(FleetRbac::firstAllowedRoute($request->user()));
+            $replacedAnotherSession = $activeLoginSession->claim($request, $request->user());
+            $redirect = redirect()->route(FleetRbac::firstAllowedRoute($request->user()));
+
+            if ($replacedAnotherSession) {
+                $redirect->with(
+                    'login_notice',
+                    'Login successful. The previous device was logged out because only one active login is allowed per user.'
+                );
+            }
+
+            return $redirect;
         }
 
         if (Schema::hasTable('users') && Schema::hasColumn('users', 'account_status')) {
@@ -78,8 +89,9 @@ class LoginController extends Controller
         ]);
     }
 
-    public function timeout(Request $request): JsonResponse|RedirectResponse
+    public function timeout(Request $request, ActiveLoginSession $activeLoginSession): JsonResponse|RedirectResponse
     {
+        $activeLoginSession->release($request, $request->user());
         Auth::logout();
 
         $request->session()->invalidate();
@@ -99,8 +111,9 @@ class LoginController extends Controller
         return redirect()->route('login');
     }
 
-    public function logout(Request $request): RedirectResponse
+    public function logout(Request $request, ActiveLoginSession $activeLoginSession): RedirectResponse
     {
+        $activeLoginSession->release($request, $request->user());
         Auth::logout();
 
         $request->session()->invalidate();

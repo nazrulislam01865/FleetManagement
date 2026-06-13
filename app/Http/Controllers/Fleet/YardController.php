@@ -6,6 +6,7 @@ use App\Models\Fleet\FleetEmployee;
 use App\Models\Fleet\FleetYard;
 use App\Models\Fleet\FleetVehicleCategory;
 use App\Services\FleetTemporaryUploadService;
+use App\Services\FleetRecordOwnershipService;
 use App\Support\FleetDocumentUploadPolicy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -62,6 +63,7 @@ class YardController extends FleetBaseController
         $paths = $this->documentPaths($yard->payload['documents'] ?? []);
 
         DB::transaction(fn () => $yard->delete());
+        app(FleetRecordOwnershipService::class)->forgetRecord('yards', $code);
         if ($paths !== []) {
             Storage::disk('public')->delete($paths);
         }
@@ -278,10 +280,20 @@ class YardController extends FleetBaseController
             Storage::disk('public')->delete($removedPaths);
         }
 
+        $ownership = app(FleetRecordOwnershipService::class);
+        if ($yard->wasRecentlyCreated) {
+            $ownership->claimRecord('yards', (string) $yard->code, (int) $request->user()->id);
+        }
+        $recordPayload = is_array($yard->payload) ? $yard->payload : [];
+        $recordPayload['createdAt'] = optional($yard->created_at)->toIso8601String();
+        $recordPayload['updatedAt'] = optional($yard->updated_at)->toIso8601String();
+        $recordPayload['creatorName'] = $ownership->creatorName('yards', (string) $yard->code)
+            ?? ($yard->wasRecentlyCreated ? (string) $request->user()->name : 'System / Legacy');
+
         return response()->json([
             'ok' => true,
             'message' => $yard->wasRecentlyCreated ? 'Yard created successfully.' : 'Yard updated successfully.',
-            'record' => $yard->payload,
+            'record' => $recordPayload,
             'nextYardId' => $this->nextYardId(),
         ]);
     }

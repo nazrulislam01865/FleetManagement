@@ -112,7 +112,12 @@
                                 && ($canAssignSuperAdmin || $user->fleetRole?->slug !== 'super_admin');
                         @endphp
                         <tr>
-                            <td>{{ optional($user->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</td>
+                            <td>
+                                <div class="created-at-cell">
+                                    <span class="created-at-date">{{ optional($user->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</span>
+                                    <small class="created-at-creator">Created by: {{ $user->creatorName ?? 'System / Legacy' }}</small>
+                                </div>
+                            </td>
                             <td>
                                 <b>{{ $user->name }}</b>
                                 @if(auth()->id() === $user->id)

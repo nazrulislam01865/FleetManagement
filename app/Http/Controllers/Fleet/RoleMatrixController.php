@@ -6,6 +6,7 @@ use App\Models\Fleet\FleetPermission;
 use App\Models\Fleet\FleetRole;
 use App\Models\User;
 use App\Support\FleetRbac;
+use App\Services\FleetRecordOwnershipService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -155,7 +156,7 @@ class RoleMatrixController extends FleetBaseController
             'fleet_role_id' => ['required', 'integer', Rule::in($roleIds)],
         ]);
 
-        DB::transaction(function () use ($validated): void {
+        $createdUser = DB::transaction(function () use ($validated): User {
             $user = User::query()->create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -167,7 +168,15 @@ class RoleMatrixController extends FleetBaseController
             if ($role) {
                 $this->syncSingleUserFromRole($user, $role);
             }
+
+            return $user;
         });
+
+        app(FleetRecordOwnershipService::class)->claimRecord(
+            'users',
+            (string) $createdUser->id,
+            (int) $request->user()->id
+        );
 
         return redirect()
             ->route('fleet.users')

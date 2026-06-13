@@ -321,6 +321,8 @@
 
             <?php echo $renderField('Created At', optional($record->created_at)->format('d M Y, h:i A')); ?>
 
+            <?php echo $renderField('Created By', $recordCreatorName ?? 'System / Legacy'); ?>
+
             <?php echo $renderField('Last Updated', optional($record->updated_at)->format('d M Y, h:i A')); ?>
 
         </div>

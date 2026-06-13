@@ -221,7 +221,12 @@
                                 && ($canAssignSuperAdmin || $user->fleetRole?->slug !== 'super_admin');
                         ?>
                         <tr>
-                            <td><?php echo e(optional($user->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A')); ?></td>
+                            <td>
+                                <div class="created-at-cell">
+                                    <span class="created-at-date"><?php echo e(optional($user->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A')); ?></span>
+                                    <small class="created-at-creator">Created by: <?php echo e($user->creatorName ?? 'System / Legacy'); ?></small>
+                                </div>
+                            </td>
                             <td>
                                 <b><?php echo e($user->name); ?></b>
                                 <?php if(auth()->id() === $user->id): ?>

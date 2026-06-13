@@ -289,7 +289,7 @@ class ContractController extends FleetBaseController
                     [
                         'name' => $row[$this->nameKey] ?? $code,
                         'status' => $row['savedAs'] ?? ($row['status'] ?? null),
-                        'payload' => $row,
+                        'payload' => $this->withoutRecordMetadata($row),
                     ]
                 );
             }

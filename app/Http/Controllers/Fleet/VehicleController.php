@@ -189,7 +189,7 @@ class VehicleController extends FleetBaseController
                     [
                         'name' => $row[$nameKey] ?? $code,
                         'status' => $row[$statusKey] ?? null,
-                        'payload' => $row,
+                        'payload' => $this->withoutRecordMetadata($row),
                     ]
                 );
             }
@@ -216,6 +216,8 @@ class VehicleController extends FleetBaseController
             $row['id'] = trim((string) $row['id']);
             $row['regNo'] = strtoupper(trim((string) ($row['regNo'] ?? '')));
             $row['engineNo'] = strtoupper(trim((string) ($row['engineNo'] ?? '')));
+            $driver = trim((string) ($row['driver'] ?? ''));
+            $row['driver'] = $driver !== '' ? $driver : null;
             $row['rentalType'] = trim((string) ($row['rentalType'] ?? ''));
             $row['driverPaymentAmount'] = round((float) ($row['driverPaymentAmount'] ?? 0), 2);
             $row['vehicleRentalAmount'] = round((float) ($row['vehicleRentalAmount'] ?? $row['rent'] ?? 0), 2);
@@ -265,14 +267,14 @@ class VehicleController extends FleetBaseController
                 'vendor' => ['nullable', Rule::in($vehicleVendors)],
                 'model' => ['required', 'string', 'max:255'],
                 'color' => ['nullable', 'string', 'max:100'],
-                'engineNo' => ['required', 'regex:/^[A-Z0-9]{17}$/'],
+                'engineNo' => ['required', 'string'],
                 'mileage' => ['nullable', 'numeric', 'min:0'],
                 'odo' => ['nullable', 'numeric', 'min:0'],
                 'category' => ['required', Rule::in($categories)],
                 'subCategory' => ['nullable', 'string', 'max:255'],
                 'usage' => ['required', Rule::in($usageTypes)],
                 'rentalType' => ['required', Rule::in(['With Driver', 'Without Driver'])],
-                'driver' => ['required', Rule::in($drivers)],
+                'driver' => ['nullable', Rule::in($drivers)],
                 'driverPaymentAmount' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', 'numeric', 'min:0'],
                 'driverPaymentCycle' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', Rule::in($paymentCycles)],
                 'vehicleRentalAmount' => ['required', 'numeric', 'min:0'],
@@ -291,7 +293,6 @@ class VehicleController extends FleetBaseController
             $validator = Validator::make($row, $rules, [
                 'regNo.not_regex' => 'Registration Number cannot contain these special characters: @ # $ % ^ & * ( ) ! ` ~.',
                 'vendor.in' => 'Select an active vehicle or driver service vendor / owner.',
-                'engineNo.regex' => 'Engine Number must contain exactly 17 letters or digits.',
                 'driver.in' => 'Select a valid driver.',
             ]);
 

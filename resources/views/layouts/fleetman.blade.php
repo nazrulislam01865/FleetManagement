@@ -105,6 +105,23 @@
         window.FLEETMAN = @json($fleetman ?? []);
     </script>
     <script src="{{ asset('js/fleetman.js') }}?v={{ $fleetJsVersion }}"></script>
+    @if(session('login_notice'))
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var loginToast = document.getElementById('toast');
+
+                if (!loginToast) {
+                    return;
+                }
+
+                loginToast.textContent = @json(session('login_notice'));
+                loginToast.classList.add('show');
+                window.setTimeout(function () {
+                    loginToast.classList.remove('show');
+                }, 5200);
+            }, { once: true });
+        </script>
+    @endif
     <script src="{{ asset('js/fleetman-navigation.js') }}?v={{ $fleetNavigationJsVersion }}"></script>
     <script src="{{ asset('js/fleetman-rbac.js') }}?v={{ $fleetRbacJsVersion }}"></script>
     <script>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Fleet;
 use App\Models\Fleet\FleetDue;
 use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetEmployee;
+use App\Services\FleetRecordOwnershipService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,14 +36,16 @@ class DueController extends FleetBaseController
             return response()->json(['error' => 'Invalid rows payload'], 400);
         }
 
-        DB::transaction(function () use ($rows) {
+        $createdCodes = DB::transaction(function () use ($rows): array {
+            $createdCodes = [];
+
             foreach ($rows as $row) {
                 $code = (string) ($row['code'] ?? '');
                 if ($code === '') {
                     continue;
                 }
 
-                FleetDue::updateOrCreate(
+                $due = FleetDue::updateOrCreate(
                     ['code' => $code],
                     [
                         'type' => $row['type'] ?? 'General',
@@ -53,11 +56,25 @@ class DueController extends FleetBaseController
                         'amount' => $row['amount'] ?? 0,
                         'status' => $row['status'] ?? 'Pending',
                         'due_date' => $row['due_date'] ?? null,
-                        'payload' => $row,
+                        'payload' => $this->withoutRecordMetadata($row),
                     ]
                 );
+
+                if ($due->wasRecentlyCreated) {
+                    $createdCodes[] = $code;
+                }
             }
+
+            return array_values(array_unique($createdCodes));
         });
+
+        $userId = (int) ($request->user()?->id ?? 0);
+        if ($userId > 0 && $createdCodes !== []) {
+            $ownership = app(FleetRecordOwnershipService::class);
+            foreach ($createdCodes as $code) {
+                $ownership->claimRecord('dues', (string) $code, $userId);
+            }
+        }
 
         return response()->json([
             'ok' => true,
@@ -74,7 +91,7 @@ class DueController extends FleetBaseController
      * are preserved so historical/paid payroll is
      * never reset by generating the same month again.
      */
-    public function generatePayroll(Request $request): JsonResponse
+    public function generatePayroll(Request $request, FleetRecordOwnershipService $ownership): JsonResponse
     {
         $validated = $request->validate([
             'month' => ['required', 'date_format:Y-m'],
@@ -117,7 +134,9 @@ class DueController extends FleetBaseController
             ], 422);
         }
 
-        $result = DB::transaction(function () use ($month, $today): array {
+        $creatorUserId = (int) ($request->user()?->id ?? 0);
+
+        $result = DB::transaction(function () use ($month, $today, $ownership, $creatorUserId): array {
             $created = 0;
             $existing = 0;
 
@@ -153,7 +172,14 @@ class DueController extends FleetBaseController
                     ]
                 );
 
-                $due->wasRecentlyCreated ? $created++ : $existing++;
+                if ($due->wasRecentlyCreated) {
+                    $created++;
+                    if ($creatorUserId > 0) {
+                        $ownership->claimRecord('dues', (string) $due->code, $creatorUserId);
+                    }
+                } else {
+                    $existing++;
+                }
             }
 
             // 2. Employee Salaries
@@ -190,7 +216,14 @@ class DueController extends FleetBaseController
                     ]
                 );
 
-                $due->wasRecentlyCreated ? $created++ : $existing++;
+                if ($due->wasRecentlyCreated) {
+                    $created++;
+                    if ($creatorUserId > 0) {
+                        $ownership->claimRecord('dues', (string) $due->code, $creatorUserId);
+                    }
+                } else {
+                    $existing++;
+                }
             }
 
             // 3. Vehicle Monthly Rents (kept in the existing monthly generation flow)
@@ -224,7 +257,14 @@ class DueController extends FleetBaseController
                     ]
                 );
 
-                $due->wasRecentlyCreated ? $created++ : $existing++;
+                if ($due->wasRecentlyCreated) {
+                    $created++;
+                    if ($creatorUserId > 0) {
+                        $ownership->claimRecord('dues', (string) $due->code, $creatorUserId);
+                    }
+                } else {
+                    $existing++;
+                }
             }
 
             return compact('created', 'existing');
@@ -265,9 +305,20 @@ class DueController extends FleetBaseController
      */
     private function latestDues()
     {
-        return FleetDue::query()
+        $rows = FleetDue::query()
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
+        $creatorNames = app(FleetRecordOwnershipService::class)->creatorNames(
+            'dues',
+            $rows->pluck('code')->all()
+        );
+
+        return $rows->each(function (FleetDue $row) use ($creatorNames): void {
+            $row->setAttribute(
+                'creatorName',
+                $creatorNames[(string) $row->code] ?? 'System / Legacy'
+            );
+        });
     }
 }

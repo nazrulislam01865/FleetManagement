@@ -157,6 +157,23 @@
         window.FLEETMAN = <?php echo json_encode($fleetman ?? [], 15, 512) ?>;
     </script>
     <script src="<?php echo e(asset('js/fleetman.js')); ?>?v=<?php echo e($fleetJsVersion); ?>"></script>
+    <?php if(session('login_notice')): ?>
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                var loginToast = document.getElementById('toast');
+
+                if (!loginToast) {
+                    return;
+                }
+
+                loginToast.textContent = <?php echo json_encode(session('login_notice'), 15, 512) ?>;
+                loginToast.classList.add('show');
+                window.setTimeout(function () {
+                    loginToast.classList.remove('show');
+                }, 5200);
+            }, { once: true });
+        </script>
+    <?php endif; ?>
     <script src="<?php echo e(asset('js/fleetman-navigation.js')); ?>?v=<?php echo e($fleetNavigationJsVersion); ?>"></script>
     <script src="<?php echo e(asset('js/fleetman-rbac.js')); ?>?v=<?php echo e($fleetRbacJsVersion); ?>"></script>
     <script>

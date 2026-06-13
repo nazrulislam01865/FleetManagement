@@ -6,6 +6,7 @@ use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetDriverAttendance;
 use App\Models\Fleet\FleetDue;
 use App\Support\FleetDuration;
+use App\Services\FleetRecordOwnershipService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -61,6 +62,14 @@ class DriverAttendanceController extends FleetBaseController
             return $record->refresh();
         });
 
+        if ($isNewRecord) {
+            app(FleetRecordOwnershipService::class)->claimRecord(
+                'driver_attendance',
+                $code,
+                (int) $request->user()->id
+            );
+        }
+
         return response()->json([
             'ok' => true,
             'message' => $isNewRecord ? 'Attendance saved successfully.' : 'Attendance updated successfully.',
@@ -82,6 +91,10 @@ class DriverAttendanceController extends FleetBaseController
             }
             $record->delete();
         });
+
+        $ownership = app(FleetRecordOwnershipService::class);
+        $ownership->forgetRecord('driver_attendance', $code);
+        $ownership->forgetRecord('dues', 'PAY-LOG-'.$code);
 
         return response()->json([
             'ok' => true,
@@ -320,6 +333,7 @@ class DriverAttendanceController extends FleetBaseController
         $dueCode = 'PAY-LOG-'.$logId;
         if (trim((string) ($row[$this->statusKey] ?? '')) !== 'Completed') {
             FleetDue::query()->where('code', $dueCode)->delete();
+            app(FleetRecordOwnershipService::class)->forgetRecord('dues', $dueCode);
             return;
         }
 
@@ -335,6 +349,7 @@ class DriverAttendanceController extends FleetBaseController
 
         if (! $driver || strcasecmp((string) ($driver->payload['salaryTenure'] ?? ''), 'Hourly') !== 0) {
             FleetDue::query()->where('code', $dueCode)->delete();
+            app(FleetRecordOwnershipService::class)->forgetRecord('dues', $dueCode);
             return;
         }
 
@@ -349,10 +364,11 @@ class DriverAttendanceController extends FleetBaseController
         $amount = round($salary * $driverHours, 2);
         if ($amount <= 0) {
             FleetDue::query()->where('code', $dueCode)->delete();
+            app(FleetRecordOwnershipService::class)->forgetRecord('dues', $dueCode);
             return;
         }
 
-        FleetDue::query()->updateOrCreate(
+        $due = FleetDue::query()->updateOrCreate(
             ['code' => $dueCode],
             [
                 'type' => 'Driver Salary',
@@ -370,11 +386,19 @@ class DriverAttendanceController extends FleetBaseController
                 ],
             ]
         );
+
+        $userId = (int) (auth()->id() ?? 0);
+        if ($due->wasRecentlyCreated && $userId > 0) {
+            app(FleetRecordOwnershipService::class)->claimRecord('dues', (string) $due->code, $userId);
+        }
     }
 
     private function cleanPersistenceMetadata(array $row): array
     {
-        unset($row['createdAt'], $row['created_at'], $row['updatedAt'], $row['updated_at']);
+        unset(
+            $row['createdAt'], $row['created_at'], $row['updatedAt'], $row['updated_at'],
+            $row['creatorName'], $row['createdBy'], $row['created_by']
+        );
 
         return $row;
     }
@@ -392,6 +416,7 @@ class DriverAttendanceController extends FleetBaseController
         $payload = is_array($record->payload) ? $record->payload : [];
         $payload['createdAt'] = optional($record->created_at)->toIso8601String();
         $payload['updatedAt'] = optional($record->updated_at)->toIso8601String();
+        $payload['creatorName'] = $this->creatorNameForRecord('driver_attendance', (string) $record->code);
 
         return $payload;
     }

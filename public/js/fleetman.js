@@ -18,6 +18,17 @@ window.FleetmanFormatCreatedAt = window.FleetmanFormatCreatedAt || ((value) => {
         hour12: true,
     }).format(parsed);
 });
+window.FleetmanCreatedAtCell = window.FleetmanCreatedAtCell || ((value, creator) => {
+    const escapeHtml = (input) => String(input ?? '').replace(/[&<>'"]/g, (character) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+    }[character]));
+    const creatorName = creator && typeof creator === 'object'
+        ? (creator.name || creator.label || '')
+        : creator;
+    const safeCreator = String(creatorName || 'System / Legacy').trim() || 'System / Legacy';
+
+    return `<div class="created-at-cell"><span class="created-at-date">${escapeHtml(window.FleetmanFormatCreatedAt(value))}</span><small class="created-at-creator">Created by: ${escapeHtml(safeCreator)}</small></div>`;
+});
 window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
     'use strict';
 
@@ -1018,12 +1029,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const driver = $('#driver');
             const wrapper = $('#driverPaymentFields');
 
-            // A vehicle must always have a selected driver, even when the
-            // rental agreement itself is marked as "Without Driver".
+            // Driver assignment is optional. Keep the searchable field visible
+            // for users who want to assign a driver while creating the vehicle.
             driver?.closest('.field')?.classList.remove('hidden');
             if (driver) {
-                driver.required = true;
-                driver.setAttribute('aria-required', 'true');
+                driver.required = false;
+                driver.removeAttribute('aria-required');
             }
 
             // Only the driver's payment information depends on rental type.
@@ -1406,7 +1417,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 ['#engineNo', 'Engine Number is required.'],
                 ['#category', 'Vehicle Category is required.'],
                 ['#rentalType', 'Rental Type is required.'],
-                ['#driver', 'Driver is required.'],
                 ['#vehicleRentalAmount', 'Vehicle Rental Amount is required.'],
                 ['#vehiclePaymentCycle', 'Vehicle Payment Cycle is required.'],
             ].forEach(([selector, message]) => {
@@ -1421,11 +1431,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const regInput = $('#regNo');
             if (regInput?.value.trim() && /[@#$%^&*()!`~]/.test(regInput.value.trim())) {
                 invalidate(regInput, 'Registration Number cannot contain: @ # $ % ^ & * ( ) ! ` ~.');
-            }
-
-            const engineInput = $('#engineNo');
-            if (engineInput?.value.trim() && !/^[A-Za-z0-9]{17}$/.test(engineInput.value.trim())) {
-                invalidate(engineInput, 'Engine Number must contain exactly 17 letters or digits.');
             }
 
             const driver = $('#driver');
@@ -1714,7 +1719,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 });
                 return `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(vehicle.createdAt || vehicle.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(vehicle.createdAt || vehicle.created_at, vehicle.creatorName || vehicle.createdBy)}</td>
                     <td><div class="vehicle-cell">${avatar}<div><b>${escapeHtml(vehicle.name)}</b><br><small>${escapeHtml(vehicle.id)} · ${escapeHtml(vehicle.model)}</small>${imageLink}</div></div></td>
                     <td>${escapeHtml(vehicle.regNo)}</td>
                     <td>${escapeHtml(vehicle.category)}<br><small>${escapeHtml(vehicle.subCategory || '')}</small></td>
@@ -2070,7 +2075,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             body.innerHTML = rows.length ? rows.map((row) => {
                 const statusClass = row.status === 'Active' ? 'ok' : row.status === 'Inactive' ? 'danger' : 'soft';
                 return `<tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><div class="fuel-cell"><div class="fuel-icon">⛽</div><div><b>${escapeHtml(row.name)}</b><br><small>${escapeHtml(row.fuelPriceId)}</small></div></div></td>
                     <td>${escapeHtml(row.fuelType || '-')}</td>
                     <td>${Number(row.price || 0).toLocaleString()}<br><small>${escapeHtml(row.remarks ? row.remarks.slice(0, 42) : '')}</small></td>
@@ -3467,7 +3472,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     const imageFlag = rechargePhotoFlag(row);
                     const imgClass = imageFlag === 'All 3 Images Taken' ? 'ok' : (imageFlag === 'Not Taken' ? 'danger' : 'warn');
                     return `<tr>
-                        <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                        <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                         <td><div class="listCell"><div class="listIcon">⛽</div><div><b>${escapeHtml(row.rechargeId || '')}</b></div></div></td>
                         <td>${escapeHtml(row.date || row.createdAt || '')}</td>
                         <td>${escapeHtml(row.contract || '')}</td>
@@ -4322,7 +4327,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const uploadedCount = (party.documents || []).filter((doc) => doc.file?.filePath || doc.file?.fileUrl).length;
             const cls = party.status === 'Active' ? 'ok' : party.status === 'Blacklisted' ? 'danger' : party.status === 'Draft' ? 'soft' : 'warn';
             return `<tr>
-                <td>${escapeHtml(window.FleetmanFormatCreatedAt(party.createdAt || party.created_at))}</td>
+                <td>${window.FleetmanCreatedAtCell(party.createdAt || party.created_at, party.creatorName || party.createdBy)}</td>
                 <td><div class="party-cell"><div class="party-icon">🤝</div><div><b>${escapeHtml(party.partyName)}</b><br><small>${escapeHtml(party.partyId)}</small></div></div></td>
                 <td><span class="badge soft">${escapeHtml(party.partyType || '-')}</span><br><small>${escapeHtml(party.vendorContractorType || '-')}</small>${(party.fuelTypes || []).length ? `<br><small>${escapeHtml((party.fuelTypes || []).join(', '))}</small>` : ''}</td>
                 <td>${escapeHtml(party.phone || '-')}<br><small>${escapeHtml(party.email || '')}</small></td>
@@ -4525,8 +4530,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const show = isClientVisit(purpose);
             field?.classList.toggle('hidden', !show);
             if (input) {
-                input.required = show;
-                input.setAttribute('aria-required', show ? 'true' : 'false');
+                input.required = false;
+                input.setAttribute('aria-required', 'false');
                 if (!show) {
                     input.value = '';
                     clearFieldError(input);
@@ -4763,14 +4768,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             });
 
             const clientInput = $('#tripClient');
-            if (isClientVisit()) {
-                if (!clientInput?.value.trim()) {
-                    markInvalid(clientInput, 'Client is required for a Client Visit trip.');
-                    errors.push(clientInput);
-                } else if (!findClient(clientInput.value)) {
-                    markInvalid(clientInput, 'Select a client from the suggestion list.');
-                    errors.push(clientInput);
-                }
+            if (isClientVisit() && clientInput?.value.trim() && !findClient(clientInput.value)) {
+                markInvalid(clientInput, 'Select a client from the suggestion list or leave the field blank.');
+                errors.push(clientInput);
             }
 
             const totalInput = $('#tripTotalCost');
@@ -4971,7 +4971,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const state = paymentState(trip);
             const stateClass = state === 'Paid' ? 'paid' : state === 'Partially Paid' ? 'partial' : 'unpaid';
             return `<tr>
-                <td>${escapeHtml(window.FleetmanFormatCreatedAt(trip.createdAt || trip.created_at))}</td>
+                <td>${window.FleetmanCreatedAtCell(trip.createdAt || trip.created_at, trip.creatorName || trip.createdBy)}</td>
                 <td><div class="trip-cell"><div class="trip-icon">🧭</div><div><b>${escapeHtml(trip.tripId)}</b><br><small>${escapeHtml([trip.purpose || 'Trip', trip.client || ''].filter(Boolean).join(' · '))}</small></div></div></td>
                 <td>${escapeHtml(trip.startDate || '-')}</td>
                 <td><b>${escapeHtml(trip.vehicle || '-')}</b><br><small>${escapeHtml(trip.driver || '-')}</small></td>
@@ -5569,7 +5569,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 alt: `${row.fullName || 'Driver'} photo`,
                 size: 'table',
             });
-            return `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><div class="driver-cell">${avatar}<div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT/Hour: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`;
+            return `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><div class="driver-cell">${avatar}<div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT/Hour: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`;
         }
 
         function renderList(){
@@ -5804,7 +5804,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setTimeout(()=>{renderList();setVisible('clientListPage');},450);
         }
         function loadSample(){ resetForm(); const row=(samples.clients||[])[0]; if(!row) return; const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); toast('Sample client data added.'); }
-        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
+        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
         function renderList(){ const q=value('#clientSearch').toLowerCase(), status=value('#clientFilterStatus'), type=value('#clientFilterType'), method=value('#clientFilterMethod'); const rows=clients.filter((row)=>{ const people=(row.contacts||[]).map((person)=>[person.name,person.phone,person.role,person.whatsapp,person.email].join(' ')).join(' '); return (!q||[row.clientName,row.phone,row.email,row.clientId,row.reference,people].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!type||row.clientType===type)&&(!method||row.contactMethod===method); }); $('#clientTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="9" class="empty">No client found. Click “Add Client” to create one.</td></tr>'; $('#clientKpiTotal').textContent=clients.length; $('#clientKpiActive').textContent=clients.filter((c)=>c.status==='Active').length; $('#clientKpiEmail').textContent=clients.filter((c)=>c.email).length; }
         function editClient(id){ const row=clients.find((r)=>r.clientId===id); if(!row) return; resetForm(); const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); setVisible('clientAddPage'); }
         function viewClient(id){ const row=clients.find((r)=>r.clientId===id); if(row) window.FleetmanDetailViewer?.show('Client Details', row); }
@@ -6290,7 +6290,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 size: 'table',
             });
             return `<tr>
-                <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                 <td><div class="employee-cell">${avatar}<div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.employeeId)}</small></div></div></td>
                 <td>${formatContacts(row)}<br><small style="color:#667085">${escapeHtml(row.email || '')}</small></td>
                 <td>${escapeHtml(row.designation || '-')}</td>
@@ -6908,7 +6908,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function rowHtml(row) {
             const cls = badgeClass(row.status);
             return `<tr>
-                <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                 <td><div class="list-cell"><div class="list-icon">📝</div><div><b>${escapeHtml(row.logId)}</b><br><small>${escapeHtml(row.date)}</small></div></div></td>
                 <td>${escapeHtml(row.date || '-')}<br><small>${escapeHtml(row.startTime || '-')} to ${escapeHtml(row.endTime || '-')}</small></td>
                 <td><b>${escapeHtml(row.contract || '-')}</b><br><small>${escapeHtml(row.vehicle || '-')}</small></td>
@@ -7683,7 +7683,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(vehicleCategories);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
@@ -7709,7 +7709,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td>${escapeHtml(vehicleCategoryName(row.vehicleCategoryCode))}</td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
@@ -7728,7 +7728,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(partyTypes);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
@@ -7750,7 +7750,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
                 return `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><div class="master-document-type-badges">${badges}</div></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
@@ -7770,7 +7770,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(licenceTypes);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
@@ -7785,7 +7785,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const tbody = $('#fuelTypeMasterTbody');
             if (!tbody) return;
             const rows = sortRows(fuelTypes);
-            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No fuel type added yet.</td></tr>';
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No fuel type added yet.</td></tr>';
         }
 
         function renderFuelUnits() {
@@ -7793,7 +7793,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const tbody = $('#fuelUnitMasterTbody');
             if (!tbody) return;
             const rows = sortRows(fuelUnits);
-            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-unit="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-unit="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No fuel unit added yet.</td></tr>';
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-fuel-unit="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-fuel-unit="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No fuel unit added yet.</td></tr>';
         }
 
         function renderPaymentTypes() {
@@ -7801,7 +7801,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const tbody = $('#paymentTypeMasterTbody');
             if (!tbody) return;
             const rows = sortRows(paymentTypes);
-            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-payment-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-payment-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No payment type added yet.</td></tr>';
+            tbody.innerHTML = rows.length ? rows.map((row) => `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><b>${escapeHtml(row.name)}</b></td><td><span class="master-code">${escapeHtml(row.code)}</span></td><td>${Number(row.sortOrder || 0)}</td><td><span class="badge ${row.status === 'Inactive' ? 'warn' : 'ok'}">${escapeHtml(row.status || 'Active')}</span></td><td class="master-description">${escapeHtml(row.description || '—')}</td><td><div class="master-actions"><button type="button" class="mini-btn" data-master-edit-payment-type="${escapeHtml(row.code)}">Edit</button><button type="button" class="mini-btn danger" data-master-delete-payment-type="${escapeHtml(row.code)}">Delete</button></div></td></tr>`).join('') : '<tr><td colspan="7" class="empty">No payment type added yet.</td></tr>';
         }
 
         function renderClientTypes() {
@@ -7812,7 +7812,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(clientTypes);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
@@ -7830,7 +7830,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(contactMethods);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
@@ -7848,7 +7848,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const rows = sortRows(driverContactTypes);
             tbody.innerHTML = rows.length ? rows.map((row) => `
                 <tr>
-                    <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                    <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                     <td><b>${escapeHtml(row.name)}</b></td>
                     <td><span class="master-code">${escapeHtml(row.code)}</span></td>
                     <td>${Number(row.sortOrder || 0)}</td>
@@ -8954,7 +8954,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (tbody) {
                 tbody.innerHTML = pageItems.length ? pageItems.map((row) => `
                     <tr>
-                        <td>${escapeHtml(window.FleetmanFormatCreatedAt(row.createdAt || row.created_at))}</td>
+                        <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                         <td><b>${escapeHtml(row.contractId)}</b></td>
                         <td>${escapeHtml(row.partyName || '-')}</td>
                         <td>${escapeHtml(row.contractWith || '-')}</td>

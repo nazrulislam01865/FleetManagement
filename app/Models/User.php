@@ -15,7 +15,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Schema;
 
 #[Fillable(['name', 'email', 'password', 'fleet_role_id', 'account_status'])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'active_session_id'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */

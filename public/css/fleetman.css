@@ -1151,3 +1151,31 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
     .release-mobile-actions form{grid-column:1/-1}
     .release-kpis{grid-template-columns:1fr 1fr!important}
 }
+
+
+/* Created At audit metadata */
+.created-at-cell {
+    display: flex;
+    min-width: 150px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.created-at-date {
+    font-weight: 600;
+    color: inherit;
+}
+
+.created-at-creator {
+    display: block;
+    max-width: 190px;
+    overflow: hidden;
+    color: var(--muted, #64748b);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

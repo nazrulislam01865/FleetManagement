@@ -191,7 +191,12 @@
                 <tbody>
                     @forelse($releases as $release)
                         <tr>
-                            <td>{{ optional($release->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</td>
+                            <td>
+                                <div class="created-at-cell">
+                                    <span class="created-at-date">{{ optional($release->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</span>
+                                    <small class="created-at-creator">Created by: {{ $release->createdBy?->name ?? 'System / Legacy' }}</small>
+                                </div>
+                            </td>
                             <td><span class="release-version">{{ $release->version }}</span></td>
                             <td class="release-title-cell">
                                 <b>{{ $release->title }}</b>

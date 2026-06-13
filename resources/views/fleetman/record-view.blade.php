@@ -268,6 +268,7 @@
             {!! $renderField('Record Name', $record->name) !!}
             {!! $renderField('Record Status', $record->status) !!}
             {!! $renderField('Created At', optional($record->created_at)->format('d M Y, h:i A')) !!}
+            {!! $renderField('Created By', $recordCreatorName ?? 'System / Legacy') !!}
             {!! $renderField('Last Updated', optional($record->updated_at)->format('d M Y, h:i A')) !!}
         </div>
     </section>
