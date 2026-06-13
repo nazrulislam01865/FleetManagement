@@ -139,7 +139,8 @@ class FuelRechargeController extends FleetBaseController
 
         return response()->json([
             'ok' => true,
-            'rows' => $this->recordsFor(FleetFuelRecharge::class),
+            'rows' => $this->syncResponseRows(FleetFuelRecharge::class, $rows, $this->idKey),
+            'can_view_list' => $this->currentUserCanViewPage(),
         ]);
     }
 

@@ -354,14 +354,45 @@
 
                 <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '2. Contact Person(s)']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '2. Vendor Photo']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => '2. Contact Person(s)']); ?>
+<?php $component->withAttributes(['title' => '2. Vendor Photo']); ?>
+                    <div class="photo-box party-photo-box">
+                        <div class="field" style="flex:1">
+                            <label for="partyPhoto">Vendor Photo <small>(Optional)</small></label>
+                            <input id="partyPhoto" type="file" accept="image/jpeg,image/png,image/webp">
+                            <input id="partyPhotoData" type="hidden">
+                            <div class="temp-upload-progress hidden" id="partyPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
+                            <div class="upload-meta" id="partyPhotoInfo"></div>
+                            <div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. This photo is optional.</div>
+                        </div>
+                    </div>
+                 <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $attributes = $__attributesOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $component = $__componentOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__componentOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+
+                <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '3. Contact Person(s)']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.section-card'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['title' => '3. Contact Person(s)']); ?>
                      <?php $__env->slot('action', null, []); ?> 
                         <button type="button" class="btn light" id="addPartyContactBtn">＋ Add Contact Person</button>
                      <?php $__env->endSlot(); ?>
@@ -379,14 +410,14 @@
 
                 <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '3. Documents','class' => 'document-section-card']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '4. Documents','class' => 'document-section-card']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => '3. Documents','class' => 'document-section-card']); ?>
+<?php $component->withAttributes(['title' => '4. Documents','class' => 'document-section-card']); ?>
                      <?php $__env->slot('action', null, []); ?> 
                         <button type="button" class="btn secondary" id="addPartyDocumentBtn">+ Add document</button>
                      <?php $__env->endSlot(); ?>
@@ -613,7 +644,7 @@
             </div>
             <div class="table-wrap wide-table">
                 <table>
-                    <thead><tr><th>Created At</th><th>Vendor / Party</th><th>Type</th><th>Phone</th><th>Contact Person</th><th>Payment Terms</th><th>Documents</th><th>Status</th><th>Address</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Created At</th><th>Vendor / Party</th><th>Type</th><th>Phone</th><th>Contact Person</th><th>Payment Terms</th><th>Documents</th><th>Expiring Documents</th><th>Status</th><th>Address</th><th>Actions</th></tr></thead>
                     <tbody id="partyTbody"></tbody>
                 </table>
             </div>

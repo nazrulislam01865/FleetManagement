@@ -18,6 +18,20 @@ window.FleetmanFormatCreatedAt = window.FleetmanFormatCreatedAt || ((value) => {
         hour12: true,
     }).format(parsed);
 });
+window.FleetmanListAccess = window.FleetmanListAccess || Object.freeze({
+    canView() {
+        return window.FLEETMAN?.auth?.pageAccess?.canView === true;
+    },
+    isCreateOnly() {
+        const access = window.FLEETMAN?.auth?.pageAccess || {};
+        return access.canManage === true && access.canView !== true;
+    },
+    savedMessage(entityLabel, draft = false) {
+        const action = draft ? `${entityLabel} draft saved successfully.` : `${entityLabel} saved successfully.`;
+        return `${action} You are not allowed to view the list. The Add page has been reopened.`;
+    },
+});
+
 window.FleetmanCreatedAtCell = window.FleetmanCreatedAtCell || ((value, creator) => {
     const escapeHtml = (input) => String(input ?? '').replace(/[&<>'"]/g, (character) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
@@ -29,6 +43,146 @@ window.FleetmanCreatedAtCell = window.FleetmanCreatedAtCell || ((value, creator)
 
     return `<div class="created-at-cell"><span class="created-at-date">${escapeHtml(window.FleetmanFormatCreatedAt(value))}</span><small class="created-at-creator">Created by: ${escapeHtml(safeCreator)}</small></div>`;
 });
+
+window.FleetmanExpiringDocuments = window.FleetmanExpiringDocuments || (() => {
+    'use strict';
+
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
+    }[character]));
+
+    function documentName(document = {}) {
+        return String(
+            document.name
+            || document.documentName
+            || document.title
+            || document.type
+            || document.file?.originalName
+            || document.file?.fileName
+            || 'Document'
+        ).trim() || 'Document';
+    }
+
+    function expiryValue(document = {}) {
+        return String(
+            document.expiry
+            || document.expiryDate
+            || document.expiresAt
+            || document.validUntil
+            || document.validityDate
+            || ''
+        ).trim();
+    }
+
+    function dateSerial(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return null;
+
+        const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (isoMatch) {
+            const year = Number(isoMatch[1]);
+            const month = Number(isoMatch[2]);
+            const day = Number(isoMatch[3]);
+            const serial = Date.UTC(year, month - 1, day);
+            return Number.isNaN(serial) ? null : serial;
+        }
+
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return null;
+        return Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate());
+    }
+
+    function todaySerial() {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Dhaka',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).formatToParts(new Date());
+        const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+        return Date.UTC(Number(values.year), Number(values.month) - 1, Number(values.day));
+    }
+
+    function formatDate(value) {
+        const serial = dateSerial(value);
+        if (serial === null) return String(value || '');
+        return new Intl.DateTimeFormat('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            timeZone: 'UTC',
+        }).format(new Date(serial));
+    }
+
+    function labelForDays(days) {
+        if (days < -1) return `Expired ${Math.abs(days)} days ago`;
+        if (days === -1) return 'Expired yesterday';
+        if (days === 0) return 'Expires today';
+        if (days === 1) return '1 day left';
+        return `${days} days left`;
+    }
+
+    function classForDays(days) {
+        if (days < 0) return 'expired';
+        if (days <= 7) return 'urgent';
+        if (days <= 30) return 'warning';
+        return 'safe';
+    }
+
+    function items(documents = []) {
+        const today = todaySerial();
+        return (Array.isArray(documents) ? documents : [])
+            .map((document) => {
+                const expiry = expiryValue(document);
+                const serial = dateSerial(expiry);
+                if (serial === null) return null;
+                const days = Math.round((serial - today) / DAY_MS);
+                return {
+                    name: documentName(document),
+                    expiry,
+                    formattedExpiry: formatDate(expiry),
+                    days,
+                    label: labelForDays(days),
+                    statusClass: classForDays(days),
+                };
+            })
+            .filter(Boolean)
+            .sort((left, right) => left.days - right.days || left.name.localeCompare(right.name));
+    }
+
+    function html(documents = [], options = {}) {
+        const datedDocuments = items(documents);
+        if (!datedDocuments.length) {
+            return '<span class="expiring-docs-empty">No dated documents</span>';
+        }
+
+        const limit = Math.max(1, Number(options.limit || 3));
+        const visible = datedDocuments.slice(0, limit);
+        const remaining = datedDocuments.slice(limit);
+        const hiddenTitle = remaining.map((item) => `${item.name}: ${item.label} (${item.formattedExpiry})`).join('\n');
+
+        return `<div class="expiring-docs-cell">
+            ${visible.map((item) => `<div class="expiring-doc-item">
+                <div class="expiring-doc-name">${escapeHtml(item.name)}</div>
+                <div class="expiring-doc-meta">
+                    <span class="expiring-doc-badge ${escapeHtml(item.statusClass)}">${escapeHtml(item.label)}</span>
+                    <small>${escapeHtml(item.formattedExpiry)}</small>
+                </div>
+            </div>`).join('')}
+            ${remaining.length ? `<button type="button" class="expiring-doc-more" title="${escapeHtml(hiddenTitle)}">+${remaining.length} more</button>` : ''}
+        </div>`;
+    }
+
+    function text(documents = []) {
+        return items(documents)
+            .map((item) => `${item.name}: ${item.label} (${item.formattedExpiry})`)
+            .join(' | ');
+    }
+
+    return { items, html, text };
+})();
+
 window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
     'use strict';
 
@@ -1429,7 +1583,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
 
             const regInput = $('#regNo');
-            if (regInput?.value.trim() && /[@#$%^&*()!`~]/.test(regInput.value.trim())) {
+            if (regInput?.value.trim().length > 25) {
+                invalidate(regInput, 'Registration Number cannot be more than 25 characters.');
+            } else if (regInput?.value.trim() && /[@#$%^&*()!`~]/.test(regInput.value.trim())) {
                 invalidate(regInput, 'Registration Number cannot contain: @ # $ % ^ & * ( ) ! ` ~.');
             }
 
@@ -1584,9 +1740,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
 
             vehicles = savedVehicleRows;
-            renderTable();
-            toast('Vehicle saved successfully.');
-            setVisible('vehicleListPage');
+            if (window.FleetmanListAccess.canView()) {
+                renderTable();
+                toast('Vehicle saved successfully.');
+                setVisible('vehicleListPage');
+            } else {
+                vehicles = [];
+                resetForm();
+                setVisible('vehicleAddPage');
+                toast(window.FleetmanListAccess.savedMessage('Vehicle'));
+            }
         }
 
         function loadSample() {
@@ -1731,11 +1894,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <td>${(vehicle.fuels || []).map((item) => `<span class="badge soft">${escapeHtml(item.priority)}: ${escapeHtml(item.type)} · ${escapeHtml(item.rate || '0')}</span>`).join('')}</td>
                     <td>${escapeHtml(vehicle.driver || 'Not assigned')}</td>
                     <td>${docs.length} document(s)<br><small>${docsWithFiles} uploaded file(s)${docsWithFiles ? ` · ${documentLinks(vehicle)}` : ''}</small></td>
+                    <td>${window.FleetmanExpiringDocuments.html(docs)}</td>
                     <td>${Number(vehicle.totalRentalAmount ?? vehicle.rent ?? 0).toLocaleString()} BDT<br><small>${escapeHtml(vehicle.rentalType || '-')}</small></td>
                     <td><span class="badge ${vehicle.status === 'Active' ? 'ok' : 'warn'}">${escapeHtml(vehicle.status || '-')}</span></td>
                     <td><button type="button" class="mini-btn view-vehicle" data-id="${escapeHtml(vehicle.id)}">View</button><button type="button" class="mini-btn edit-vehicle" data-id="${escapeHtml(vehicle.id)}">Edit</button><button type="button" class="mini-btn danger delete-vehicle" data-id="${escapeHtml(vehicle.id)}">Delete</button></td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="10" class="empty">No vehicles found.</td></tr>';
+            }).join('') : '<tr><td colspan="11" class="empty">No vehicles found.</td></tr>';
 
             $('#vehicleKpiTotal').textContent = vehicles.length;
             $('#vehicleKpiActive').textContent = vehicles.filter((vehicle) => vehicle.status === 'Active').length;
@@ -2004,9 +2168,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             try {
                 await saveStore();
-                renderList();
-                toast(row.status === 'Draft' ? 'Draft saved.' : 'Fuel price saved.');
-                setVisible('fuelPriceListPage');
+                if (window.FleetmanListAccess.canView()) {
+                    renderList();
+                    toast(row.status === 'Draft' ? 'Draft saved.' : 'Fuel price saved.');
+                    setVisible('fuelPriceListPage');
+                } else {
+                    prices = [];
+                    resetForm();
+                    setVisible('fuelPriceAddPage');
+                    toast(window.FleetmanListAccess.savedMessage('Fuel price', row.status === 'Draft'));
+                }
             } catch (error) {
                 prices = previous;
                 toast(error.message || 'Fuel price save failed.');
@@ -3408,7 +3579,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
             if (saved) {
                 resetFuelRechargeForm();
-                toast('Fuel recharge submitted successfully. Form reset for next entry.');
+                toast(window.FleetmanListAccess.canView()
+                    ? 'Fuel recharge submitted successfully. Form reset for next entry.'
+                    : window.FleetmanListAccess.savedMessage('Fuel recharge'));
             }
         }
 
@@ -3441,7 +3614,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
             if (saved) {
                 resetFuelRechargeForm();
-                toast('Draft saved to database. Form reset for next entry.');
+                toast(window.FleetmanListAccess.canView()
+                    ? 'Draft saved to database. Form reset for next entry.'
+                    : window.FleetmanListAccess.savedMessage('Fuel recharge', true));
             }
         }
 
@@ -3840,6 +4015,20 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return Boolean(file.tempToken || file.filePath || file.fileUrl || file.previewUrl);
         }
 
+        function parsePartyPhoto(hidden) {
+            if (!hidden?.value) return {};
+            try { return JSON.parse(hidden.value) || {}; } catch (_) { return {}; }
+        }
+
+        function renderPartyPhoto(fileData = {}) {
+            uploadManager.render({
+                info: $('#partyPhotoInfo'),
+                progress: $('#partyPhotoProgress'),
+                file: fileData,
+                showPreview: true,
+            });
+        }
+
         function genId() {
             return 'VND' + new Date().toISOString().slice(2, 10).replaceAll('-', '') + Math.floor(100 + Math.random() * 900);
         }
@@ -4026,6 +4215,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#partyStatus', 'Active');
             setValue('#vendorContractorType', $('#vendorContractorType')?.dataset.defaultValue || '');
             setValue('#paymentTerms', 'Cash');
+            setValue('#partyPhotoData', '');
+            renderPartyPhoto({});
             setPartyFuelTypes([]);
             toggleFuelStationFields();
             $('#partyContacts').innerHTML = '';
@@ -4066,6 +4257,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 }
             });
 
+            const photo = parsePartyPhoto($('#partyPhotoData'));
+
             return {
                 party: {
                     partyId: value('#partyId'),
@@ -4084,6 +4277,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     paymentTerms: value('#paymentTerms'),
                     address: value('#partyAddress').trim(),
                     about: value('#partyAbout').trim(),
+                    photo,
+                    photoName: photo.originalName || '',
                     contacts,
                     documents,
                 },
@@ -4134,6 +4329,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             if (isFuelStationParty(party.partyType, party.partyName) && !(party.fuelTypes || []).length) {
                 invalidate(null, 'Select at least one fuel type sold by this fuel station.', $('#partyFuelTypesField'));
+            }
+
+            if (hasPartyUploadedFile(party.photo) && Number(party.photo?.sizeBytes || 0) > 100 * 1024) {
+                invalidate($('#partyPhoto'), 'Vendor Photo must be 100 KB or smaller.', $('.party-photo-box'));
             }
 
             const contactRows = $$('#partyContacts .contact-row');
@@ -4211,7 +4410,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function saveParty(statusOverride) {
-            await uploadManager.waitForInputs($$('#partyDocuments .partyDocFile'));
+            await uploadManager.waitForInputs([$('#partyPhoto'), ...$$('#partyDocuments .partyDocFile')]);
             const form = collect(statusOverride);
             const party = form.party;
 
@@ -4249,9 +4448,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             if (Array.isArray(result?.rows)) parties = result.rows;
 
-            renderList();
-            toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Vendor / Party saved.');
-            setVisible('vendorListPage');
+            if (window.FleetmanListAccess.canView()) {
+                renderList();
+                toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Vendor / Party saved.');
+                setVisible('vendorListPage');
+            } else {
+                parties = [];
+                resetForm();
+                setVisible('vendorAddPage');
+                toast(window.FleetmanListAccess.savedMessage('Vendor / Party', statusOverride === 'Draft'));
+            }
         }
 
         function loadSample() {
@@ -4273,6 +4479,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#paymentTerms', sample.paymentTerms);
             setValue('#partyAddress', sample.address);
             setValue('#partyAbout', sample.about);
+            setValue('#partyPhotoData', sample.photo ? JSON.stringify(sample.photo) : '');
+            renderPartyPhoto(sample.photo || {});
             $('#partyContacts').innerHTML = '';
             (sample.contacts || []).forEach(addContact);
             $('#partyDocuments').innerHTML = '';
@@ -4299,6 +4507,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#paymentTerms', party.paymentTerms);
             setValue('#partyAddress', party.address);
             setValue('#partyAbout', party.about);
+            setValue('#partyPhotoData', party.photo ? JSON.stringify(party.photo) : '');
+            renderPartyPhoto(party.photo || {});
             $('#partyContacts').innerHTML = '';
             (party.contacts || []).forEach(addContact);
             $('#partyDocuments').innerHTML = '';
@@ -4333,12 +4543,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const cls = party.status === 'Active' ? 'ok' : party.status === 'Blacklisted' ? 'danger' : party.status === 'Draft' ? 'soft' : 'warn';
             return `<tr>
                 <td>${window.FleetmanCreatedAtCell(party.createdAt || party.created_at, party.creatorName || party.createdBy)}</td>
-                <td><div class="party-cell"><div class="party-icon">🤝</div><div><b>${escapeHtml(party.partyName)}</b><br><small>${escapeHtml(party.partyId)}</small></div></div></td>
+                <td><div class="party-cell">${window.FleetmanEntityAvatar.html(party.photo || {}, { fallback: '🤝', alt: `${party.partyName || 'Vendor'} photo`, size: 'table' })}<div><b>${escapeHtml(party.partyName)}</b><br><small>${escapeHtml(party.partyId)}</small></div></div></td>
                 <td><span class="badge soft">${escapeHtml(party.partyType || '-')}</span><br><small>${escapeHtml(party.vendorContractorType || '-')}</small>${(party.fuelTypes || []).length ? `<br><small>${escapeHtml((party.fuelTypes || []).join(', '))}</small>` : ''}</td>
                 <td>${escapeHtml(party.phone || '-')}<br><small>${escapeHtml(party.email || '')}</small></td>
                 <td><b>${escapeHtml(main.name || '-')}</b><br><small>${escapeHtml(main.phone || '')}${(party.contacts || []).length > 1 ? ` · +${(party.contacts || []).length - 1} more` : ''}</small></td>
                 <td>${escapeHtml(party.paymentTerms || '-')}</td>
                 <td>${(party.documents || []).length} document(s)<br><small>${uploadedCount} uploaded file(s)</small></td>
+                <td>${window.FleetmanExpiringDocuments.html(party.documents || [])}</td>
                 <td><span class="badge ${cls}">${escapeHtml(party.status || '-')}</span></td>
                 <td>${escapeHtml(party.address || '-')}</td>
                 <td><button type="button" class="mini-btn view-party" data-id="${escapeHtml(party.partyId)}">View</button><button type="button" class="mini-btn edit-party" data-id="${escapeHtml(party.partyId)}">Edit</button><button type="button" class="mini-btn danger delete-party" data-id="${escapeHtml(party.partyId)}">Delete</button></td>
@@ -4357,7 +4568,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     && (!status || party.status === status)
                     && (!terms || party.paymentTerms === terms);
             });
-            $('#partyTbody').innerHTML = list.length ? list.map(rowHtml).join('') : '<tr><td colspan="10" class="empty">No vendor / party found. Click “Add Vendor / Party” to create one.</td></tr>';
+            $('#partyTbody').innerHTML = list.length ? list.map(rowHtml).join('') : '<tr><td colspan="11" class="empty">No vendor / party found. Click “Add Vendor / Party” to create one.</td></tr>';
             $('#partyKpiTotal').textContent = parties.length;
             $('#partyKpiActive').textContent = parties.filter((party) => party.status === 'Active').length;
             $('#partyKpiTypes').textContent = new Set(parties.map((party) => party.partyType).filter(Boolean)).size;
@@ -4409,6 +4620,21 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (event.target.closest('#vendorAddPage input, #vendorAddPage select, #vendorAddPage textarea')) {
                 clearPartyFieldError(event.target);
             }
+            const partyPhoto = event.target.closest('#partyPhoto');
+            if (partyPhoto) {
+                uploadManager.upload(partyPhoto, {
+                    hidden: $('#partyPhotoData'),
+                    info: $('#partyPhotoInfo'),
+                    progress: $('#partyPhotoProgress'),
+                    extensions: ['jpg', 'jpeg', 'png', 'webp'],
+                    maxBytes: 100 * 1024,
+                    imageOnly: true,
+                    showPreview: true,
+                    onSuccess: () => clearPartyFieldError(partyPhoto, $('.party-photo-box')),
+                });
+                return;
+            }
+
             const documentName = event.target.closest('#partyDocuments .partyDocName');
             if (documentName) refreshPartyDocumentOptions();
 
@@ -4905,9 +5131,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (!result?.ok) return;
 
             trips = Array.isArray(result.rows) ? result.rows : nextTrips;
-            renderList();
-            toast('Trip saved successfully.');
-            setVisible('tripListPage');
+            if (window.FleetmanListAccess.canView()) {
+                renderList();
+                toast('Trip saved successfully.');
+                setVisible('tripListPage');
+            } else {
+                trips = [];
+                resetForm();
+                setVisible('tripAddPage');
+                toast(window.FleetmanListAccess.savedMessage('Trip'));
+            }
         }
 
         function loadTripIntoForm(trip) {
@@ -5488,10 +5721,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const photoInput = $('#driverPhoto');
             const photo = parseUploadData($('#driverPhotoData'));
             const photoBox = $('.driver-photo-box');
-            if (!hasUploadedFile(photo)) {
-                markDriverInvalid(photoInput, 'Driver Photo is required.', photoBox);
-                valid = false;
-            } else if (Number(photo.sizeBytes || 0) > 100 * 1024) {
+            if (hasUploadedFile(photo) && Number(photo.sizeBytes || 0) > 100 * 1024) {
                 markDriverInvalid(photoInput, 'Driver Photo must be 100 KB or smaller.', photoBox);
                 valid = false;
             }
@@ -5531,9 +5761,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return;
             }
             drivers = savedDriverRows;
-            renderList();
-            toast(statusOverride==='Draft'?'Draft saved.':'Driver saved. Redirecting to driver list.');
-            setVisible('driverListPage');
+            if (window.FleetmanListAccess.canView()) {
+                renderList();
+                toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Driver saved. Redirecting to driver list.');
+                setVisible('driverListPage');
+            } else {
+                drivers = [];
+                resetForm();
+                setVisible('driverAddPage');
+                toast(window.FleetmanListAccess.savedMessage('Driver', statusOverride === 'Draft'));
+            }
         }
 
         function populateDriverForm(row) {
@@ -5564,7 +5801,40 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             toast('Sample driver data added.');
         }
 
-        function isExpiringSoon(row){ if(!row.licenseValidity) return false; return (new Date(row.licenseValidity)-new Date())/86400000 < licenseWarnDays; }
+        function licenseDaysRemaining(row) {
+            const rawDate = String(row?.licenseValidity || '').trim();
+            if (!rawDate) return null;
+
+            const expiryDate = new Date(`${rawDate}T00:00:00`);
+            if (Number.isNaN(expiryDate.getTime())) return null;
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            return Math.round((expiryDate.getTime() - today.getTime()) / 86400000);
+        }
+
+        function isExpiringSoon(row) {
+            const daysRemaining = licenseDaysRemaining(row);
+            return daysRemaining !== null
+                && daysRemaining >= 0
+                && daysRemaining <= licenseWarnDays;
+        }
+
+        function matchesDriverValidityFilter(row, filterValue) {
+            if (!filterValue) return true;
+
+            const daysRemaining = licenseDaysRemaining(row);
+            if (daysRemaining === null) return false;
+
+            if (filterValue === 'within-180-days') {
+                return daysRemaining >= 0 && daysRemaining <= licenseWarnDays;
+            }
+            if (filterValue === 'expired') return daysRemaining < 0;
+            if (filterValue === 'beyond-180-days') return daysRemaining > licenseWarnDays;
+
+            return true;
+        }
 
         function rowHtml(row){
             const exp=isExpiringSoon(row);
@@ -5574,17 +5844,33 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 alt: `${row.fullName || 'Driver'} photo`,
                 size: 'table',
             });
-            return `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><div class="driver-cell">${avatar}<div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT/Hour: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`;
+            return `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><div class="driver-cell">${avatar}<div><b>${escapeHtml(row.fullName)}</b><br><small>${escapeHtml(row.driverId)} · NID: ${escapeHtml(row.nid||'-')}</small></div></div></td><td>${escapeHtml(row.contact||'-')}<br><small>${row.whatsapp?'WA: '+escapeHtml(row.whatsapp):''}</small></td><td><span class="badge soft">${escapeHtml(row.licenseType||'-')}</span><br><small>${escapeHtml(row.licenseNo||'-')}</small></td><td><span class="badge ${exp?'warn':'ok'}">${escapeHtml(row.licenseValidity||'-')}</span></td><td>${escapeHtml(row.salary||0)} / ${escapeHtml(row.salaryTenure||'-')}<br><small>OT/Hour: ${escapeHtml(row.otRate||0)}</small></td><td>${escapeHtml(row.workingHour||0)} hrs<br><small>${escapeHtml(row.duty||'-')}</small></td><td>${escapeHtml(row.vendor||'None')}</td><td>${(row.documents||[]).length} document(s)</td><td>${window.FleetmanExpiringDocuments.html(row.documents || [])}</td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td><button type="button" class="mini-btn view-driver" data-id="${escapeHtml(row.driverId)}">View</button><button type="button" class="mini-btn edit-driver" data-id="${escapeHtml(row.driverId)}">Edit</button><button type="button" class="mini-btn danger delete-driver" data-id="${escapeHtml(row.driverId)}">Delete</button></td></tr>`;
         }
 
         function renderList(){
-            const q=value('#driverSearch').toLowerCase(), status=value('#driverFilterStatus'), license=value('#driverFilterLicense'), tenure=value('#driverFilterTenure');
-            const rows=drivers.filter((row)=>(!q||[row.fullName,row.contact,row.nid,row.licenseNo,row.driverId].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!license||row.licenseType===license)&&(!tenure||row.salaryTenure===tenure));
-            $('#driverTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="11" class="empty">No driver found. Click “Add Driver” to create one.</td></tr>';
-            $('#driverKpiTotal').textContent=drivers.length;
-            $('#driverKpiActive').textContent=drivers.filter((row)=>row.status==='Active').length;
-            $('#driverKpiExpired').textContent=drivers.filter(isExpiringSoon).length;
-            $('#driverKpiDocs').textContent=drivers.reduce((sum,row)=>sum+(row.documents||[]).length,0);
+            const q=value('#driverSearch').toLowerCase();
+            const status=value('#driverFilterStatus');
+            const license=value('#driverFilterLicense');
+            const validity=value('#driverFilterValidity');
+            const tenure=value('#driverFilterTenure');
+
+            // The dashboard link preselects the appropriate filter. It behaves
+            // like a normal Driver List filter and can be changed or cleared.
+            const rows=drivers.filter((row)=>(!q||[row.fullName,row.contact,row.nid,row.licenseNo,row.driverId].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!license||row.licenseType===license)&&matchesDriverValidityFilter(row, validity)&&(!tenure||row.salaryTenure===tenure));
+            const emptyMessage = validity === 'within-180-days'
+                ? 'No drivers have a license expiring within the next 180 days.'
+                : validity === 'expired'
+                    ? 'No drivers have an expired license.'
+                    : validity === 'beyond-180-days'
+                        ? 'No drivers have a license valid beyond 180 days.'
+                        : 'No driver found. Click “Add Driver” to create one.';
+            $('#driverTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):`<tr><td colspan="12" class="empty">${emptyMessage}</td></tr>`;
+
+            // KPI values must represent only the currently filtered list.
+            $('#driverKpiTotal').textContent=rows.length;
+            $('#driverKpiActive').textContent=rows.filter((row)=>row.status==='Active').length;
+            $('#driverKpiExpired').textContent=rows.filter(isExpiringSoon).length;
+            $('#driverKpiDocs').textContent=rows.reduce((sum,row)=>sum+(row.documents||[]).length,0);
         }
 
         function editDriver(id){
@@ -5605,8 +5891,17 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         $('#saveDriverDraftBtn')?.addEventListener('click',()=>saveDriver('Draft'));
         $('#loadDriverSampleBtn')?.addEventListener('click',loadSample);
         $('#exportDriversBtn')?.addEventListener('click',exportDrivers);
-        $('#clearDriverFiltersBtn')?.addEventListener('click',()=>{['#driverSearch','#driverFilterStatus','#driverFilterLicense','#driverFilterTenure'].forEach((selector)=>setValue(selector,'')); renderList();});
-        ['#driverSearch','#driverFilterStatus','#driverFilterLicense','#driverFilterTenure'].forEach((selector)=>$(selector)?.addEventListener('input',renderList));
+        $('#clearDriverFiltersBtn')?.addEventListener('click',()=>{
+            ['#driverSearch','#driverFilterStatus','#driverFilterLicense','#driverFilterValidity','#driverFilterTenure']
+                .forEach((selector)=>setValue(selector,''));
+
+            const url = new URL(window.location.href);
+            url.searchParams.delete('license_filter');
+            window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+
+            renderList();
+        });
+        ['#driverSearch','#driverFilterStatus','#driverFilterLicense','#driverFilterValidity','#driverFilterTenure'].forEach((selector)=>$(selector)?.addEventListener('input',renderList));
 
         document.addEventListener('input', (event) => {
             if (!event.target.closest('#driverAddPage')) return;
@@ -5666,6 +5961,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         });
 
         resetForm();
+
+        const driverUrlParams = new URLSearchParams(window.location.search);
+        const requestedLicenseFilter = driverUrlParams.get('license_filter');
+        if (['within-180-days', 'expired', 'beyond-180-days'].includes(requestedLicenseFilter)) {
+            setValue('#driverFilterValidity', requestedLicenseFilter);
+        }
+
         renderList();
         if (window.location.search.includes('action=add')) setVisible('driverAddPage');
         else setVisible('driverListPage');
@@ -5676,12 +5978,28 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         let clients=Array.isArray(records.clients) ? records.clients : (samples.clients||[]);
         const phonePattern = /^\d{11}$/;
         const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+        const uploadManager = window.FleetmanTemporaryUploads;
 
         function saveStore(){ return syncResource('clients', clients); }
+        function parseClientUpload(hidden){
+            if(!hidden?.value) return {};
+            try { return JSON.parse(hidden.value) || {}; } catch (_) { return {}; }
+        }
+        function hasClientUploadedFile(file={}){
+            return Boolean(file.tempToken || file.filePath || file.fileUrl || file.previewUrl);
+        }
+        function renderClientPhoto(fileData={}){
+            uploadManager.render({
+                info: $('#clientPhotoInfo'),
+                progress: $('#clientPhotoProgress'),
+                file: fileData,
+                showPreview: true,
+            });
+        }
         function genId(){ return 'CLI' + new Date().toISOString().slice(2,10).replaceAll('-','') + Math.floor(100 + Math.random()*900); }
         function clientField(element){ return element?.closest('.field') || element; }
-        function clearClientFieldError(element){
-            const field=clientField(element);
+        function clearClientFieldError(element,customContainer=null){
+            const field=customContainer||clientField(element);
             if(!field) return;
             field.classList.remove('field-invalid');
             field.querySelectorAll('.field-error').forEach((error)=>error.remove());
@@ -5694,13 +6012,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             $$('.field-error',page).forEach((error)=>error.remove());
             $$('[aria-invalid="true"]',page).forEach((element)=>element.removeAttribute('aria-invalid'));
         }
-        function markClientInvalid(element,message){
-            if(!element) return;
-            const field=clientField(element);
+        function markClientInvalid(element,message,customContainer=null){
+            if(!element && !customContainer) return;
+            const field=customContainer||clientField(element);
             if(!field) return;
-            clearClientFieldError(element);
+            clearClientFieldError(element,field);
             field.classList.add('field-invalid');
-            element.setAttribute?.('aria-invalid','true');
+            element?.setAttribute?.('aria-invalid','true');
             const error=document.createElement('small');
             error.className='field-error';
             error.textContent=message;
@@ -5728,6 +6046,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#clientType','Corporate');
             setValue('#clientStatus','Active');
             setValue('#clientContactMethod','');
+            setValue('#clientPhotoData','');
+            renderClientPhoto({});
             $('#clientContacts').innerHTML='';
             addContact();
         }
@@ -5736,12 +6056,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 const meta=$('.clientContactMeta',row)?.value.trim()||'';
                 return {name:$('.clientContactName',row)?.value.trim()||'',role:$('.clientContactRole',row)?.value.trim()||'',phone:$('.clientContactPhone',row)?.value.trim()||'',whatsapp:meta.includes('@')?'':meta,email:meta.includes('@')?meta:''};
             }).filter((c)=>c.name||c.phone||c.role||c.whatsapp||c.email);
-            return {clientValidationVersion:1,clientId:value('#clientId').trim(),clientName:value('#clientName').trim(),email:value('#clientEmail').trim(),phone:value('#clientPhone').trim(),whatsapp:value('#clientWhatsapp').trim(),reference:value('#clientReference').trim(),clientType:value('#clientType'),status:statusOverride||value('#clientStatus'),contactMethod:value('#clientContactMethod'),address:value('#clientAddress').trim(),about:value('#clientAbout').trim(),contacts};
+            const photo=parseClientUpload($('#clientPhotoData'));
+            return {clientValidationVersion:1,clientId:value('#clientId').trim(),clientName:value('#clientName').trim(),email:value('#clientEmail').trim(),phone:value('#clientPhone').trim(),whatsapp:value('#clientWhatsapp').trim(),reference:value('#clientReference').trim(),clientType:value('#clientType'),status:statusOverride||value('#clientStatus'),contactMethod:value('#clientContactMethod'),address:value('#clientAddress').trim(),about:value('#clientAbout').trim(),contacts,photo,photoName:photo.originalName||''};
         }
         function validate(row){
             clearClientValidation();
             const errors=[];
-            const invalidate=(element,message)=>{ markClientInvalid(element,message); if(element) errors.push(element); };
+            const invalidate=(element,message,container=null)=>{ markClientInvalid(element,message,container); if(element||container) errors.push(element||container); };
             const required=[
                 ['#clientId',row.clientId,'Client ID is required.'],
                 ['#clientName',row.clientName,'Client Name is required.'],
@@ -5759,6 +6080,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if(row.email && !emailPattern.test(row.email)) invalidate($('#clientEmail'),'Please enter a valid email address.');
             if(row.phone && !phonePattern.test(row.phone)) invalidate($('#clientPhone'),'Phone Number must be exactly 11 digits.');
             if(row.whatsapp && !phonePattern.test(row.whatsapp)) invalidate($('#clientWhatsapp'),'WhatsApp Number must be exactly 11 digits.');
+            if(hasClientUploadedFile(row.photo) && Number(row.photo?.sizeBytes||0)>100*1024){
+                invalidate($('#clientPhoto'),'Client Logo must be 100 KB or smaller.',$('.client-photo-box'));
+            }
 
             const contactRows=$$('#clientContacts .contact-row');
             if(!contactRows.length){
@@ -5793,6 +6117,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
         function upsert(row){ const idx=clients.findIndex((item)=>item.clientId===row.clientId); if(idx>=0) clients[idx]=row; else clients.unshift(row); return idx; }
         async function saveClient(statusOverride){
+            await uploadManager.waitForInputs([$('#clientPhoto')]);
             const row=collect(statusOverride);
             if(statusOverride==='Draft' && !row.clientName) row.clientName='Draft Client';
             if(statusOverride!=='Draft' && !validate(row)) return;
@@ -5805,13 +6130,20 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 else clients=clients.filter((item)=>item.clientId!==row.clientId);
                 return;
             }
-            toast(statusOverride==='Draft'?'Draft saved.':'Client saved. Redirecting to client list.');
-            setTimeout(()=>{renderList();setVisible('clientListPage');},450);
+            if (window.FleetmanListAccess.canView()) {
+                toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Client saved. Redirecting to client list.');
+                setTimeout(() => { renderList(); setVisible('clientListPage'); }, 450);
+            } else {
+                clients = [];
+                resetForm();
+                setVisible('clientAddPage');
+                toast(window.FleetmanListAccess.savedMessage('Client', statusOverride === 'Draft'));
+            }
         }
-        function loadSample(){ resetForm(); const row=(samples.clients||[])[0]; if(!row) return; const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); toast('Sample client data added.'); }
-        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><div class="client-cell"><div class="client-icon">🏢</div><div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
+        function loadSample(){ resetForm(); const row=(samples.clients||[])[0]; if(!row) return; const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); setValue('#clientPhotoData',row.photo?JSON.stringify(row.photo):''); renderClientPhoto(row.photo||{}); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); toast('Sample client data added.'); }
+        function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><div class="client-cell">${window.FleetmanEntityAvatar.html(row.photo||{},{fallback:'🏢',alt:`${row.clientName||'Client'} logo`,size:'table'})}<div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
         function renderList(){ const q=value('#clientSearch').toLowerCase(), status=value('#clientFilterStatus'), type=value('#clientFilterType'), method=value('#clientFilterMethod'); const rows=clients.filter((row)=>{ const people=(row.contacts||[]).map((person)=>[person.name,person.phone,person.role,person.whatsapp,person.email].join(' ')).join(' '); return (!q||[row.clientName,row.phone,row.email,row.clientId,row.reference,people].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!type||row.clientType===type)&&(!method||row.contactMethod===method); }); $('#clientTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="9" class="empty">No client found. Click “Add Client” to create one.</td></tr>'; $('#clientKpiTotal').textContent=clients.length; $('#clientKpiActive').textContent=clients.filter((c)=>c.status==='Active').length; $('#clientKpiEmail').textContent=clients.filter((c)=>c.email).length; }
-        function editClient(id){ const row=clients.find((r)=>r.clientId===id); if(!row) return; resetForm(); const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); setVisible('clientAddPage'); }
+        function editClient(id){ const row=clients.find((r)=>r.clientId===id); if(!row) return; resetForm(); const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); setValue('#clientPhotoData',row.photo?JSON.stringify(row.photo):''); renderClientPhoto(row.photo||{}); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); setVisible('clientAddPage'); }
         function viewClient(id){ const row=clients.find((r)=>r.clientId===id); if(row) window.FleetmanDetailViewer?.show('Client Details', row); }
         async function deleteClient(id){ if(!confirm('Delete this client from prototype list?')) return; const previous=clients.slice(); clients=clients.filter((row)=>row.clientId!==id); const result=await saveStore(); if(result?.syncFailed){clients=previous;return;} renderList(); toast('Client deleted.'); }
         function exportClients(){ const rows=[['Client ID','Client Name','Phone','WhatsApp','Email','Reference','Client Type','Status','Preferred Contact','Address','About','Contact Persons']]; clients.forEach((row)=>rows.push([row.clientId,row.clientName,row.phone,row.whatsapp,row.email,row.reference,row.clientType,row.status,row.contactMethod,row.address,row.about,(row.contacts||[]).map((p)=>`${p.name} / ${p.role||''} / ${p.phone||''}`).join('; ')])); exportCsv(rows,'fleetman-client-list.csv'); }
@@ -5825,6 +6157,18 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         $('#applyClientFiltersBtn')?.addEventListener('click',renderList);
         $('#clearClientFiltersBtn')?.addEventListener('click',()=>{['#clientSearch','#clientFilterStatus','#clientFilterType','#clientFilterMethod'].forEach((sel)=>setValue(sel,'')); renderList();});
         ['#clientSearch','#clientFilterStatus','#clientFilterType','#clientFilterMethod'].forEach((sel)=>$(sel)?.addEventListener('input',renderList));
+        $('#clientPhoto')?.addEventListener('change',(event)=>{
+            uploadManager.upload(event.target,{
+                hidden:$('#clientPhotoData'),
+                info:$('#clientPhotoInfo'),
+                progress:$('#clientPhotoProgress'),
+                extensions:['jpg','jpeg','png','webp'],
+                maxBytes:100*1024,
+                imageOnly:true,
+                showPreview:true,
+                onSuccess:()=>clearClientFieldError(event.target,$('.client-photo-box')),
+            });
+        });
         $('#clientAddPage')?.addEventListener('input',(event)=>{
             const target=event.target;
             if(target.matches('#clientPhone,#clientWhatsapp,.clientContactPhone')) target.value=target.value.replace(/\D/g,'').slice(0,11);
@@ -6232,8 +6576,15 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return;
             }
             employees = savedEmployeeRows;
-            toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Employee saved. Redirecting to employee list.');
-            setTimeout(() => { renderList(); setVisible('employeeListPage'); }, 450);
+            if (window.FleetmanListAccess.canView()) {
+                toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Employee saved. Redirecting to employee list.');
+                setTimeout(() => { renderList(); setVisible('employeeListPage'); }, 450);
+            } else {
+                employees = [];
+                resetForm();
+                setVisible('employeeAddPage');
+                toast(window.FleetmanListAccess.savedMessage('Employee', statusOverride === 'Draft'));
+            }
         }
 
         function populateEmployeeForm(row) {
@@ -6304,6 +6655,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 <td><span class="badge ${statusClass(row.status)}">${escapeHtml(row.status || '-')}</span></td>
                 <td>${escapeHtml(row.presentAddress || '-')}</td>
                 <td>${docCount > 0 ? `<span class="badge soft">${docCount} file${docCount > 1 ? 's' : ''}</span>` : '<span style="color:#aaa">—</span>'}</td>
+                <td>${window.FleetmanExpiringDocuments.html(row.documents || [])}</td>
                 <td><button type="button" class="mini-btn view-employee" data-id="${escapeHtml(row.employeeId)}">View</button><button type="button" class="mini-btn edit-employee" data-id="${escapeHtml(row.employeeId)}">Edit</button><button type="button" class="mini-btn danger delete-employee" data-id="${escapeHtml(row.employeeId)}">Delete</button></td>
             </tr>`;
         }
@@ -6318,7 +6670,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return (!query || [row.employeeId, row.fullName, row.designation, row.contactNumber, row.nid, contactStr].join(' ').toLowerCase().includes(query)) &&
                     (!status || row.status === status) && (!tenure || row.salaryTenure === tenure) && (!designation || row.designation === designation);
             });
-            $('#employeeTbody').innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="10" class="empty">No employee found. Click “Add Employee” to create one.</td></tr>';
+            $('#employeeTbody').innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="11" class="empty">No employee found. Click “Add Employee” to create one.</td></tr>';
             $('#employeeKpiTotal').textContent = employees.length;
             $('#employeeKpiActive').textContent = employees.filter((row) => row.status === 'Active').length;
             $('#employeeKpiMonthly').textContent = employees.filter((row) => row.salaryTenure === 'Monthly').length;
@@ -6878,9 +7230,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 if (result?.syncFailed || result?.ok === false) return;
 
                 logs = Array.isArray(result?.rows) ? result.rows : nextRows;
-                renderList();
-                setVisible('attendanceListPage');
-                toast(isDraft ? 'Draft saved.' : 'Attendance saved successfully.');
+                if (window.FleetmanListAccess.canView()) {
+                    renderList();
+                    setVisible('attendanceListPage');
+                    toast(isDraft ? 'Draft saved.' : 'Attendance saved successfully.');
+                } else {
+                    logs = [];
+                    resetForm();
+                    setVisible('attendanceAddPage');
+                    toast(window.FleetmanListAccess.savedMessage('Attendance', isDraft));
+                }
             } finally {
                 savingLog = false;
                 [saveButton, draftButton].filter(Boolean).forEach((button) => { button.disabled = false; });
@@ -8911,10 +9270,17 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             upsertLocal(row);
             syncContracts(row.contractId)
                 .then(() => {
-                    currentPage = 1;
-                    renderList();
-                    setPage('contractListPage');
-                    toast(savedAs === 'Draft' ? 'Contract draft saved.' : 'Contract submitted successfully.');
+                    if (window.FleetmanListAccess.canView()) {
+                        currentPage = 1;
+                        renderList();
+                        setPage('contractListPage');
+                        toast(savedAs === 'Draft' ? 'Contract draft saved.' : 'Contract submitted successfully.');
+                    } else {
+                        contracts = [];
+                        resetForm();
+                        setPage('contractCreatePage');
+                        toast(window.FleetmanListAccess.savedMessage('Contract', savedAs === 'Draft'));
+                    }
                 })
                 .catch((error) => {
                     contracts = previousContracts;
@@ -8970,9 +9336,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                         <td>${(row.assignments || []).length}</td>
                         <td>${new Set((row.assignments || []).map((item) => item.driverId || item.driver)).size}</td>
                         <td>${(row.documents || []).length}</td>
+                        <td>${window.FleetmanExpiringDocuments.html(row.documents || [])}</td>
                         <td><span class="badge ${badgeClass(row.savedAs)}">${escapeHtml(row.savedAs || '-')}</span></td>
                         <td><button class="mini-btn view-contract" type="button" data-id="${escapeHtml(row.contractId)}">View</button><button class="mini-btn edit-contract" type="button" data-id="${escapeHtml(row.contractId)}">Edit</button><button class="mini-btn danger delete-contract" type="button" data-id="${escapeHtml(row.contractId)}">Delete</button></td>
-                    </tr>`).join('') : '<tr><td colspan="13"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
+                    </tr>`).join('') : '<tr><td colspan="14"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
             }
 
             const cards = $('#contractMobileCards');
@@ -8988,6 +9355,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                             <div><b>End</b><br>${formatDate(row.contractEnd)}</div>
                             <div><b>Assignments</b><br>${(row.assignments || []).length}</div>
                             <div><b>Documents</b><br>${(row.documents || []).length}</div>
+                            <div class="contract-expiring-mobile"><b>Expiring Documents</b>${window.FleetmanExpiringDocuments.html(row.documents || [], { limit: 2 })}</div>
                         </div>
                     </div>`).join('');
             }

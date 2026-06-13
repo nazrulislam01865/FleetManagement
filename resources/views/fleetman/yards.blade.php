@@ -166,6 +166,7 @@
                             <th>Monthly Charge</th>
                             <th>Zones</th>
                             <th>Documents</th>
+                            <th>Expiring Documents</th>
                             <th>Actions</th>
                         </tr>
                     </thead>

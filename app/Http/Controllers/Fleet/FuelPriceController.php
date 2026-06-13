@@ -128,7 +128,8 @@ class FuelPriceController extends FleetBaseController
 
         return response()->json([
             'ok' => true,
-            'rows' => $this->recordsFor(FleetFuelPrice::class),
+            'rows' => $this->syncResponseRows(FleetFuelPrice::class, $rows, $this->idKey),
+            'can_view_list' => $this->currentUserCanViewPage(),
         ]);
     }
 

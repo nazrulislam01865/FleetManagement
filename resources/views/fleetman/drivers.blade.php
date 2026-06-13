@@ -66,8 +66,8 @@
                     <div style="margin-top:16px"><x-fleetman.textarea id="driverAbout" label="About / Remarks" required placeholder="Any important note about the driver" /></div>
                 </x-fleetman.section-card>
 
-                <x-fleetman.section-card title="5. Driver Photo">
-                    <div class="photo-box driver-photo-box"><div class="field" style="flex:1"><label for="driverPhoto">Driver Photo <span class="req">*</span></label><input id="driverPhoto" type="file" accept="image/jpeg,image/png,image/webp" required aria-required="true"><input id="driverPhotoData" type="hidden"><div class="temp-upload-progress hidden" id="driverPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta" id="driverPhotoInfo"></div><div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. The image preview appears below after upload.</div></div></div>
+                <x-fleetman.section-card title="5. Driver Photo (Optional)">
+                    <div class="photo-box driver-photo-box"><div class="field" style="flex:1"><label for="driverPhoto">Driver Photo (Optional)</label><input id="driverPhoto" type="file" accept="image/jpeg,image/png,image/webp" aria-required="false"><input id="driverPhotoData" type="hidden"><div class="temp-upload-progress hidden" id="driverPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta" id="driverPhotoInfo"></div><div class="hint">Optional. Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. The image preview appears below after upload.</div></div></div>
                 </x-fleetman.section-card>
 
                 <x-fleetman.section-card title="6. Documents" id="driverDocumentsSection" class="document-section-card">
@@ -98,10 +98,20 @@
                 <input id="driverSearch" placeholder="Search by name, mobile, NID, license">
                 <x-fleetman.select id="driverFilterStatus" label="" :options="$fleetman['options']['driver_statuses']" placeholder="All status" />
                 <x-fleetman.select id="driverFilterLicense" label="" :options="$fleetman['options']['driver_license_types']" placeholder="All license" />
+                <x-fleetman.select
+                    id="driverFilterValidity"
+                    label=""
+                    :options="[
+                        'within-180-days' => 'License review: within 180 days',
+                        'expired' => 'Expired licenses',
+                        'beyond-180-days' => 'Valid beyond 180 days',
+                    ]"
+                    placeholder="All validity"
+                />
                 <x-fleetman.select id="driverFilterTenure" label="" :options="$fleetman['options']['driver_salary_tenures']" placeholder="All salary type" />
                 <button type="button" class="btn light" id="clearDriverFiltersBtn">Clear Filter</button>
             </div>
-            <div class="table-wrap driver-table"><table><thead><tr><th>Created At</th><th>Driver</th><th>Contact</th><th>License</th><th>Validity</th><th>Salary</th><th>Working Hour</th><th>Vendor</th><th>Docs</th><th>Status</th><th>Action</th></tr></thead><tbody id="driverTbody"></tbody></table></div>
+            <div class="table-wrap driver-table"><table><thead><tr><th>Created At</th><th>Driver</th><th>Contact</th><th>License</th><th>Validity</th><th>Salary</th><th>Working Hour</th><th>Vendor</th><th>Docs</th><th>Expiring Documents</th><th>Status</th><th>Action</th></tr></thead><tbody id="driverTbody"></tbody></table></div>
         </div>
     </div>
 </div>

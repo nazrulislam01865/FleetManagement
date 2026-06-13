@@ -158,7 +158,8 @@ class VehicleController extends FleetBaseController
 
         return response()->json([
             'ok' => true,
-            'rows' => $this->recordsFor(FleetVehicle::class),
+            'rows' => $this->syncResponseRows(FleetVehicle::class, $rows, $this->idKey),
+            'can_view_list' => $this->currentUserCanViewPage(),
         ]);
     }
 
@@ -263,7 +264,7 @@ class VehicleController extends FleetBaseController
             $rules = [
                 'id' => ['required', 'string', 'max:100'],
                 'name' => ['required', 'string', 'max:255'],
-                'regNo' => ['required', 'string', 'not_regex:/[@#$%^&*()!`~]/'],
+                'regNo' => ['required', 'string', 'max:25', 'not_regex:/[@#$%^&*()!`~]/'],
                 'vendor' => ['nullable', Rule::in($vehicleVendors)],
                 'model' => ['required', 'string', 'max:255'],
                 'color' => ['nullable', 'string', 'max:100'],
@@ -291,6 +292,7 @@ class VehicleController extends FleetBaseController
             ];
 
             $validator = Validator::make($row, $rules, [
+                'regNo.max' => 'Registration Number cannot be more than 25 characters.',
                 'regNo.not_regex' => 'Registration Number cannot contain these special characters: @ # $ % ^ & * ( ) ! ` ~.',
                 'vendor.in' => 'Select an active vehicle or driver service vendor / owner.',
                 'driver.in' => 'Select a valid driver.',

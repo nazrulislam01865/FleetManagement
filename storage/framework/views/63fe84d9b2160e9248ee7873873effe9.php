@@ -353,6 +353,7 @@
                             <th>Vehicle Count</th>
                             <th>Driver Count</th>
                             <th>Documents</th>
+                            <th>Expiring Documents</th>
                             <th>Saved As</th>
                             <th>Actions</th>
                         </tr>

@@ -61,9 +61,13 @@ Route::post('/logout', [LoginController::class, 'logout'])
     ->name('logout');
 
 Route::get('/', function () {
-    return auth()->check()
-        ? redirect()->route(FleetRbac::firstAllowedRoute(auth()->user()))
-        : redirect()->route('login');
+    if (! auth()->check()) {
+        return redirect()->route('login');
+    }
+
+    $destination = FleetRbac::firstAllowedDestination(auth()->user());
+
+    return redirect()->route($destination['route'], $destination['parameters']);
 });
 
 Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAccess::class])->group(function () {

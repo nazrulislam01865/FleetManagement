@@ -360,39 +360,66 @@ class FleetRbac
     }
 
     /**
-     * Return the first page the user may open. This prevents custom roles
-     * without dashboard access from being redirected straight to a 403 page.
+     * Return the first destination the user may open. View permissions lead
+     * to list pages, while manage-only permissions lead directly to Add.
+     *
+     * @return array{route:string, parameters:array<string, string>}
      */
-    public static function firstAllowedRoute(?User $user): string
+    public static function firstAllowedDestination(?User $user): array
     {
         $candidates = [
-            ['permission' => 'dashboard.view', 'route' => 'fleet.dashboard'],
-            ['permission' => 'trips.view', 'route' => 'fleet.trips'],
-            ['permission' => 'driver_attendance.view', 'route' => 'fleet.driver-attendance'],
-            ['permission' => 'yards.view', 'route' => 'fleet.yards'],
-            ['permission' => 'vehicles.view', 'route' => 'fleet.vehicles'],
-            ['permission' => 'fuel_recharge.view', 'route' => 'fleet.fuel-recharge'],
-            ['permission' => 'fuel_prices.view', 'route' => 'fleet.fuel-prices'],
-            ['permission' => 'contracts.view', 'route' => 'fleet.contracts'],
-            ['permission' => 'clients.view', 'route' => 'fleet.clients'],
-            ['permission' => 'drivers.view', 'route' => 'fleet.drivers'],
-            ['permission' => 'employees.view', 'route' => 'fleet.employees'],
-            ['permission' => 'vendors.view', 'route' => 'fleet.vendors'],
-            ['permission' => 'dues.view', 'route' => 'fleet.dues'],
-            ['permission' => 'reports.view', 'route' => 'fleet.reports'],
-            ['permission' => 'users.view', 'route' => 'fleet.users'],
-            ['permission' => 'role_matrix.view', 'route' => 'fleet.role-matrix'],
-            ['permission' => 'master_data.view', 'route' => 'fleet.master-data'],
-            ['permission' => 'settings.manage', 'route' => 'fleet.settings'],
+            ['permission' => 'dashboard.view', 'route' => 'fleet.dashboard', 'parameters' => []],
+            ['permission' => 'trips.view', 'route' => 'fleet.trips', 'parameters' => ['action' => 'list']],
+            ['permission' => 'trips.manage', 'route' => 'fleet.trips', 'parameters' => ['action' => 'add']],
+            ['permission' => 'driver_attendance.view', 'route' => 'fleet.driver-attendance', 'parameters' => ['action' => 'list']],
+            ['permission' => 'driver_attendance.manage', 'route' => 'fleet.driver-attendance', 'parameters' => ['action' => 'add']],
+            ['permission' => 'yards.view', 'route' => 'fleet.yards', 'parameters' => ['action' => 'list']],
+            ['permission' => 'yards.manage', 'route' => 'fleet.yards', 'parameters' => ['action' => 'add']],
+            ['permission' => 'vehicles.view', 'route' => 'fleet.vehicles', 'parameters' => ['action' => 'list']],
+            ['permission' => 'vehicles.manage', 'route' => 'fleet.vehicles', 'parameters' => ['action' => 'add']],
+            ['permission' => 'fuel_recharge.view', 'route' => 'fleet.fuel-recharge', 'parameters' => ['action' => 'list']],
+            ['permission' => 'fuel_recharge.manage', 'route' => 'fleet.fuel-recharge', 'parameters' => ['action' => 'add']],
+            ['permission' => 'fuel_prices.view', 'route' => 'fleet.fuel-prices', 'parameters' => ['action' => 'list']],
+            ['permission' => 'fuel_prices.manage', 'route' => 'fleet.fuel-prices', 'parameters' => ['action' => 'add']],
+            ['permission' => 'contracts.view', 'route' => 'fleet.contracts', 'parameters' => ['action' => 'list']],
+            ['permission' => 'contracts.manage', 'route' => 'fleet.contracts', 'parameters' => ['action' => 'add']],
+            ['permission' => 'clients.view', 'route' => 'fleet.clients', 'parameters' => ['action' => 'list']],
+            ['permission' => 'clients.manage', 'route' => 'fleet.clients', 'parameters' => ['action' => 'add']],
+            ['permission' => 'drivers.view', 'route' => 'fleet.drivers', 'parameters' => ['action' => 'list']],
+            ['permission' => 'drivers.manage', 'route' => 'fleet.drivers', 'parameters' => ['action' => 'add']],
+            ['permission' => 'employees.view', 'route' => 'fleet.employees', 'parameters' => ['action' => 'list']],
+            ['permission' => 'employees.manage', 'route' => 'fleet.employees', 'parameters' => ['action' => 'add']],
+            ['permission' => 'vendors.view', 'route' => 'fleet.vendors', 'parameters' => ['action' => 'list']],
+            ['permission' => 'vendors.manage', 'route' => 'fleet.vendors', 'parameters' => ['action' => 'add']],
+            ['permission' => 'dues.view', 'route' => 'fleet.dues', 'parameters' => []],
+            ['permission' => 'reports.view', 'route' => 'fleet.reports', 'parameters' => []],
+            ['permission' => 'users.view', 'route' => 'fleet.users', 'parameters' => []],
+            ['permission' => 'role_matrix.view', 'route' => 'fleet.role-matrix', 'parameters' => []],
+            ['permission' => 'master_data.view', 'route' => 'fleet.master-data', 'parameters' => []],
+            ['permission' => 'settings.manage', 'route' => 'fleet.settings', 'parameters' => []],
         ];
 
         foreach ($candidates as $candidate) {
             if (! $user || ! method_exists($user, 'canFleet') || $user->canFleet($candidate['permission'])) {
-                return $candidate['route'];
+                return [
+                    'route' => $candidate['route'],
+                    'parameters' => $candidate['parameters'],
+                ];
             }
         }
 
-        return 'fleet.dashboard';
+        return ['route' => 'fleet.dashboard', 'parameters' => []];
+    }
+
+    public static function firstAllowedRoute(?User $user): string
+    {
+        return self::firstAllowedDestination($user)['route'];
+    }
+
+    /** @return array<string, string> */
+    public static function firstAllowedRouteParameters(?User $user): array
+    {
+        return self::firstAllowedDestination($user)['parameters'];
     }
 
     private static function permission(string $key, string $module, string $action, string $label, string $description, ?string $routeName, int $sortOrder): array

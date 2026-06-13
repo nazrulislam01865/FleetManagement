@@ -290,16 +290,48 @@
 <?php $component = $__componentOriginal315c571ce40dc0c12ed885ba8a594408; ?>
 <?php unset($__componentOriginal315c571ce40dc0c12ed885ba8a594408); ?>
 <?php endif; ?>
+
                 <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '2. Contact Person(s)','class' => 'client-contact-card']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '2. Client Logo']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => '2. Contact Person(s)','class' => 'client-contact-card']); ?>
+<?php $component->withAttributes(['title' => '2. Client Logo']); ?>
+                    <div class="photo-box client-photo-box">
+                        <div class="field" style="flex:1">
+                            <label for="clientPhoto">Client Logo <small>(Optional)</small></label>
+                            <input id="clientPhoto" type="file" accept="image/jpeg,image/png,image/webp">
+                            <input id="clientPhotoData" type="hidden">
+                            <div class="temp-upload-progress hidden" id="clientPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
+                            <div class="upload-meta" id="clientPhotoInfo"></div>
+                            <div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. This logo is optional.</div>
+                        </div>
+                    </div>
+                 <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $attributes = $__attributesOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
+<?php $component = $__componentOriginal315c571ce40dc0c12ed885ba8a594408; ?>
+<?php unset($__componentOriginal315c571ce40dc0c12ed885ba8a594408); ?>
+<?php endif; ?>
+
+                <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '3. Contact Person(s)','class' => 'client-contact-card']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.section-card'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['title' => '3. Contact Person(s)','class' => 'client-contact-card']); ?>
                      <?php $__env->slot('action', null, []); ?> <button type="button" class="btn light" id="addClientContactBtn">＋ Add Contact Person</button> <?php $__env->endSlot(); ?>
                     <div id="clientContacts"></div>
                  <?php echo $__env->renderComponent(); ?>

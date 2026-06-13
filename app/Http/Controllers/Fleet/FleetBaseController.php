@@ -232,7 +232,8 @@ abstract class FleetBaseController extends Controller
 
         return response()->json([
             'ok' => true,
-            'rows' => $this->recordsFor($modelClass),
+            'rows' => $this->syncResponseRows($modelClass, $rows, $idKey),
+            'can_view_list' => $this->currentUserCanViewPage(),
         ]);
     }
 
@@ -243,6 +244,13 @@ abstract class FleetBaseController extends Controller
      */
     protected function deleteMissingRecords(Builder $query, iterable $incomingCodes, string $column = 'code'): void
     {
+        // A manage-only role may create records but must not receive the list.
+        // Its request therefore contains only the submitted record, not the
+        // complete table. Never interpret omitted rows as deletions in that mode.
+        if (! $this->currentUserCanViewPage()) {
+            return;
+        }
+
         $codes = collect($incomingCodes)
             ->map(fn ($code): string => trim((string) $code))
             ->filter()
@@ -437,29 +445,42 @@ abstract class FleetBaseController extends Controller
                         return ! empty($item['route']) || count($item['children'] ?? []) > 0;
                     })
                     ->map(function (array $item): array {
-                        $itemAllowed = $this->menuItemAllowed($item);
-                        $item['allowed'] = $itemAllowed;
-
                         $children = collect($item['children'] ?? [])
                             ->filter(fn (array $child): bool => $this->menuItemVisible($child))
                             ->filter(fn (array $child): bool => ! empty($child['route']))
-                            ->map(function (array $child) use ($itemAllowed): array {
-                                // Child options also require access to the parent/list module.
-                                $child['allowed'] = $itemAllowed && $this->menuItemAllowed($child);
+                            ->map(function (array $child): array {
+                                // View and Manage are independent. A role may
+                                // use Add while the matching List stays locked.
+                                $child['allowed'] = $this->menuItemAllowed($child);
 
                                 return $child;
                             })
-                            ->values()
-                            ->all();
+                            ->values();
 
-                        if ($children !== []) {
-                            $item['children'] = $children;
+                        $itemDirectlyAllowed = $this->menuItemAllowed($item);
+                        $firstAllowedChild = $children->first(
+                            fn (array $child): bool => (bool) ($child['allowed'] ?? false)
+                        );
+
+                        // Keep the module menu usable when Manage is granted
+                        // without View. In that case the parent opens Add.
+                        $item['allowed'] = $itemDirectlyAllowed || $firstAllowedChild !== null;
+
+                        if (! $itemDirectlyAllowed && is_array($firstAllowedChild)) {
+                            $item['route'] = $firstAllowedChild['route'] ?? $item['route'] ?? null;
+                            $item['routeParams'] = $firstAllowedChild['routeParams'] ?? [];
+                            $item['permission'] = $firstAllowedChild['permission'] ?? null;
+                        }
+
+                        if ($children->isNotEmpty()) {
+                            $item['children'] = $children->all();
                         } else {
                             unset($item['children']);
                         }
 
                         return $item;
                     })
+                    ->filter(fn (array $item): bool => (bool) ($item['allowed'] ?? false))
                     ->values()
                     ->all();
 
@@ -579,12 +600,16 @@ abstract class FleetBaseController extends Controller
             || ! method_exists($user, 'canFleet')
             || $user->canFleet($permission);
 
+        $canView = $can($viewPermission);
+        $canManage = $managePermission !== null && $can($managePermission);
+
         return [
             'viewPermission' => $viewPermission,
             'managePermission' => $managePermission,
-            'canView' => $can($viewPermission),
-            'canManage' => $managePermission !== null && $can($viewPermission) && $can($managePermission),
-            'readOnly' => $viewPermission !== null && ($managePermission === null || ! ($can($viewPermission) && $can($managePermission))),
+            'canView' => $canView,
+            'canManage' => $canManage,
+            'readOnly' => $viewPermission !== null && $canView && ! $canManage,
+            'createOnly' => $viewPermission !== null && ! $canView && $canManage,
         ];
     }
 
@@ -1181,6 +1206,48 @@ abstract class FleetBaseController extends Controller
     protected function recordsFor(string $modelClass): array
     {
         $rows = $modelClass::query()
+            ->latest('id')
+            ->get();
+
+        return $this->recordPayloadsWithCreator(
+            $rows,
+            $this->ownershipResourceForModel($modelClass)
+        );
+    }
+
+
+    protected function currentUserCanViewPage(): bool
+    {
+        return (bool) ($this->pagePermissionAccess($this->page)['canView'] ?? false);
+    }
+
+    /**
+     * A view-enabled role receives the normal complete collection. A
+     * manage-only role receives only records submitted in this request so a
+     * successful create can be confirmed without exposing the module list.
+     *
+     * @param class-string<Model> $modelClass
+     */
+    protected function syncResponseRows(string $modelClass, array $submittedRows, ?string $idKey = null): array
+    {
+        if ($this->currentUserCanViewPage()) {
+            return $this->recordsFor($modelClass);
+        }
+
+        $key = $idKey ?: $this->idKey;
+        $codes = collect($submittedRows)
+            ->filter(fn ($row): bool => is_array($row))
+            ->map(fn (array $row): string => trim((string) ($row[$key] ?? '')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($codes->isEmpty()) {
+            return [];
+        }
+
+        $rows = $modelClass::query()
+            ->whereIn('code', $codes->all())
             ->latest('id')
             ->get();
 

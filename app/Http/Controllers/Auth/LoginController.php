@@ -17,18 +17,31 @@ use Illuminate\View\View;
 
 class LoginController extends Controller
 {
-    public function show(): View|RedirectResponse
+    public function show(Request $request): View|RedirectResponse
     {
         if (Auth::check()) {
-            return redirect()->route(FleetRbac::firstAllowedRoute(Auth::user()));
+            return $this->redirectToFirstAllowed(Auth::user());
         }
 
         $logoUrl = FleetBrand::logoUrl();
+        $logoutNotice = '';
+
+        // A background fetch may follow an authentication redirect to /login.
+        // Do not consume the one-time message during that hidden request; keep
+        // it for the actual browser navigation to the login screen.
+        if (! $request->expectsJson() && ! $request->ajax()) {
+            $logoutNotice = trim((string) $request->session()->pull('fleetman.logout_notice', ''));
+
+            if ($logoutNotice === '' && $request->query('reason') === 'session-replaced') {
+                $logoutNotice = 'You were logged out because this account was signed in on another device or browser. Only one active login is allowed per user. If this was not you, change your password immediately.';
+            }
+        }
 
         return view('auth.login', [
             'brand' => array_merge(config('fleetman.brand'), [
                 'logo_url' => $logoUrl,
             ]),
+            'logoutNotice' => $logoutNotice,
         ]);
     }
 
@@ -51,7 +64,7 @@ class LoginController extends Controller
             $request->session()->put('fleetman.last_activity_at', now()->timestamp);
 
             $replacedAnotherSession = $activeLoginSession->claim($request, $request->user());
-            $redirect = redirect()->route(FleetRbac::firstAllowedRoute($request->user()));
+            $redirect = $this->redirectToFirstAllowed($request->user());
 
             if ($replacedAnotherSession) {
                 $redirect->with(
@@ -78,6 +91,14 @@ class LoginController extends Controller
         return back()
             ->withErrors(['email' => 'The provided email or password is incorrect.'])
             ->onlyInput('email');
+    }
+
+
+    private function redirectToFirstAllowed(?User $user): RedirectResponse
+    {
+        $destination = FleetRbac::firstAllowedDestination($user);
+
+        return redirect()->route($destination['route'], $destination['parameters']);
     }
 
     public function keepAlive(Request $request): JsonResponse

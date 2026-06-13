@@ -30,21 +30,20 @@ class EnsureFleetManageAccess
         )));
 
         $scopePermissions = [
-            'yards' => ['yards.view', 'yards.manage'],
-            'vehicles' => ['vehicles.view', 'vehicles.manage'],
-            'fuel-recharge' => ['fuel_recharge.view', 'fuel_recharge.manage'],
-            'vendors' => ['vendors.view', 'vendors.manage'],
-            'drivers' => ['drivers.view', 'drivers.manage'],
-            'employees' => ['employees.view', 'employees.manage'],
-            'contracts' => ['contracts.view', 'contracts.manage'],
+            'yards' => 'yards.manage',
+            'vehicles' => 'vehicles.manage',
+            'fuel-recharge' => 'fuel_recharge.manage',
+            'vendors' => 'vendors.manage',
+            'drivers' => 'drivers.manage',
+            'employees' => 'employees.manage',
+            'clients' => 'clients.manage',
+            'contracts' => 'contracts.manage',
         ];
 
-        $requiredPermissions = $scopePermissions[$scope] ?? null;
-        $allowed = $requiredPermissions
+        $requiredPermission = $scopePermissions[$scope] ?? null;
+        $allowed = $requiredPermission
             && method_exists($user, 'canFleet')
-            && collect($requiredPermissions)->every(
-                fn (string $permission): bool => $user->canFleet($permission)
-            );
+            && $user->canFleet($requiredPermission);
 
         if (! $allowed) {
             if ($request->expectsJson()) {

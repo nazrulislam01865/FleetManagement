@@ -143,7 +143,11 @@ class EmployeeController extends FleetBaseController
             throw $exception;
         }
 
-        return response()->json(['ok' => true, 'rows' => $this->recordsFor(FleetEmployee::class)]);
+        return response()->json([
+            'ok' => true,
+            'rows' => $this->syncResponseRows(FleetEmployee::class, $rows, $this->idKey),
+            'can_view_list' => $this->currentUserCanViewPage(),
+        ]);
     }
 
     private function validateEmployeeRows(array $rows, Request $request, ?array $strictValidationIndexes = null): void

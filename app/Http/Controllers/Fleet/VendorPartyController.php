@@ -48,7 +48,33 @@ class VendorPartyController extends FleetBaseController
         $this->validateUniqueDocumentNames($rows);
 
         $storedPaths = [];
+        $temporaryPhotoTokens = [];
         $userId = (int) $request->user()->id;
+        $photoErrors = [];
+
+        foreach ($rows as $partyIndex => $party) {
+            if (! is_array($party)) {
+                continue;
+            }
+
+            $photo = is_array($party['photo'] ?? null) ? $party['photo'] : [];
+            $token = trim((string) ($photo['tempToken'] ?? ''));
+
+            if ($token === '') {
+                continue;
+            }
+
+            try {
+                $uploads->validateClaim($photo, $userId);
+                $temporaryPhotoTokens[] = $token;
+            } catch (ValidationException) {
+                $photoErrors["rows.{$partyIndex}.photo"] = 'The uploaded Vendor Photo is no longer available. Please upload the photo again.';
+            }
+        }
+
+        if ($photoErrors !== []) {
+            throw ValidationException::withMessages($photoErrors);
+        }
 
         try {
             foreach ($rows as $partyIndex => &$party) {
@@ -56,6 +82,22 @@ class VendorPartyController extends FleetBaseController
                     continue;
                 }
                 $partyId = Str::slug((string) ($party['partyId'] ?? 'new-party')) ?: 'new-party';
+                $photo = is_array($party['photo'] ?? null) ? $party['photo'] : [];
+
+                if (filled($photo['tempToken'] ?? null)) {
+                    $party['photo'] = $uploads->claim(
+                        $photo,
+                        $userId,
+                        "fleet/vendor-parties/{$partyId}/photo",
+                        ['jpg', 'jpeg', 'png', 'webp'],
+                        100,
+                        true,
+                        false
+                    );
+                    $party['photoName'] = $party['photo']['originalName'];
+                    $storedPaths[] = $party['photo']['filePath'];
+                }
+
                 foreach (($party['documents'] ?? []) as $documentIndex => $document) {
                     if (! is_array($document)) {
                         continue;
@@ -118,6 +160,14 @@ class VendorPartyController extends FleetBaseController
             }
 
             $this->persistRows($rows);
+
+            foreach (array_values(array_unique($temporaryPhotoTokens)) as $token) {
+                try {
+                    $uploads->delete((string) $token, $userId);
+                } catch (Throwable) {
+                    // The vendor and permanent photo have already been saved.
+                }
+            }
         } catch (Throwable $exception) {
             if ($storedPaths !== []) {
                 Storage::disk('public')->delete($storedPaths);
@@ -128,7 +178,8 @@ class VendorPartyController extends FleetBaseController
 
         return response()->json([
             'ok' => true,
-            'rows' => $this->recordsFor(FleetVendorParty::class),
+            'rows' => $this->syncResponseRows(FleetVendorParty::class, $rows, $this->idKey),
+            'can_view_list' => $this->currentUserCanViewPage(),
         ]);
     }
 
@@ -146,6 +197,11 @@ class VendorPartyController extends FleetBaseController
             if (! is_array($row)) {
                 $errors["rows.{$index}"] = 'Each vendor / party row must be a valid object.';
                 continue;
+            }
+
+            $photo = is_array($row['photo'] ?? null) ? $row['photo'] : [];
+            if ((int) ($photo['sizeBytes'] ?? 0) > 100 * 1024) {
+                $errors["rows.{$index}.photo"] = 'Vendor Photo must not exceed 100 KB.';
             }
 
             // Existing rows created before these rules remain readable. The
@@ -169,6 +225,7 @@ class VendorPartyController extends FleetBaseController
                 'paymentTerms' => ['nullable', Rule::in($paymentTerms)],
                 'address' => ['required', 'string', 'max:1500'],
                 'about' => ['nullable', 'string', 'max:2000'],
+                'photo' => ['nullable', 'array'],
                 'contacts' => ['required', 'array', 'min:1'],
                 'contacts.*.name' => ['required', 'string', 'max:255'],
                 'contacts.*.role' => ['nullable', 'string', 'max:255'],

@@ -394,11 +394,19 @@
             if (index >= 0) records[index] = savedRecord;
             else records.unshift(savedRecord);
             nextYardId = String(result.nextYardId || nextYardId);
-            toast(result.message || 'Yard saved successfully.');
             editingCode = null;
-            renderList();
-            navigateTo('list');
-            resetForm();
+            if (window.FleetmanListAccess?.canView?.()) {
+                toast(result.message || 'Yard saved successfully.');
+                renderList();
+                navigateTo('list');
+                resetForm();
+            } else {
+                records.splice(0, records.length);
+                resetForm();
+                navigateTo('add');
+                toast(window.FleetmanListAccess?.savedMessage?.('Yard')
+                    || 'Yard saved successfully. You are not allowed to view the list. The Add page has been reopened.');
+            }
         } catch (error) {
             toast(error?.message || 'The yard could not be saved.');
         } finally {
@@ -463,8 +471,9 @@
                 <td>${money(record.monthlyCharge)}</td>
                 <td>${Array.isArray(record.zones) ? record.zones.length : 0}</td>
                 <td>${Array.isArray(record.documents) ? record.documents.length : 0}</td>
+                <td>${window.FleetmanExpiringDocuments.html(record.documents || [])}</td>
                 <td class="yard-action-cell">${actionMarkup(record)}</td>
-            </tr>`).join('') : '<tr><td colspan="12" class="empty">No yard record matches the selected filters.</td></tr>';
+            </tr>`).join('') : '<tr><td colspan="13" class="empty">No yard record matches the selected filters.</td></tr>';
 
         $('#yardMobileList').innerHTML = pageRows.map((record) => `
             <article class="yard-mobile-card">
@@ -479,6 +488,7 @@
                     <div>Monthly Charge<b>${money(record.monthlyCharge)}</b></div>
                     <div>Zones<b>${Array.isArray(record.zones) ? record.zones.length : 0}</b></div>
                     <div>Documents<b>${Array.isArray(record.documents) ? record.documents.length : 0}</b></div>
+                    <div class="yard-expiring-mobile">Expiring Documents${window.FleetmanExpiringDocuments.html(record.documents || [], { limit: 2 })}</div>
                 </div>
                 <div class="yard-mobile-actions">${actionMarkup(record, true)}</div>
             </article>`).join('');

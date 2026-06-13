@@ -74,7 +74,8 @@ class DriverAttendanceController extends FleetBaseController
             'ok' => true,
             'message' => $isNewRecord ? 'Attendance saved successfully.' : 'Attendance updated successfully.',
             'record' => $this->attendancePayload($record),
-            'rows' => $this->recordsFor(FleetDriverAttendance::class),
+            'rows' => $this->syncResponseRows(FleetDriverAttendance::class, [$row], $this->idKey),
+            'can_view_list' => $this->currentUserCanViewPage(),
         ]);
     }
 
@@ -99,7 +100,10 @@ class DriverAttendanceController extends FleetBaseController
         return response()->json([
             'ok' => true,
             'message' => 'Attendance deleted successfully.',
-            'rows' => $this->recordsFor(FleetDriverAttendance::class),
+            'rows' => $this->currentUserCanViewPage()
+                ? $this->recordsFor(FleetDriverAttendance::class)
+                : [],
+            'can_view_list' => $this->currentUserCanViewPage(),
         ]);
     }
 

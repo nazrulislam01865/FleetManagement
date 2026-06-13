@@ -202,6 +202,8 @@
         'fleet.vehicles',
         'fleet.drivers',
         'fleet.employees',
+        'fleet.clients',
+        'fleet.vendors',
     ], true);
 
     if (($detail['list_route'] ?? '') === 'fleet.vehicles') {
@@ -214,6 +216,14 @@
     } elseif (($detail['list_route'] ?? '') === 'fleet.employees') {
         $recordMedia = $recordPayload['photo'] ?? null;
         $recordFallback = '👤';
+        $recordMediaAlt = $recordTitle.' photo';
+    } elseif (($detail['list_route'] ?? '') === 'fleet.clients') {
+        $recordMedia = $recordPayload['photo'] ?? null;
+        $recordFallback = '🏢';
+        $recordMediaAlt = $recordTitle.' photo';
+    } elseif (($detail['list_route'] ?? '') === 'fleet.vendors') {
+        $recordMedia = $recordPayload['photo'] ?? null;
+        $recordFallback = '🤝';
         $recordMediaAlt = $recordTitle.' photo';
     }
 

@@ -82,7 +82,9 @@ class EnforceUserInactivityTimeout
             $request,
             'You were logged out because this account was signed in on another device or browser. Only one active login is allowed per user. If this was not you, change your password immediately.',
             'You were logged out because this account was signed in on another device or browser. Only one active login is allowed per user.',
-            false
+            false,
+            'session-replaced',
+            true
         );
     }
 
@@ -90,7 +92,9 @@ class EnforceUserInactivityTimeout
         Request $request,
         string $flashMessage,
         string $jsonMessage,
-        bool $releaseActiveSession
+        bool $releaseActiveSession,
+        ?string $reason = null,
+        bool $persistNotice = false
     ): JsonResponse|RedirectResponse {
         if ($releaseActiveSession) {
             $this->activeLoginSession->release($request, $request->user());
@@ -100,15 +104,27 @@ class EnforceUserInactivityTimeout
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        $request->session()->flash('status', $flashMessage);
+
+        if ($persistNotice) {
+            // Keep this message until the actual login page consumes it. A
+            // background AJAX request may detect the replaced session first,
+            // and a normal flash message can be aged out by an intermediate
+            // redirect before the user sees the login screen.
+            $request->session()->put('fleetman.logout_notice', $flashMessage);
+        } else {
+            $request->session()->flash('status', $flashMessage);
+        }
+
+        $loginUrl = route('login', $reason ? ['reason' => $reason] : []);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => $jsonMessage,
-                'redirect' => route('login'),
+                'reason' => $reason,
+                'redirect' => $loginUrl,
             ], 401);
         }
 
-        return redirect()->route('login');
+        return redirect()->to($loginUrl);
     }
 }

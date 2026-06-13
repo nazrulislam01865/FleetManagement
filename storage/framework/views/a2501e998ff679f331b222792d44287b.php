@@ -592,15 +592,15 @@
 
                 <?php if (isset($component)) { $__componentOriginal315c571ce40dc0c12ed885ba8a594408 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal315c571ce40dc0c12ed885ba8a594408 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '5. Driver Photo']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.section-card','data' => ['title' => '5. Driver Photo (Optional)']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.section-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => '5. Driver Photo']); ?>
-                    <div class="photo-box driver-photo-box"><div class="field" style="flex:1"><label for="driverPhoto">Driver Photo <span class="req">*</span></label><input id="driverPhoto" type="file" accept="image/jpeg,image/png,image/webp" required aria-required="true"><input id="driverPhotoData" type="hidden"><div class="temp-upload-progress hidden" id="driverPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta" id="driverPhotoInfo"></div><div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. The image preview appears below after upload.</div></div></div>
+<?php $component->withAttributes(['title' => '5. Driver Photo (Optional)']); ?>
+                    <div class="photo-box driver-photo-box"><div class="field" style="flex:1"><label for="driverPhoto">Driver Photo (Optional)</label><input id="driverPhoto" type="file" accept="image/jpeg,image/png,image/webp" aria-required="false"><input id="driverPhotoData" type="hidden"><div class="temp-upload-progress hidden" id="driverPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div><div class="upload-meta" id="driverPhotoInfo"></div><div class="hint">Optional. Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. The image preview appears below after upload.</div></div></div>
                  <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal315c571ce40dc0c12ed885ba8a594408)): ?>
@@ -810,6 +810,34 @@
 <?php endif; ?>
                 <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4b244ece64768724078120db372595a2 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'driverFilterValidity','label' => '','options' => [
+                        'within-180-days' => 'License review: within 180 days',
+                        'expired' => 'Expired licenses',
+                        'beyond-180-days' => 'Valid beyond 180 days',
+                    ],'placeholder' => 'All validity']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.select'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['id' => 'driverFilterValidity','label' => '','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute([
+                        'within-180-days' => 'License review: within 180 days',
+                        'expired' => 'Expired licenses',
+                        'beyond-180-days' => 'Valid beyond 180 days',
+                    ]),'placeholder' => 'All validity']); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal4b244ece64768724078120db372595a2)): ?>
+<?php $attributes = $__attributesOriginal4b244ece64768724078120db372595a2; ?>
+<?php unset($__attributesOriginal4b244ece64768724078120db372595a2); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal4b244ece64768724078120db372595a2)): ?>
+<?php $component = $__componentOriginal4b244ece64768724078120db372595a2; ?>
+<?php unset($__componentOriginal4b244ece64768724078120db372595a2); ?>
+<?php endif; ?>
+                <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal4b244ece64768724078120db372595a2 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'driverFilterTenure','label' => '','options' => $fleetman['options']['driver_salary_tenures'],'placeholder' => 'All salary type']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.select'); ?>
 <?php if ($component->shouldRender()): ?>
@@ -830,7 +858,7 @@
 <?php endif; ?>
                 <button type="button" class="btn light" id="clearDriverFiltersBtn">Clear Filter</button>
             </div>
-            <div class="table-wrap driver-table"><table><thead><tr><th>Created At</th><th>Driver</th><th>Contact</th><th>License</th><th>Validity</th><th>Salary</th><th>Working Hour</th><th>Vendor</th><th>Docs</th><th>Status</th><th>Action</th></tr></thead><tbody id="driverTbody"></tbody></table></div>
+            <div class="table-wrap driver-table"><table><thead><tr><th>Created At</th><th>Driver</th><th>Contact</th><th>License</th><th>Validity</th><th>Salary</th><th>Working Hour</th><th>Vendor</th><th>Docs</th><th>Expiring Documents</th><th>Status</th><th>Action</th></tr></thead><tbody id="driverTbody"></tbody></table></div>
         </div>
     </div>
 </div>

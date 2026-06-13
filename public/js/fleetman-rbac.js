@@ -4,7 +4,8 @@
     const auth = window.FLEETMAN?.auth || {};
     const pageAccess = auth.pageAccess || {};
     const managePermission = String(pageAccess.managePermission || '');
-    const isReadOnly = Boolean(managePermission) && pageAccess.canManage !== true;
+    const isReadOnly = Boolean(managePermission) && pageAccess.canView === true && pageAccess.canManage !== true;
+    const isCreateOnly = Boolean(managePermission) && pageAccess.canManage === true && pageAccess.canView !== true;
     const canDeleteRecords = auth.canDeleteRecords === true;
     const canViewFullDetails = typeof window.FleetmanDetailViewer?.canViewDetails === 'function'
         ? window.FleetmanDetailViewer.canViewDetails()
@@ -177,6 +178,73 @@
         body.prepend(banner);
     }
 
+
+    function addCreateOnlyBanner() {
+        if (!isCreateOnly || document.querySelector('.rbac-create-only-banner')) return;
+
+        const body = document.querySelector('.fleet-main-body');
+        if (!body) return;
+
+        const banner = document.createElement('div');
+        banner.className = 'rbac-readonly-banner rbac-create-only-banner';
+        banner.setAttribute('role', 'status');
+        banner.innerHTML = '<span aria-hidden="true">➕</span><div><b>Create-only access</b><small>You may add records in this module, but your role is not allowed to view its list.</small></div>';
+        body.prepend(banner);
+    }
+
+    function isListNavigationControl(element) {
+        if (!(element instanceof HTMLElement)) return false;
+
+        const target = String(element.dataset?.pageTarget || '');
+        if (target.endsWith('ListPage')) return true;
+
+        if (element.tagName.toLowerCase() !== 'a' || !element.getAttribute('href')) return false;
+
+        try {
+            const url = new URL(element.href, window.location.href);
+            if (url.origin !== window.location.origin || url.pathname !== window.location.pathname) return false;
+            return url.searchParams.get('action') !== 'add';
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function enforceCreateOnlyControls(root = document) {
+        if (!isCreateOnly) return;
+
+        const page = String(document.body?.dataset?.page || '').toLowerCase();
+        const pagePairs = {
+            'yards': ['yardAddPage', 'yardListPage'],
+            'vehicles': ['vehicleAddPage', 'vehicleListPage'],
+            'fuel-prices': ['fuelPriceAddPage', 'fuelPriceListPage'],
+            'fuel-recharge': ['rechargeAddPage', 'rechargeListPage'],
+            'trips': ['tripAddPage', 'tripListPage'],
+            'driver-attendance': ['attendanceAddPage', 'attendanceListPage'],
+            'drivers': ['driverAddPage', 'driverListPage'],
+            'employees': ['employeeAddPage', 'employeeListPage'],
+            'clients': ['clientAddPage', 'clientListPage'],
+            'vendors': ['vendorAddPage', 'vendorListPage'],
+            'contracts': ['contractCreatePage', 'contractListPage'],
+        };
+        const pair = pagePairs[page];
+        if (pair) {
+            document.getElementById(pair[0])?.classList.remove('hidden');
+            document.getElementById(pair[1])?.classList.add('hidden');
+        }
+
+        const scope = root instanceof Element ? root : document.querySelector('.main-content');
+        if (!scope) return;
+
+        if (isListNavigationControl(scope)) {
+            muteElement(scope, 'You are not allowed to view the list.');
+        }
+        scope.querySelectorAll('button[data-page-target], a[href]').forEach((element) => {
+            if (isListNavigationControl(element)) {
+                muteElement(element, 'You are not allowed to view the list.');
+            }
+        });
+    }
+
     function forceListPage() {
         if (!isReadOnly) return;
 
@@ -233,11 +301,13 @@
 
         forceListPage();
         addReadOnlyBanner();
+        addCreateOnlyBanner();
         enforceReadOnlyControls();
+        enforceCreateOnlyControls();
         enforceDeleteControls();
         enforceDetailControls();
 
-        if (isReadOnly || !canDeleteRecords || !canViewFullDetails) {
+        if (isReadOnly || isCreateOnly || !canDeleteRecords || !canViewFullDetails) {
             const mainContent = document.querySelector('.main-content');
             if (mainContent) {
                 new MutationObserver((mutations) => {
@@ -245,6 +315,7 @@
                         mutation.addedNodes.forEach((node) => {
                             if (node instanceof Element) {
                                 enforceReadOnlyControls(node);
+                                enforceCreateOnlyControls(node);
                                 enforceDeleteControls(node);
                                 enforceDetailControls(node);
                             }
@@ -257,7 +328,7 @@
 
     window.FleetmanAccess = Object.freeze({
         has: permissionAllowed,
-        canManagePage: () => !isReadOnly,
+        canManagePage: () => pageAccess.canManage === true,
         canDeleteRecords: () => canDeleteRecords,
         pageAccess: { ...pageAccess },
     });

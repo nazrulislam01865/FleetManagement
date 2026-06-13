@@ -30,7 +30,7 @@
                     <div class="grid3">
                         <div class="field"><label for="vehicleId">Vehicle ID <span class="req">*</span></label><input id="vehicleId" readonly></div>
                         <div class="field"><label for="vehicleName">Vehicle Name <span class="req">*</span></label><input id="vehicleName" placeholder="Example: Dhaka Pickup 01" required></div>
-                        <div class="field"><label for="regNo">Registration Number <span class="req">*</span></label><input id="regNo" placeholder="Example: DHAKA METRO-GA 12-3456" title="The characters @ # $ % ^ & * ( ) ! ` ~ are not allowed." required></div>
+                        <div class="field"><label for="regNo">Registration Number <span class="req">*</span></label><input id="regNo" maxlength="25" placeholder="Maximum 25 characters" title="Maximum 25 characters. The characters @ # $ % ^ & * ( ) ! ` ~ are not allowed." required></div>
                         <x-fleetman.select id="vendor" label="Vendor / Owner" :options="$fleetman['options']['vehicle_vendors']" placeholder="Select vendor/owner" />
                         <div class="field"><label for="model">Model <span class="req">*</span></label><input id="model" placeholder="Example: Toyota Hiace 2021" required></div>
                         <div class="field"><label for="color">Color</label><input id="color" placeholder="Example: White"></div>
@@ -169,7 +169,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>Created At</th><th>Vehicle</th><th>Registration</th><th>Category</th><th>Fuel Setup</th><th>Driver</th><th>Documents</th><th>Rent</th><th>Status</th><th>Action</th>
+                            <th>Created At</th><th>Vehicle</th><th>Registration</th><th>Category</th><th>Fuel Setup</th><th>Driver</th><th>Documents</th><th>Expiring Documents</th><th>Rent</th><th>Status</th><th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="vehicleTbody"></tbody>

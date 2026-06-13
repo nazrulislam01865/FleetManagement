@@ -9,6 +9,7 @@ use App\Models\Fleet\FleetEmployee;
 use App\Models\Fleet\FleetFuelRecharge;
 use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
+use App\Models\Fleet\FleetVendorParty;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -42,6 +43,7 @@ class DashboardController extends FleetBaseController
         $trips = $can('trips.view') ? $this->rows(FleetTrip::class) : [];
         $fuelRecharges = $can('fuel_recharge.view') ? $this->rows(FleetFuelRecharge::class) : [];
         $clients = $can('clients.view') ? $this->rows(FleetClient::class) : [];
+        $vendors = $can('vendors.view') ? $this->rows(FleetVendorParty::class) : [];
         $attendance = $can('driver_attendance.view') ? $this->rows(FleetDriverAttendance::class) : [];
         $employees = $can('employees.view') ? $this->rows(FleetEmployee::class) : [];
         $notifications = $user && Schema::hasTable('notifications')
@@ -93,7 +95,12 @@ class DashboardController extends FleetBaseController
             }
 
             try {
-                return now()->diffInDays(Carbon::parse($date), false) <= 180;
+                $daysRemaining = now()->startOfDay()->diffInDays(
+                    Carbon::parse($date)->startOfDay(),
+                    false
+                );
+
+                return $daysRemaining >= 0 && $daysRemaining <= 180;
             } catch (\Throwable) {
                 return false;
             }
@@ -153,7 +160,8 @@ class DashboardController extends FleetBaseController
                 'vehicles' => $this->recentRowsWithMedia($vehicles, 'image'),
                 'trips' => array_slice($trips, 0, 5),
                 'drivers' => $this->recentRowsWithMedia($drivers, 'photo'),
-                'clients' => array_slice($clients, 0, 5),
+                'clients' => $this->recentRowsWithMedia($clients, 'photo'),
+                'vendors' => $this->recentRowsWithMedia($vendors, 'photo'),
                 'employees' => $this->recentRowsWithMedia($employees, 'photo'),
             ],
             'access' => [
@@ -168,7 +176,14 @@ class DashboardController extends FleetBaseController
                 'employees' => $can('employees.view'),
             ],
             'warnings' => [
-                ['title' => 'Driver license review', 'value' => $expiringDrivers, 'description' => 'Drivers with license validity within 180 days.'],
+                [
+                    'title' => 'Driver license review',
+                    'value' => $expiringDrivers,
+                    'description' => 'Drivers with license validity within 180 days.',
+                    'url' => $can('drivers.view')
+                        ? route('fleet.drivers', ['license_filter' => 'within-180-days'])
+                        : null,
+                ],
                 ['title' => 'Trip payment balance', 'value' => '৳'.number_format($totalTripBalance, 2), 'description' => 'Remaining client payments across saved trips.'],
                 ['title' => 'Total attendance distance', 'value' => number_format($totalAttendanceKm, 2).' km', 'description' => 'Distance from driver attendance logs.'],
             ],

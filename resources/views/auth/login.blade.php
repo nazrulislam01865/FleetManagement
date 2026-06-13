@@ -15,15 +15,16 @@
         </div>
     @endif
 
-    @if (session('status'))
-        @php
-            $statusMessage = (string) session('status');
-            $normalizedStatus = strtolower($statusMessage);
-            $isSessionExpired = str_contains($normalizedStatus, 'session expired')
-                || str_contains($normalizedStatus, 'signed in from another device')
-                || str_contains($normalizedStatus, 'previous session was logged out')
-                || str_contains($normalizedStatus, 'only one active login is allowed');
-        @endphp
+    @php
+        $statusMessage = trim((string) (($logoutNotice ?? '') !== '' ? $logoutNotice : session('status', '')));
+        $normalizedStatus = strtolower($statusMessage);
+        $isSessionExpired = str_contains($normalizedStatus, 'session expired')
+            || str_contains($normalizedStatus, 'signed in from another device')
+            || str_contains($normalizedStatus, 'previous session was logged out')
+            || str_contains($normalizedStatus, 'only one active login is allowed')
+            || str_contains($normalizedStatus, 'logged out because this account');
+    @endphp
+    @if ($statusMessage !== '')
         <div class="{{ $isSessionExpired ? 'login-error' : 'login-success' }}" role="{{ $isSessionExpired ? 'alert' : 'status' }}">
             {{ $statusMessage }}
         </div>

@@ -29,7 +29,21 @@
                     <div style="margin-top:16px"><x-fleetman.textarea id="clientAddress" label="Permanent Address" required placeholder="House / Road / Area / City" /></div>
                     <div style="margin-top:16px"><x-fleetman.textarea id="clientAbout" label="About / Notes" required placeholder="Short note about this client, operation area, service requirement, billing note, etc." /></div>
                 </x-fleetman.section-card>
-                <x-fleetman.section-card title="2. Contact Person(s)" class="client-contact-card">
+
+                <x-fleetman.section-card title="2. Client Logo">
+                    <div class="photo-box client-photo-box">
+                        <div class="field" style="flex:1">
+                            <label for="clientPhoto">Client Logo <small>(Optional)</small></label>
+                            <input id="clientPhoto" type="file" accept="image/jpeg,image/png,image/webp">
+                            <input id="clientPhotoData" type="hidden">
+                            <div class="temp-upload-progress hidden" id="clientPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
+                            <div class="upload-meta" id="clientPhotoInfo"></div>
+                            <div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. This logo is optional.</div>
+                        </div>
+                    </div>
+                </x-fleetman.section-card>
+
+                <x-fleetman.section-card title="3. Contact Person(s)" class="client-contact-card">
                     <x-slot:action><button type="button" class="btn light" id="addClientContactBtn">＋ Add Contact Person</button></x-slot:action>
                     <div id="clientContacts"></div>
                 </x-fleetman.section-card>

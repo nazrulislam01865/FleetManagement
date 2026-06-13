@@ -77,8 +77,21 @@
                     </div>
                 </x-fleetman.section-card>
 
+                <x-fleetman.section-card title="2. Vendor Photo">
+                    <div class="photo-box party-photo-box">
+                        <div class="field" style="flex:1">
+                            <label for="partyPhoto">Vendor Photo <small>(Optional)</small></label>
+                            <input id="partyPhoto" type="file" accept="image/jpeg,image/png,image/webp">
+                            <input id="partyPhotoData" type="hidden">
+                            <div class="temp-upload-progress hidden" id="partyPhotoProgress"><div class="temp-upload-progress-track"><div class="temp-upload-progress-bar"></div></div><small class="temp-upload-progress-label"></small></div>
+                            <div class="upload-meta" id="partyPhotoInfo"></div>
+                            <div class="hint">Allowed: JPG, JPEG, PNG or WEBP. Maximum size: 100 KB. This photo is optional.</div>
+                        </div>
+                    </div>
+                </x-fleetman.section-card>
+
                 <x-fleetman.section-card
-                    title="2. Contact Person(s)"
+                    title="3. Contact Person(s)"
                 >
                     <x-slot:action>
                         <button type="button" class="btn light" id="addPartyContactBtn">＋ Add Contact Person</button>
@@ -87,7 +100,7 @@
                 </x-fleetman.section-card>
 
                 <x-fleetman.section-card
-                    title="3. Documents"
+                    title="4. Documents"
                     class="document-section-card"
                 >
                     <x-slot:action>
@@ -140,7 +153,7 @@
             </div>
             <div class="table-wrap wide-table">
                 <table>
-                    <thead><tr><th>Created At</th><th>Vendor / Party</th><th>Type</th><th>Phone</th><th>Contact Person</th><th>Payment Terms</th><th>Documents</th><th>Status</th><th>Address</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Created At</th><th>Vendor / Party</th><th>Type</th><th>Phone</th><th>Contact Person</th><th>Payment Terms</th><th>Documents</th><th>Expiring Documents</th><th>Status</th><th>Address</th><th>Actions</th></tr></thead>
                     <tbody id="partyTbody"></tbody>
                 </table>
             </div>

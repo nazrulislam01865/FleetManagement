@@ -137,7 +137,10 @@ class ContractController extends FleetBaseController
 
         return response()->json([
             'ok' => true,
-            'rows' => $this->contractRows(),
+            'rows' => $this->currentUserCanViewPage()
+                ? $this->contractRows()
+                : $this->syncResponseRows(FleetContract::class, $rows, $this->idKey),
+            'can_view_list' => $this->currentUserCanViewPage(),
         ]);
     }
 

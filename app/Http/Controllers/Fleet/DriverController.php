@@ -108,7 +108,7 @@ class DriverController extends FleetBaseController
 
                 $validator = Validator::make(
                     ['photo' => $file],
-                    ['photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:100']],
+                    ['photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:100']],
                     ['photo.max' => 'The driver photo must not exceed 100 KB.']
                 );
 
@@ -162,7 +162,7 @@ class DriverController extends FleetBaseController
             }
 
             $this->persistRows($rows);
-            $savedRows = $this->recordsFor(FleetDriver::class);
+            $savedRows = $this->syncResponseRows(FleetDriver::class, $rows, $this->idKey);
 
             // Consume temporary uploads only after every file and database row
             // has been saved successfully. Failed saves therefore remain retryable.
@@ -172,6 +172,7 @@ class DriverController extends FleetBaseController
                 'ok' => true,
                 'message' => 'Driver saved successfully.',
                 'rows' => $savedRows,
+                'can_view_list' => $this->currentUserCanViewPage(),
             ]);
         } catch (ValidationException $exception) {
             $this->deleteStoredDriverFiles($storedPaths);
@@ -545,7 +546,7 @@ class DriverController extends FleetBaseController
                 'documents.*.name' => ['required', Rule::in($driverDocuments)],
                 'documents.*.expiry' => ['nullable', 'date'],
                 'documents.*.reminder' => ['nullable', Rule::in($reminders)],
-                'photo' => ['required', 'array'],
+                'photo' => ['nullable', 'array'],
             ], [
                 'whatsapp.regex' => 'WhatsApp Number must be exactly 11 digits.',
                 'nid.regex' => 'NID must contain digits only and cannot exceed 17 digits.',
@@ -575,9 +576,9 @@ class DriverController extends FleetBaseController
 
             $photo = is_array($row['photo'] ?? null) ? $row['photo'] : [];
             $directPhoto = $request->file("driver_photo_files.{$index}");
-            if (! $this->hasStoredFile($photo) && ! $directPhoto instanceof UploadedFile) {
-                $errors["rows.{$index}.photo"] = 'Driver Photo is required.';
-            } elseif ((int) ($photo['sizeBytes'] ?? 0) > 100 * 1024) {
+            if ($this->hasStoredFile($photo) && (int) ($photo['sizeBytes'] ?? 0) > 100 * 1024) {
+                $errors["rows.{$index}.photo"] = 'Driver Photo must not exceed 100 KB.';
+            } elseif ($directPhoto instanceof UploadedFile && $directPhoto->getSize() > 100 * 1024) {
                 $errors["rows.{$index}.photo"] = 'Driver Photo must not exceed 100 KB.';
             }
 
