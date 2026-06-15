@@ -10,6 +10,7 @@ use App\Models\Fleet\FleetFuelRecharge;
 use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
 use App\Models\Fleet\FleetVendorParty;
+use App\Support\FleetPhoto;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -243,13 +244,13 @@ class DashboardController extends FleetBaseController
         if ($path !== '') {
             $path = preg_replace('#^(public/|storage/)#', '', ltrim($path, '/')) ?? $path;
 
-            return route('fleet.files.show', ['path' => $path], false);
+            return FleetPhoto::url($path, false);
         }
 
         foreach (['fileUrl', 'file_url', 'previewUrl', 'preview_url', 'url'] as $urlKey) {
             $url = trim((string) ($file[$urlKey] ?? ''));
             if ($url !== '') {
-                return $url;
+                return FleetPhoto::rewriteStoredUrl($url, false);
             }
         }
 

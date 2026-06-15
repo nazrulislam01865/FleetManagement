@@ -57,6 +57,6 @@ final class FleetBrand
             $version = (string) time();
         }
 
-        return route('brand.logo', ['v' => $version]);
+        return route('brand.logo', ['v' => $version], false);
     }
 }

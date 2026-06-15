@@ -25,6 +25,8 @@ use App\Http\Controllers\Fleet\SettingsController;
 use App\Http\Controllers\Fleet\VehicleController;
 use App\Http\Controllers\Fleet\VendorPartyController;
 use App\Http\Controllers\Fleet\YardController;
+use App\Http\Middleware\CaptureFleetActivityNotifications;
+use App\Http\Middleware\EnforceUserInactivityTimeout;
 use App\Http\Middleware\EnsureFleetDeleteAccess;
 use App\Http\Middleware\EnsureFleetManageAccess;
 use App\Http\Middleware\EnsureFleetPermission;
@@ -33,6 +35,22 @@ use App\Support\FleetRbac;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/brand/logo', [BrandAssetController::class, 'logo'])->name('brand.logo');
+
+// Display photos must not depend on browser cookies, active-login state,
+// account permissions, extensions, or cross-site tracking behavior.
+Route::get('/fleet/photos/{path}', [FleetFileController::class, 'photo'])
+    ->where('path', '.*')
+    ->withoutMiddleware([
+        \Illuminate\Cookie\Middleware\EncryptCookies::class,
+        \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        \Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class,
+        EnforceUserInactivityTimeout::class,
+        CaptureFleetActivityNotifications::class,
+    ])
+    ->name('fleet.photos.show');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');

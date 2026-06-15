@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\FleetPhoto;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -347,7 +348,7 @@ class FleetTemporaryUploadService
     {
         return [
             'filePath' => $storedPath,
-            'fileUrl' => route('fleet.files.show', ['path' => $storedPath]),
+            'fileUrl' => FleetPhoto::url($storedPath, false),
             'fileName' => basename($storedPath),
             'originalName' => $metadata['originalName'] ?? basename($storedPath),
             'mimeType' => $metadata['mimeType'] ?? (Storage::disk('public')->mimeType($storedPath) ?: 'application/octet-stream'),

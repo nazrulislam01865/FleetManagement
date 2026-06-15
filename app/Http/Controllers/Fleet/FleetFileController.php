@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Fleet;
 
 use App\Http\Controllers\Controller;
+use App\Support\FleetPhoto;
 use App\Support\FleetRbac;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -10,9 +11,31 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class FleetFileController extends Controller
 {
+    /**
+     * Serve display photos without relying on an authenticated browser image
+     * request. Only known photo folders and real image MIME types are allowed.
+     */
+    public function photo(string $path): BinaryFileResponse
+    {
+        $path = FleetPhoto::normalizePath($path);
+        abort_unless(FleetPhoto::isDisplayPath($path), 404);
+
+        $disk = Storage::disk('public');
+        abort_unless($disk->exists($path), 404);
+
+        $mimeType = strtolower((string) ($disk->mimeType($path) ?: 'application/octet-stream'));
+        abort_unless(str_starts_with($mimeType, 'image/'), 404);
+
+        return $this->inlineResponse($disk->path($path), $path, $mimeType, true);
+    }
+
+    /**
+     * Serve documents and other protected files using the existing module
+     * permissions. This endpoint remains authenticated.
+     */
     public function show(Request $request, string $path): BinaryFileResponse
     {
-        $path = ltrim(rawurldecode($path), '/');
+        $path = FleetPhoto::normalizePath($path);
         abort_if($path === '' || str_contains($path, '..') || str_starts_with($path, '.'), 404);
 
         $this->authorizeFilePath($request, $path);
@@ -20,24 +43,37 @@ class FleetFileController extends Controller
         $disk = Storage::disk('public');
         abort_unless($disk->exists($path), 404);
 
-        $mimeType = $disk->mimeType($path) ?: 'application/octet-stream';
-        $fileName = basename($path);
+        $mimeType = strtolower((string) ($disk->mimeType($path) ?: 'application/octet-stream'));
 
-        return response()->file($disk->path($path), [
+        return $this->inlineResponse($disk->path($path), $path, $mimeType, false);
+    }
+
+    private function inlineResponse(
+        string $absolutePath,
+        string $storedPath,
+        string $mimeType,
+        bool $publicPhoto
+    ): BinaryFileResponse {
+        $fileName = basename($storedPath);
+
+        return response()->file($absolutePath, [
             'Content-Type' => $mimeType,
             'Content-Disposition' => 'inline; filename="'.addslashes($fileName).'"',
-            'Cache-Control' => 'private, max-age=3600',
+            'Cache-Control' => $publicPhoto
+                ? 'public, max-age=86400, stale-while-revalidate=604800'
+                : 'private, max-age=3600',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
     private function authorizeFilePath(Request $request, string $path): void
     {
+        $user = $request->user();
+        abort_unless($user, 401);
+
         FleetRbac::syncDefaults();
 
         $normalized = strtolower(ltrim($path, '/'));
-        $user = $request->user();
-        abort_unless($user, 401);
 
         if (preg_match('#^fleet/profile-pictures/(\d+)/#', $normalized, $matches) === 1) {
             $ownerId = (int) ($matches[1] ?? 0);
@@ -78,12 +114,10 @@ class FleetFileController extends Controller
             return;
         }
 
-        if ($requiredPermission) {
-            abort_unless(
-                method_exists($user, 'canFleet') && $user->canFleet($requiredPermission),
-                403,
-                'You do not have permission to view this file.'
-            );
-        }
+        abort_unless(
+            method_exists($user, 'canFleet') && $user->canFleet($requiredPermission),
+            403,
+            'You do not have permission to view this file.'
+        );
     }
 }

@@ -35,18 +35,17 @@
         return false;
     };
 
-    $fileUrl = static function (array $file) use ($fleetman): string {
+    $fileUrl = static function (array $file): string {
         $path = trim((string) ($file['filePath'] ?? $file['path'] ?? ''));
         $path = preg_replace('#^(public/|storage/)#', '', ltrim($path, '/')) ?? $path;
-        $template = (string) data_get($fleetman, 'resources.uploads.file_template', '');
-
-        if ($path !== '' && $template !== '') {
-            $encodedPath = implode('/', array_map('rawurlencode', explode('/', $path)));
-
-            return str_replace('__PATH__', $encodedPath, $template);
+        if ($path !== '') {
+            return \App\Support\FleetPhoto::url($path, false);
         }
 
-        return trim((string) ($file['previewUrl'] ?? $file['fileUrl'] ?? $file['url'] ?? ''));
+        return \App\Support\FleetPhoto::rewriteStoredUrl(
+            trim((string) ($file['previewUrl'] ?? $file['fileUrl'] ?? $file['url'] ?? '')),
+            false
+        );
     };
 
     $isImageFile = static function (array $file): bool {

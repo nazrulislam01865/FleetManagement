@@ -32,6 +32,109 @@ window.FleetmanListAccess = window.FleetmanListAccess || Object.freeze({
     },
 });
 
+window.FleetmanMediaUrl = window.FleetmanMediaUrl || (() => {
+    'use strict';
+
+    const photoPatterns = [
+        /^fleet\/profile-pictures\/\d+\/[^/]+$/i,
+        /^fleet\/vehicles\/[^/]+\/images\/[^/]+$/i,
+        /^fleet\/drivers\/[^/]+\/photo\/[^/]+$/i,
+        /^fleet\/employees\/[^/]+\/photo\/[^/]+$/i,
+        /^fleet\/vendor-parties\/[^/]+\/photo\/[^/]+$/i,
+        /^fleet\/clients\/[^/]+\/photo\/[^/]+$/i,
+        /^fleet\/yards\/[^/]+\/photo\/[^/]+$/i,
+        /^fleet\/fuel-recharges\/[^/]+\/photos(?:\/[^/]+)+$/i,
+    ];
+
+    function normalizePath(value) {
+        return String(value || '')
+            .trim()
+            .replace(/^\/+/, '')
+            .replace(/^(public\/|storage\/)/i, '');
+    }
+
+    function isDisplayPhotoPath(value) {
+        const path = normalizePath(value);
+        return Boolean(path) && !path.includes('..') && photoPatterns.some((pattern) => pattern.test(path));
+    }
+
+    function urlForPath(value) {
+        const path = normalizePath(value);
+        if (!path) return '';
+
+        const uploads = window.FLEETMAN?.resources?.uploads || {};
+        const template = String(
+            isDisplayPhotoPath(path)
+                ? (uploads.photo_template || '')
+                : (uploads.file_template || '')
+        );
+
+        if (!template) return '';
+        const encodedPath = path.split('/').map((part) => encodeURIComponent(part)).join('/');
+        return template.replace('__PATH__', encodedPath);
+    }
+
+    function storedPathFromUrl(value) {
+        const url = String(value || '').trim();
+        if (!url) return '';
+
+        let pathname = '';
+        try {
+            pathname = new URL(url, window.location.origin).pathname;
+        } catch (_) {
+            pathname = url.split('?')[0].split('#')[0];
+        }
+
+        for (const prefix of ['/fleet/files/', '/fleet/photos/']) {
+            const index = pathname.indexOf(prefix);
+            if (index === -1) continue;
+            const encodedPath = pathname.slice(index + prefix.length);
+            try {
+                return normalizePath(decodeURIComponent(encodedPath));
+            } catch (_) {
+                return normalizePath(encodedPath);
+            }
+        }
+
+        return '';
+    }
+
+    function rewriteStoredUrl(value) {
+        const url = String(value || '').trim();
+        if (!url) return '';
+
+        const path = storedPathFromUrl(url);
+        if (path && isDisplayPhotoPath(path)) {
+            return urlForPath(path);
+        }
+
+        return url;
+    }
+
+    function fileUrl(file = {}) {
+        if (typeof file === 'string') {
+            const value = file.trim();
+            if (!value) return '';
+            if (/^https?:\/\//i.test(value) || value.startsWith('/')) {
+                return rewriteStoredUrl(value);
+            }
+            return urlForPath(value);
+        }
+
+        if (!file || typeof file !== 'object' || Array.isArray(file)) return '';
+
+        const path = normalizePath(file.filePath || file.path || '');
+        if (path) {
+            const generated = urlForPath(path);
+            if (generated) return generated;
+        }
+
+        return rewriteStoredUrl(file.previewUrl || file.fileUrl || file.url || '');
+    }
+
+    return { fileUrl, isDisplayPhotoPath, normalizePath, rewriteStoredUrl, urlForPath };
+})();
+
 window.FleetmanCreatedAtCell = window.FleetmanCreatedAtCell || ((value, creator) => {
     const escapeHtml = (input) => String(input ?? '').replace(/[&<>'"]/g, (character) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
@@ -254,17 +357,7 @@ window.FleetmanDetailViewer = window.FleetmanDetailViewer || (() => {
     }
 
     function fileUrl(file = {}) {
-        const path = String(file.filePath || file.path || '').replace(/^public\//, '').replace(/^storage\//, '');
-        const template = String(window.FLEETMAN?.resources?.uploads?.file_template || '');
-        if (path && template) {
-            const encodedPath = path.split('/').map((part) => encodeURIComponent(part)).join('/');
-            return template.replace('__PATH__', encodedPath);
-        }
-        if (file.previewUrl) return String(file.previewUrl);
-        if (file.fileUrl || file.url) return String(file.fileUrl || file.url);
-        if (!path) return '';
-        if (/^https?:\/\//i.test(path) || path.startsWith('/')) return path;
-        return '/storage/' + path;
+        return window.FleetmanMediaUrl.fileUrl(file);
     }
 
     function isFileLike(value) {
@@ -483,23 +576,7 @@ window.FleetmanEntityAvatar = window.FleetmanEntityAvatar || (() => {
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[ch]));
 
     function fileUrl(file = {}) {
-        if (typeof file === 'string') {
-            const value = file.trim();
-            if (!value) return '';
-            if (/^https?:\/\//i.test(value) || value.startsWith('/')) return value;
-            file = { filePath: value };
-        }
-
-        if (!file || typeof file !== 'object' || Array.isArray(file)) return '';
-
-        const path = String(file.filePath || file.path || '').replace(/^public\//, '').replace(/^storage\//, '').replace(/^\/+/, '');
-        const template = String(window.FLEETMAN?.resources?.uploads?.file_template || '');
-        if (path && template) {
-            const encodedPath = path.split('/').map((part) => encodeURIComponent(part)).join('/');
-            return template.replace('__PATH__', encodedPath);
-        }
-
-        return String(file.previewUrl || file.fileUrl || file.url || '');
+        return window.FleetmanMediaUrl.fileUrl(file);
     }
 
     function html(file = {}, settings = {}) {
@@ -615,10 +692,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
     }
 
     function permanentUrl(file = {}) {
-        const path = String(file.filePath || '').replace(/^public\//, '').replace(/^storage\//, '');
-        const template = String(resources().file_template || '');
-        if (path && template) return template.replace('__PATH__', path.split('/').map(encodeURIComponent).join('/'));
-        return file.previewUrl || file.fileUrl || file.url || '';
+        return window.FleetmanMediaUrl.fileUrl(file);
     }
 
     function isImage(file = {}) {

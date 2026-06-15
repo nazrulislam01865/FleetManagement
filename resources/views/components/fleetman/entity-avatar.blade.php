@@ -13,19 +13,18 @@
     $url = '';
 
     if ($path !== '') {
-        $template = route('fleet.files.show', ['path' => '__PATH__']);
-        $encodedPath = implode('/', array_map('rawurlencode', explode('/', $path)));
-        $url = str_replace('__PATH__', $encodedPath, $template);
+        $url = \App\Support\FleetPhoto::url($path, false);
     } elseif ($directValue !== '') {
-        $url = preg_match('#^https?://#i', $directValue) || str_starts_with($directValue, '/')
-            ? $directValue
-            : str_replace(
-                '__PATH__',
-                implode('/', array_map('rawurlencode', explode('/', ltrim($directValue, '/')))),
-                route('fleet.files.show', ['path' => '__PATH__'])
-            );
+        if (preg_match('#^https?://#i', $directValue) || str_starts_with($directValue, '/')) {
+            $url = \App\Support\FleetPhoto::rewriteStoredUrl($directValue, false);
+        } else {
+            $url = \App\Support\FleetPhoto::url($directValue, false);
+        }
     } else {
-        $url = trim((string) ($media['previewUrl'] ?? $media['fileUrl'] ?? $media['url'] ?? ''));
+        $url = \App\Support\FleetPhoto::rewriteStoredUrl(
+            trim((string) ($media['previewUrl'] ?? $media['fileUrl'] ?? $media['url'] ?? '')),
+            false
+        );
     }
 
     $safeSize = in_array($size, ['table', 'compact', 'large'], true) ? $size : 'table';
