@@ -113,6 +113,16 @@
         input.value = selected?.label || '';
     }
 
+    function fillSelectOptions(id, items, selectedValue = '') {
+        const select = $('#' + id);
+        if (!select || select.tagName !== 'SELECT') return;
+
+        const normalizedItems = (items || []).filter((item) => item && item.value && item.label);
+        select.innerHTML = normalizedItems.map((item) => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join('');
+        const selected = normalizedItems.find((item) => item.value === selectedValue || item.label === selectedValue) || normalizedItems[0];
+        select.value = selected?.value || '';
+    }
+
     function reportDate(value) {
         const date = new Date(String(value) + 'T00:00:00');
         if (Number.isNaN(date.getTime())) return value || '-';
@@ -489,7 +499,7 @@
             $('#fromDate').value = report.defaults?.fromDate || report.dateRange?.min || '';
             $('#toDate').value = report.defaults?.toDate || report.dateRange?.max || '';
         }
-        if (page === 'weekly' && $('#weekFilter')) fillSearchableOptions('weekFilter', report.weeks || [], report.defaults?.week);
+        if (page === 'weekly' && $('#weekFilter')) fillSelectOptions('weekFilter', report.weeks || [], report.defaults?.week);
         if (page === 'monthly' && $('#monthFilter')) fillSearchableOptions('monthFilter', report.months || [], report.defaults?.month);
         refreshContractDependentFilters(false);
         applyReport();
@@ -613,7 +623,7 @@
         fillSearchableInput('fuelFilter', filters.fuelTypes || []);
         if ($('#fromDate')) $('#fromDate').value = report.defaults?.fromDate || report.dateRange?.min || '';
         if ($('#toDate')) $('#toDate').value = report.defaults?.toDate || report.dateRange?.max || '';
-        fillSearchableOptions('weekFilter', report.weeks || [], report.defaults?.week);
+        fillSelectOptions('weekFilter', report.weeks || [], report.defaults?.week);
         fillSearchableOptions('monthFilter', report.months || [], report.defaults?.month);
         refreshContractDependentFilters(false);
         bindEvents();

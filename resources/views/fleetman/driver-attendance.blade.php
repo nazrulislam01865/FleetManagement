@@ -26,7 +26,6 @@
                             </div>
                             <input id="attendanceYard" list="attendanceYardList" placeholder="Search and select yard" autocomplete="off">
                             <datalist id="attendanceYardList"></datalist>
-                            <div class="hint">Select a yard from the saved Yard List, or leave it blank.</div>
                         </div>
                     </div>
 
@@ -71,7 +70,6 @@
                             </div>
                             <input id="attendanceSpareDriver" list="attendanceSpareDriverList" placeholder="Search and select spare driver" autocomplete="off" disabled>
                             <datalist id="attendanceSpareDriverList"></datalist>
-                            <div class="hint" id="attendanceSpareDriverHint">Appears only when Assign Spare Driver is selected.</div>
                         </div>
                     </div>
                 </x-fleetman.section-card>
