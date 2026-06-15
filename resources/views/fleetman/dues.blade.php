@@ -164,9 +164,8 @@
             document.getElementById('dueKpiSalary').textContent = '৳ ' + salaryAmt.toLocaleString();
 
             document.querySelectorAll('.mark-paid-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const code = e.target.dataset.code;
-                    markAsPaid(code);
+                btn.addEventListener('click', () => {
+                    markAsPaid(btn.dataset.code, btn);
                 });
             });
         }
@@ -196,28 +195,36 @@
             }
         }
 
-        async function markAsPaid(code) {
+        async function markAsPaid(code, triggerButton = null) {
             const due = duesData.find(d => d.code === code);
             if (!due) return;
 
-            due.status = 'Paid';
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const previousStatus = due.status;
+                due.status = 'Paid';
 
-            try {
-                const response = await fetch(syncUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-                    body: JSON.stringify({ rows: [due] })
-                });
-                const res = await response.json();
-                if (res.ok) {
-                    duesData = res.rows || [];
+                try {
+                    const response = await fetch(syncUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+                        body: JSON.stringify({ rows: [due] })
+                    });
+                    const res = await response.json().catch(() => ({}));
+                    if (response.ok && res.ok) {
+                        duesData = res.rows || [];
+                        renderDues();
+                    } else {
+                        due.status = previousStatus;
+                        renderDues();
+                        alert(res.message || 'Error marking as paid.');
+                    }
+                } catch (err) {
+                    due.status = previousStatus;
                     renderDues();
-                } else {
-                    alert('Error marking as paid');
+                    console.error(err);
+                    alert('Request failed. Please try again.');
                 }
-            } catch (err) {
-                console.error(err);
-            }
+            }, { loadingText: 'Updating...' });
         }
 
         function dhakaCalendarDate() {
@@ -309,61 +316,59 @@
         });
 
         confirmGeneratePayrollBtn.addEventListener('click', async () => {
-            const today = dhakaCalendarDate();
-            const month = payrollMonthSelect.value;
+            await window.FleetmanRunTransaction(confirmGeneratePayrollBtn, async () => {
+                const today = dhakaCalendarDate();
+                const month = payrollMonthSelect.value;
 
-            if (today.day < 26 || today.day > 30) {
-                alert(`Monthly payroll can only be generated from the 26th through the 30th of each month. Today is ${today.display}.`);
-                return;
-            }
-
-            if (!month) {
-                alert('Select a payroll month.');
-                payrollMonthSelect.focus();
-                return;
-            }
-
-            if (month > today.month) {
-                alert(`Future-month payroll cannot be generated. Select ${today.month} or an earlier month.`);
-                return;
-            }
-
-            if (!confirm(`Generate and store payroll dues for ${month}? Existing records for this month will be preserved.`)) {
-                return;
-            }
-
-            confirmGeneratePayrollBtn.disabled = true;
-            payrollMonthSelect.disabled = true;
-            confirmGeneratePayrollBtn.textContent = 'Generating...';
-
-            try {
-                const response = await fetch(payrollUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                    },
-                    body: JSON.stringify({ month })
-                });
-                const res = await response.json();
-
-                if (response.ok && res.ok) {
-                    alert(res.message);
-                    duesData = res.rows || [];
-                    renderDues();
-                    closePayrollMonthSelector();
-                } else {
-                    alert(res.message || 'Unable to generate payroll.');
+                if (today.day < 26 || today.day > 30) {
+                    alert(`Monthly payroll can only be generated from the 26th through the 30th of each month. Today is ${today.display}.`);
+                    return;
                 }
-            } catch (err) {
-                console.error(err);
-                alert('Request failed. Please try again.');
-            } finally {
-                confirmGeneratePayrollBtn.disabled = false;
-                payrollMonthSelect.disabled = false;
-                confirmGeneratePayrollBtn.textContent = 'Generate Payroll';
-            }
+
+                if (!month) {
+                    alert('Select a payroll month.');
+                    payrollMonthSelect.focus();
+                    return;
+                }
+
+                if (month > today.month) {
+                    alert(`Future-month payroll cannot be generated. Select ${today.month} or an earlier month.`);
+                    return;
+                }
+
+                if (!confirm(`Generate and store payroll dues for ${month}? Existing records for this month will be preserved.`)) {
+                    return;
+                }
+
+                payrollMonthSelect.disabled = true;
+
+                try {
+                    const response = await fetch(payrollUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        },
+                        body: JSON.stringify({ month })
+                    });
+                    const res = await response.json();
+
+                    if (response.ok && res.ok) {
+                        alert(res.message);
+                        duesData = res.rows || [];
+                        renderDues();
+                        closePayrollMonthSelector();
+                    } else {
+                        alert(res.message || 'Unable to generate payroll.');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Request failed. Please try again.');
+                } finally {
+                    payrollMonthSelect.disabled = false;
+                }
+            }, { scope: payrollDropdownMenu, loadingText: 'Generating...' });
         });
 
         document.getElementById('dueSearch').addEventListener('input', renderDues);

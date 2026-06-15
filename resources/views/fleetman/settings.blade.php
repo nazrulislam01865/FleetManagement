@@ -59,56 +59,51 @@
     });
 
     async function updateLogo(form) {
-        const uploads = window.FleetmanTemporaryUploads;
-        await uploads.waitForInputs([document.getElementById('logo')]);
-
-        const logoData = uploads.readHidden(document.getElementById('logoData'));
-        if (!logoData.tempToken) {
-            uploads.render({
-                info: document.getElementById('logoUploadInfo'),
-                progress: document.getElementById('logoUploadProgress'),
-                message: 'Please choose and finish uploading a logo before saving.',
-                error: true,
-            });
-            return;
-        }
-
         const btn = document.getElementById('btnSaveLogo');
-        const originalText = btn.innerHTML;
-        btn.innerHTML = 'Saving...';
-        btn.disabled = true;
+        return window.FleetmanRunTransaction(btn, async () => {
+            const uploads = window.FleetmanTemporaryUploads;
+            await uploads.waitForInputs([document.getElementById('logo')]);
 
-        try {
-            const response = await fetch('{{ route('fleet.settings.update-logo') }}', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
-                },
-                body: JSON.stringify({ logo: logoData }),
-            });
-
-            const result = await response.json().catch(() => ({}));
-            if (response.ok && result.ok) {
-                alert('Logo updated successfully!');
-                window.location.reload();
-            } else {
-                const message = result.message || Object.values(result.errors || {}).flat().join(' ') || 'Error updating logo.';
+            const logoData = uploads.readHidden(document.getElementById('logoData'));
+            if (!logoData.tempToken) {
                 uploads.render({
                     info: document.getElementById('logoUploadInfo'),
                     progress: document.getElementById('logoUploadProgress'),
-                    message,
+                    message: 'Please choose and finish uploading a logo before saving.',
                     error: true,
                 });
+                return;
             }
-        } catch (error) {
-            console.error(error);
-            alert('An unexpected error occurred.');
-        } finally {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
+
+            try {
+                const response = await fetch('{{ route('fleet.settings.update-logo') }}', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                    },
+                    body: JSON.stringify({ logo: logoData }),
+                });
+
+                const result = await response.json().catch(() => ({}));
+                if (response.ok && result.ok) {
+                    alert('Logo updated successfully!');
+                    window.location.reload();
+                } else {
+                    const message = result.message || Object.values(result.errors || {}).flat().join(' ') || 'Error updating logo.';
+                    uploads.render({
+                        info: document.getElementById('logoUploadInfo'),
+                        progress: document.getElementById('logoUploadProgress'),
+                        message,
+                        error: true,
+                    });
+                }
+            } catch (error) {
+                console.error(error);
+                alert('An unexpected error occurred.');
+            }
+        }, { scope: form, loadingText: 'Updating...' });
     }
 </script>
 @endsection

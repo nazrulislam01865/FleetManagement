@@ -84,6 +84,7 @@
 
         <div class="save-bar">
             <button type="button" class="btn light" id="resetTripBtn">Reset Form</button>
+            <button type="button" class="btn secondary" id="saveTripDraftBtn">Save as Draft</button>
             <button type="button" class="btn primary" id="saveTripBtn">Save Trip</button>
         </div>
     </div>

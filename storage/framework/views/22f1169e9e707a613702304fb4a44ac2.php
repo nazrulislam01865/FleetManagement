@@ -27,14 +27,14 @@
 <?php endif; ?>
         <?php if (isset($component)) { $__componentOriginal33f656cc9906d43d1f23d50a43b5f3b3 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal33f656cc9906d43d1f23d50a43b5f3b3 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.title-card','data' => ['title' => 'Add Log','subtitle' => 'Select a real contract first. Vehicle and driver options will load only from that contract assignment.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.title-card','data' => ['title' => 'Add Log','subtitle' => 'Select a contract and vehicle, then use the driver assigned in that contract or choose a searchable spare driver.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.title-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['title' => 'Add Log','subtitle' => 'Select a real contract first. Vehicle and driver options will load only from that contract assignment.']); ?>
+<?php $component->withAttributes(['title' => 'Add Log','subtitle' => 'Select a contract and vehicle, then use the driver assigned in that contract or choose a searchable spare driver.']); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal33f656cc9906d43d1f23d50a43b5f3b3)): ?>
@@ -96,10 +96,65 @@
 <?php $component = $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523; ?>
 <?php unset($__componentOriginal8e448d98e7f6e76a56b5afe0e1522523); ?>
 <?php endif; ?></div>
-                    <div class="grid3" style="margin-top:16px">
+                    <div class="grid2" style="margin-top:16px">
                         <div class="field searchable"><div class="search-label"><label for="attendanceContract">Contract <span class="req">*</span></label><span class="search-tag">Searchable</span></div><input id="attendanceContract" list="attendanceContractList" placeholder="Type to search contract" autocomplete="off" required aria-required="true"><datalist id="attendanceContractList"></datalist></div>
                         <div class="field searchable"><div class="search-label"><label for="attendanceVehicle">Vehicle <span class="req">*</span></label><span class="search-tag">Filtered</span></div><input id="attendanceVehicle" list="attendanceVehicleList" placeholder="Select vehicle from contract" autocomplete="off" required aria-required="true"><datalist id="attendanceVehicleList"></datalist></div>
-                        <div class="field searchable"><div class="search-label"><label for="attendanceDriver">Driver <span class="req">*</span></label><span class="search-tag">Filtered</span></div><input id="attendanceDriver" list="attendanceDriverList" placeholder="Select driver from contract" autocomplete="off" required aria-required="true"><datalist id="attendanceDriverList"></datalist></div>
+                    </div>
+                    <div class="grid2" style="margin-top:16px">
+                        <div class="field searchable">
+                            <div class="search-label">
+                                <label for="attendanceYard">Yard <span class="muted">(Optional)</span></label>
+                                <span class="search-tag">Searchable</span>
+                            </div>
+                            <input id="attendanceYard" list="attendanceYardList" placeholder="Search and select yard" autocomplete="off">
+                            <datalist id="attendanceYardList"></datalist>
+                            <div class="hint">Select a yard from the saved Yard List, or leave it blank.</div>
+                        </div>
+                    </div>
+
+                    <div class="field attendance-driver-assignment" id="attendanceDriverAssignmentField">
+                        <label class="section-label" id="attendanceDriverAssignmentLabel">Driver Assignment <span class="req">*</span></label>
+                        <div class="attendance-driver-mode-grid" role="radiogroup" aria-labelledby="attendanceDriverAssignmentLabel">
+                            <label class="attendance-driver-mode-card" data-driver-mode-card="main">
+                                <input type="radio" name="attendanceDriverMode" value="main" checked>
+                                <span class="attendance-driver-mode-icon" aria-hidden="true">👤</span>
+                                <span class="attendance-driver-mode-copy">
+                                    <b>Assign Main Driver</b>
+                                    <small>Use the driver assigned in the contract</small>
+                                </span>
+                            </label>
+                            <label class="attendance-driver-mode-card" data-driver-mode-card="spare">
+                                <input type="radio" name="attendanceDriverMode" value="spare">
+                                <span class="attendance-driver-mode-icon" aria-hidden="true">👥</span>
+                                <span class="attendance-driver-mode-copy">
+                                    <b>Assign Spare Driver</b>
+                                    <small>Select a different spare driver</small>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="attendanceDriver">
+
+                    <div class="attendance-driver-result-grid">
+                        <div class="attendance-main-driver-panel" id="attendanceMainDriverPanel" aria-live="polite">
+                            <span class="attendance-driver-result-icon" aria-hidden="true">👤</span>
+                            <div>
+                                <small>Assigned Main Driver</small>
+                                <b id="attendanceMainDriverName">Select a vehicle first</b>
+                                <span id="attendanceMainDriverMeta">The driver assigned to this vehicle in the selected contract will appear here.</span>
+                            </div>
+                        </div>
+
+                        <div class="field searchable is-disabled" id="attendanceSpareDriverField" aria-disabled="true">
+                            <div class="search-label">
+                                <label for="attendanceSpareDriver">Spare Driver <span class="req">*</span></label>
+                                <span class="search-tag">Searchable</span>
+                            </div>
+                            <input id="attendanceSpareDriver" list="attendanceSpareDriverList" placeholder="Search and select spare driver" autocomplete="off" disabled>
+                            <datalist id="attendanceSpareDriverList"></datalist>
+                            <div class="hint" id="attendanceSpareDriverHint">Appears only when Assign Spare Driver is selected.</div>
+                        </div>
                     </div>
                  <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>

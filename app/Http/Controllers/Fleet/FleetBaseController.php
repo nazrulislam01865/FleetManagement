@@ -407,6 +407,12 @@ abstract class FleetBaseController extends Controller
         $isVehiclePage = $currentPage === 'vehicles';
 
         $logoUrl = FleetBrand::logoUrl();
+        $accountName = trim((string) ($user?->name ?? (config('fleetman.account.name') ?? 'User')));
+        $nameParts = preg_split('/\s+/u', $accountName, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $accountInitials = collect($nameParts)
+            ->take(2)
+            ->map(fn ($part): string => mb_strtoupper(mb_substr((string) $part, 0, 1)))
+            ->join('');
 
         return [
             'brand' => array_merge(config('fleetman.brand'), [
@@ -414,7 +420,11 @@ abstract class FleetBaseController extends Controller
             ]),
             'account' => array_merge(config('fleetman.account'), [
                 'title' => $roleName,
-                'name' => $user?->name ?? (config('fleetman.account.name') ?? 'User'),
+                'name' => $accountName !== '' ? $accountName : 'User',
+                'email' => $user?->email ?? '',
+                'status' => $user?->accountStatusLabel() ?? 'Active',
+                'initials' => $accountInitials !== '' ? $accountInitials : 'U',
+                'photo_path' => trim((string) ($user?->profile_photo_path ?? '')),
             ]),
             'menuGroups' => $this->authorizedMenuGroups(config('fleetman.menu', [])),
             'activeMenu' => $activeMenu,
@@ -1489,6 +1499,7 @@ abstract class FleetBaseController extends Controller
                     'note' => collect([$regNo, $status ? 'Status: '.$status : null])->filter()->join(' • '),
                 ];
             })
+            ->filter(fn (array $vehicle): bool => strcasecmp((string) ($vehicle['status'] ?? ''), 'Draft') !== 0)
             ->values()
             ->all();
     }
@@ -1623,6 +1634,10 @@ abstract class FleetBaseController extends Controller
                 $id = (string) ($payload['id'] ?? $vehicle->code);
                 $name = (string) ($payload['name'] ?? $vehicle->name ?? $vehicle->code);
                 $label = trim($id.' - '.$name, ' -');
+                $status = (string) ($payload['status'] ?? $vehicle->status ?? '');
+                if (strcasecmp($status, 'Draft') === 0) {
+                    return [];
+                }
                 $latestOdo = $latestOdoByVehicle[$id]
                     ?? $latestOdoByVehicle[$vehicle->code]
                     ?? $latestOdoByVehicle[$name]
@@ -1635,7 +1650,7 @@ abstract class FleetBaseController extends Controller
                     'name' => $name,
                     'label' => $label,
                     'regNo' => (string) ($payload['regNo'] ?? ''),
-                    'status' => (string) ($payload['status'] ?? $vehicle->status ?? ''),
+                    'status' => $status,
                     'driver' => (string) ($payload['driver'] ?? ''),
                     'odo' => $latestOdo ?? $baseOdo,
                     'startKm' => $latestOdo ?? $baseOdo,
@@ -1771,6 +1786,7 @@ abstract class FleetBaseController extends Controller
 
                     return [
                         'id' => $id,
+                        'code' => (string) $vehicle->code,
                         'name' => $name,
                         'label' => trim($id.' - '.$name, ' -'),
                         'type' => $type !== '' ? $type : 'Vehicle',
@@ -1780,6 +1796,7 @@ abstract class FleetBaseController extends Controller
                         'model' => $model,
                     ];
                 })
+                ->filter(fn (array $vehicle): bool => strcasecmp((string) ($vehicle['status'] ?? ''), 'Draft') !== 0)
                 ->values()
                 ->all()
             : [];
@@ -1857,30 +1874,157 @@ abstract class FleetBaseController extends Controller
 
     protected function attendanceMastersFromDatabase(): array
     {
-        if (! Schema::hasTable('fleet_contracts')) {
-            return [
-                'contracts' => [],
-                'vehicle_driver_map' => [],
-                'drivers' => [],
-            ];
-        }
+        $driverRecords = Schema::hasTable('fleet_drivers')
+            ? FleetDriver::query()
+                ->orderBy('name')
+                ->orderBy('code')
+                ->get()
+                ->map(function (FleetDriver $driver): array {
+                    $payload = $driver->payload ?? [];
+                    $id = (string) ($payload['driverId'] ?? $driver->code);
+                    $name = (string) ($payload['fullName'] ?? $driver->name ?? $driver->code);
+
+                    return [
+                        'id' => $id,
+                        'code' => (string) $driver->code,
+                        'name' => $name,
+                        'label' => trim($id.' - '.$name, ' -'),
+                        'phone' => (string) ($payload['contact'] ?? $payload['phone'] ?? $payload['mobile'] ?? ''),
+                        'status' => (string) ($payload['status'] ?? $driver->status ?? ''),
+                        'duty' => (string) ($payload['duty'] ?? ''),
+                    ];
+                })
+                ->filter(fn (array $driver): bool => strcasecmp(
+                    trim((string) ($driver['status'] ?? '')),
+                    'Active'
+                ) === 0)
+                ->values()
+            : collect();
+
+        $yardRecords = Schema::hasTable('fleet_yards')
+            ? FleetYard::query()
+                ->orderBy('name')
+                ->orderBy('code')
+                ->get()
+                ->map(function (FleetYard $yard): array {
+                    $payload = $yard->payload ?? [];
+                    $id = trim((string) ($payload['yardId'] ?? $yard->code));
+                    $name = trim((string) ($payload['yardName'] ?? $yard->name ?? $yard->code));
+                    $status = trim((string) ($payload['status'] ?? $yard->status ?? ''));
+                    $location = collect([
+                        $payload['area'] ?? null,
+                        $payload['city'] ?? null,
+                    ])->filter(fn ($value) => filled($value))->join(', ');
+
+                    return [
+                        'id' => $id,
+                        'code' => (string) $yard->code,
+                        'name' => $name,
+                        'label' => trim($id.' - '.$name, ' -'),
+                        'status' => $status,
+                        'location' => $location,
+                    ];
+                })
+                ->filter(fn (array $yard): bool => strcasecmp(
+                    trim((string) ($yard['status'] ?? '')),
+                    'Draft'
+                ) !== 0)
+                ->values()
+            : collect();
+
+        $driverOptions = $driverRecords
+            ->flatMap(function (array $driver): array {
+                return collect([
+                    $driver['id'] ?? null,
+                    $driver['code'] ?? null,
+                    $driver['name'] ?? null,
+                    $driver['label'] ?? null,
+                    $driver['phone'] ?? null,
+                ])
+                    ->filter(fn ($key) => filled($key))
+                    ->mapWithKeys(fn ($key) => [(string) $key => $driver])
+                    ->all();
+            })
+            ->all();
+
+        $normalizedDriverOptions = collect($driverOptions)
+            ->mapWithKeys(fn (array $driver, string $alias): array => [
+                strtolower((string) preg_replace('/\s+/', ' ', trim($alias))) => $driver,
+            ])
+            ->all();
+
+        $resolveDriver = function (...$aliases) use ($driverOptions, $normalizedDriverOptions, $driverRecords): ?array {
+            foreach ($aliases as $alias) {
+                $candidateAliases = is_array($alias)
+                    ? [
+                        $alias['id'] ?? null,
+                        $alias['driverId'] ?? null,
+                        $alias['code'] ?? null,
+                        $alias['label'] ?? null,
+                        $alias['name'] ?? null,
+                        $alias['fullName'] ?? null,
+                    ]
+                    : [$alias];
+
+                foreach ($candidateAliases as $candidateAlias) {
+                    $key = trim((string) $candidateAlias);
+                    if ($key !== '' && isset($driverOptions[$key])) {
+                        return $driverOptions[$key];
+                    }
+
+                    $normalizedKey = strtolower((string) preg_replace('/\s+/', ' ', $key));
+                    if ($normalizedKey !== '' && isset($normalizedDriverOptions[$normalizedKey])) {
+                        return $normalizedDriverOptions[$normalizedKey];
+                    }
+
+                    if ($normalizedKey !== '') {
+                        $partialMatches = $driverRecords->filter(function (array $driver) use ($normalizedKey): bool {
+                            $name = strtolower((string) preg_replace('/\s+/', ' ', trim((string) ($driver['name'] ?? ''))));
+
+                            return $name !== '' && (str_contains($name, $normalizedKey) || str_contains($normalizedKey, $name));
+                        });
+
+                        if ($partialMatches->count() === 1) {
+                            return $partialMatches->first();
+                        }
+                    }
+                }
+            }
+
+            return null;
+        };
 
         $vehicleOptions = Schema::hasTable('fleet_vehicles')
             ? FleetVehicle::query()
                 ->orderBy('name')
                 ->orderBy('code')
                 ->get()
-                ->flatMap(function (FleetVehicle $vehicle): array {
+                ->flatMap(function (FleetVehicle $vehicle) use ($resolveDriver): array {
                     $payload = $vehicle->payload ?? [];
                     $id = (string) ($payload['id'] ?? $vehicle->code);
                     $name = (string) ($payload['name'] ?? $vehicle->name ?? $vehicle->code);
                     $label = trim($id.' - '.$name, ' -');
+                    $status = (string) ($payload['status'] ?? $vehicle->status ?? '');
+                    if (strcasecmp($status, 'Draft') === 0) {
+                        return [];
+                    }
+                    $mainDriver = $resolveDriver(
+                        $payload['driverId'] ?? null,
+                        $payload['mainDriverId'] ?? null,
+                        $payload['driver'] ?? null,
+                        $payload['mainDriver'] ?? null,
+                    );
+
                     $option = [
                         'id' => $id,
                         'name' => $name,
                         'label' => $label,
                         'regNo' => (string) ($payload['regNo'] ?? ''),
-                        'status' => (string) ($payload['status'] ?? $vehicle->status ?? ''),
+                        'status' => $status,
+                        'mainDriver' => $mainDriver,
+                        'mainDriverId' => (string) ($mainDriver['id'] ?? ''),
+                        'mainDriverName' => (string) ($mainDriver['name'] ?? ''),
+                        'mainDriverLabel' => (string) ($mainDriver['label'] ?? ''),
                     ];
 
                     return collect([$id, $vehicle->code, $name, $label, $payload['regNo'] ?? null])
@@ -1891,31 +2035,14 @@ abstract class FleetBaseController extends Controller
                 ->all()
             : [];
 
-        $driverOptions = Schema::hasTable('fleet_drivers')
-            ? FleetDriver::query()
-                ->orderBy('name')
-                ->orderBy('code')
-                ->get()
-                ->flatMap(function (FleetDriver $driver): array {
-                    $payload = $driver->payload ?? [];
-                    $id = (string) ($payload['driverId'] ?? $driver->code);
-                    $name = (string) ($payload['fullName'] ?? $driver->name ?? $driver->code);
-                    $label = trim($id.' - '.$name, ' -');
-                    $option = [
-                        'id' => $id,
-                        'name' => $name,
-                        'label' => $label,
-                        'phone' => (string) ($payload['contact'] ?? $payload['phone'] ?? $payload['mobile'] ?? ''),
-                        'status' => (string) ($payload['status'] ?? $driver->status ?? ''),
-                    ];
-
-                    return collect([$id, $driver->code, $name, $label, $payload['contact'] ?? null, $payload['phone'] ?? null, $payload['mobile'] ?? null])
-                        ->filter(fn ($key) => filled($key))
-                        ->mapWithKeys(fn ($key) => [(string) $key => $option])
-                        ->all();
-                })
-                ->all()
-            : [];
+        if (! Schema::hasTable('fleet_contracts')) {
+            return [
+                'contracts' => [],
+                'vehicle_driver_map' => [],
+                'drivers' => $driverRecords->all(),
+                'yards' => $yardRecords->all(),
+            ];
+        }
 
         $vehicleDriverMap = [];
 
@@ -1926,14 +2053,14 @@ abstract class FleetBaseController extends Controller
             })
             ->latest('id')
             ->get()
-            ->map(function (FleetContract $contract) use ($vehicleOptions, $driverOptions, &$vehicleDriverMap): ?array {
+            ->map(function (FleetContract $contract) use ($vehicleOptions, $resolveDriver, &$vehicleDriverMap): ?array {
                 $payload = $contract->payload ?? [];
                 $contractId = (string) ($payload['contractId'] ?? $payload['id'] ?? $contract->code);
                 $partyName = (string) ($payload['partyName'] ?? $payload['party'] ?? $contract->name ?? 'Contract Party');
 
                 $assignments = collect($payload['assignments'] ?? [])
                     ->filter(fn ($assignment) => is_array($assignment))
-                    ->map(function (array $assignment) use ($vehicleOptions, $driverOptions): ?array {
+                    ->map(function (array $assignment) use ($vehicleOptions, $resolveDriver): ?array {
                         $vehicleId = (string) ($assignment['vehicleId'] ?? '');
                         $vehicleText = (string) ($assignment['vehicle'] ?? $assignment['vehicleName'] ?? $vehicleId);
                         $vehicle = $vehicleOptions[$vehicleId] ?? $vehicleOptions[$vehicleText] ?? null;
@@ -1945,6 +2072,10 @@ abstract class FleetBaseController extends Controller
                                 'label' => $vehicleText,
                                 'regNo' => '',
                                 'status' => '',
+                                'mainDriver' => null,
+                                'mainDriverId' => '',
+                                'mainDriverName' => '',
+                                'mainDriverLabel' => '',
                             ];
                         }
 
@@ -1954,7 +2085,11 @@ abstract class FleetBaseController extends Controller
 
                         $driverId = (string) ($assignment['driverId'] ?? '');
                         $driverText = (string) ($assignment['driver'] ?? $assignment['driverName'] ?? $driverId);
-                        $driver = $driverOptions[$driverId] ?? $driverOptions[$driverText] ?? null;
+                        $driver = $resolveDriver(
+                            $driverId,
+                            $driverText,
+                            $assignment['driverName'] ?? null,
+                        );
 
                         if (! $driver && filled($driverText)) {
                             $driver = [
@@ -1963,6 +2098,7 @@ abstract class FleetBaseController extends Controller
                                 'label' => $driverText,
                                 'phone' => '',
                                 'status' => '',
+                                'duty' => '',
                             ];
                         }
 
@@ -1975,6 +2111,15 @@ abstract class FleetBaseController extends Controller
                             'driver' => (string) ($driver['label'] ?? $driverText),
                             'driverName' => (string) ($driver['name'] ?? $driverText),
                             'driverLabel' => (string) ($driver['label'] ?? $driverText),
+                            // For drive logs, the main driver is the driver assigned
+                            // to this vehicle inside this specific contract. Do not use
+                            // the vehicle master record's default driver here because a
+                            // contract can assign a different driver to the same vehicle.
+                            'mainDriver' => $driver,
+                            'mainDriverId' => (string) ($driver['id'] ?? $driverId),
+                            'mainDriverName' => (string) ($driver['name'] ?? $driverText),
+                            'mainDriverLabel' => (string) ($driver['label'] ?? $driverText),
+                            'mainDriverSource' => 'contract',
                             'rate' => $assignment['rate'] ?? null,
                             'duty' => $assignment['duty'] ?? null,
                         ];
@@ -1983,8 +2128,15 @@ abstract class FleetBaseController extends Controller
                     ->values();
 
                 $assignments->each(function (array $assignment) use (&$vehicleDriverMap): void {
-                    if (filled($assignment['vehicleLabel']) && filled($assignment['driverLabel'])) {
-                        $vehicleDriverMap[$assignment['vehicleLabel']] = $assignment['driverLabel'];
+                    if (! filled($assignment['vehicleLabel'] ?? null)) {
+                        return;
+                    }
+
+                    // The contract assignment is the authoritative driver for
+                    // this contract/vehicle pair.
+                    $preferredDriver = $assignment['driverLabel'] ?? null;
+                    if (filled($preferredDriver)) {
+                        $vehicleDriverMap[$assignment['vehicleLabel']] = $preferredDriver;
                     }
                 });
 
@@ -2013,12 +2165,8 @@ abstract class FleetBaseController extends Controller
         return [
             'contracts' => $contracts,
             'vehicle_driver_map' => $vehicleDriverMap,
-            'drivers' => collect($contracts)
-                ->flatMap(fn (array $contract) => $contract['drivers'] ?? [])
-                ->filter()
-                ->unique()
-                ->values()
-                ->all(),
+            'drivers' => $driverRecords->all(),
+            'yards' => $yardRecords->all(),
         ];
     }
 

@@ -146,7 +146,9 @@
         const openLink = event.target.closest('.fleet-notification-open');
         try {
             if (markButton) {
-                await markRead(markButton.dataset.markRead);
+                await window.FleetmanRunTransaction(markButton, () => markRead(markButton.dataset.markRead), {
+                    loadingText: 'Updating...',
+                });
             } else if (openLink) {
                 await markRead(openLink.dataset.notificationId);
             }
@@ -156,15 +158,21 @@
     });
 
     markAll?.addEventListener('click', async () => {
-        try { await markAllRead(); } catch (error) { console.warn(error); }
+        try {
+            await window.FleetmanRunTransaction(markAll, markAllRead, { loadingText: 'Updating...' });
+        } catch (error) {
+            console.warn(error);
+        }
     });
 
     document.querySelectorAll('.fleet-page-mark-read').forEach((button) => {
         button.addEventListener('click', async () => {
             try {
-                await markRead(button.dataset.notificationId);
-                button.closest('.fleet-notification-page-item')?.classList.remove('unread');
-                button.remove();
+                await window.FleetmanRunTransaction(button, async () => {
+                    await markRead(button.dataset.notificationId);
+                    button.closest('.fleet-notification-page-item')?.classList.remove('unread');
+                    button.remove();
+                }, { loadingText: 'Updating...' });
             } catch (error) {
                 console.warn(error);
             }

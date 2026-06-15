@@ -36,6 +36,22 @@ class FleetFileController extends Controller
         FleetRbac::syncDefaults();
 
         $normalized = strtolower(ltrim($path, '/'));
+        $user = $request->user();
+        abort_unless($user, 401);
+
+        if (preg_match('#^fleet/profile-pictures/(\d+)/#', $normalized, $matches) === 1) {
+            $ownerId = (int) ($matches[1] ?? 0);
+            $canViewUsers = method_exists($user, 'canFleet') && $user->canFleet('users.view');
+
+            abort_unless(
+                (int) $user->getKey() === $ownerId || $user->isFleetSuperAdmin() || $canViewUsers,
+                403,
+                'You do not have permission to view this profile picture.'
+            );
+
+            return;
+        }
+
         $permissionMap = [
             'fleet/vehicles/' => 'vehicles.view',
             'fleet/fuel-recharges/' => 'fuel_recharge.view',
@@ -52,9 +68,6 @@ class FleetFileController extends Controller
                 break;
             }
         }
-
-        $user = $request->user();
-        abort_unless($user, 401);
 
         // Any path without an explicit module mapping is denied by default.
         // This prevents a newly added storage folder from becoming readable

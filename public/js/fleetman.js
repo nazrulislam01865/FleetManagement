@@ -1498,7 +1498,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             renderVehicleImageInfo({});
         }
 
-        function collectVehicle() {
+        function collectVehicle(statusOverride = 'Active') {
             const documentFiles = {};
             const docs = [];
             $$('.doc-row').forEach((row) => {
@@ -1547,7 +1547,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                         rate: $('.fuelRate', row)?.value || '',
                     })).filter((fuel) => fuel.type || fuel.rate),
                     docs,
-                    status: 'Active',
+                    status: statusOverride === 'Draft' ? 'Draft' : 'Active',
                     vehicleValidationVersion: 1,
                 },
                 imageFile: selectedVehicleImageFile(),
@@ -1697,59 +1697,51 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return JSON.parse(JSON.stringify(vehicles || []));
         }
 
-        async function saveVehicle() {
-            await uploadManager.waitForInputs([$('#image'), ...$$('#vehicleDocRows .docFile')]);
-            if (documentSelects.hasDuplicates('#vehicleDocRows', '.docName')) {
-                toast('Each vehicle document type can be selected only once.');
-                return;
-            }
-            const form = collectVehicle();
-            const vehicle = form.vehicle;
-            if (!validateVehicle(vehicle)) return;
-            if (!validatePendingFiles(form.imageFile, form.documentFiles)) return;
+        async function saveVehicle(statusOverride = 'Active') {
+            const isDraft = statusOverride === 'Draft';
+            const saveBtn = isDraft ? $('#saveVehicleDraftBtn') : $('#saveVehicleBtn');
+            return window.FleetmanRunTransaction(saveBtn, async () => {
+                await uploadManager.waitForInputs([$('#image'), ...$$('#vehicleDocRows .docFile')]);
+                if (documentSelects.hasDuplicates('#vehicleDocRows', '.docName')) {
+                    toast('Each vehicle document type can be selected only once.');
+                    return;
+                }
+                const form = collectVehicle(isDraft ? 'Draft' : 'Active');
+                const vehicle = form.vehicle;
+                if (!isDraft && !validateVehicle(vehicle)) return;
+                if (!validatePendingFiles(form.imageFile, form.documentFiles)) return;
 
-            const saveBtn = $('#saveVehicleBtn');
-            const originalText = saveBtn?.textContent || '';
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.textContent = hasPendingFiles(form) ? 'Saving & uploading...' : 'Saving...';
-            }
+                const previousVehicles = cloneVehicles();
+                const vehicleIndex = upsertVehicle(vehicle);
+                const filesForSync = hasPendingFiles(form) ? { [vehicleIndex]: { imageFile: form.imageFile, documentFiles: form.documentFiles } } : {};
+                const result = await syncVehicles(vehicles, filesForSync);
 
-            const previousVehicles = cloneVehicles();
-            const vehicleIndex = upsertVehicle(vehicle);
-            const filesForSync = hasPendingFiles(form) ? { [vehicleIndex]: { imageFile: form.imageFile, documentFiles: form.documentFiles } } : {};
-            const result = await syncVehicles(vehicles, filesForSync);
+                if (result?.syncFailed || result?.ok === false) {
+                    vehicles = previousVehicles;
+                    renderTable();
+                    return;
+                }
 
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.textContent = originalText;
-            }
+                const savedVehicleRows = Array.isArray(result?.rows) ? result.rows : [];
+                if (!savedVehicleRows.some((savedRow) => String(savedRow?.id || '') === String(vehicle.id || ''))) {
+                    vehicles = previousVehicles;
+                    renderTable();
+                    toast('The vehicle was not found in the database response, so it was not added to the list.');
+                    return;
+                }
 
-            if (result?.syncFailed || result?.ok === false) {
-                vehicles = previousVehicles;
-                renderTable();
-                return;
-            }
-
-            const savedVehicleRows = Array.isArray(result?.rows) ? result.rows : [];
-            if (!savedVehicleRows.some((savedRow) => String(savedRow?.id || '') === String(vehicle.id || ''))) {
-                vehicles = previousVehicles;
-                renderTable();
-                toast('The vehicle was not found in the database response, so it was not added to the list.');
-                return;
-            }
-
-            vehicles = savedVehicleRows;
-            if (window.FleetmanListAccess.canView()) {
-                renderTable();
-                toast('Vehicle saved successfully.');
-                setVisible('vehicleListPage');
-            } else {
-                vehicles = [];
-                resetForm();
-                setVisible('vehicleAddPage');
-                toast(window.FleetmanListAccess.savedMessage('Vehicle'));
-            }
+                vehicles = savedVehicleRows;
+                if (window.FleetmanListAccess.canView()) {
+                    renderTable();
+                    toast(isDraft ? 'Vehicle draft saved.' : 'Vehicle saved successfully.');
+                    setVisible('vehicleListPage');
+                } else {
+                    vehicles = [];
+                    resetForm();
+                    setVisible('vehicleAddPage');
+                    toast(window.FleetmanListAccess.savedMessage('Vehicle', isDraft));
+                }
+            }, { loadingText: isDraft ? 'Saving Draft...' : 'Saving...' });
         }
 
         function loadSample() {
@@ -1828,19 +1820,21 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setVisible('vehicleAddPage');
         }
 
-        async function deleteVehicle(id) {
+        async function deleteVehicle(id, triggerButton = null) {
             if (!confirm('Delete this vehicle from the list?')) return;
-            const previousVehicles = cloneVehicles();
-            vehicles = vehicles.filter((vehicle) => vehicle.id !== id);
-            const result = await syncVehicles(vehicles);
-            if (result?.syncFailed || result?.ok === false) {
-                vehicles = previousVehicles;
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const previousVehicles = cloneVehicles();
+                vehicles = vehicles.filter((vehicle) => vehicle.id !== id);
+                const result = await syncVehicles(vehicles);
+                if (result?.syncFailed || result?.ok === false) {
+                    vehicles = previousVehicles;
+                    renderTable();
+                    return;
+                }
+                if (Array.isArray(result?.rows)) vehicles = result.rows;
                 renderTable();
-                return;
-            }
-            if (Array.isArray(result?.rows)) vehicles = result.rows;
-            renderTable();
-            toast('Vehicle deleted.');
+                toast('Vehicle deleted.');
+            }, { loadingText: 'Deleting...' });
         }
 
         function documentLinks(vehicle) {
@@ -1888,7 +1882,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return `
                 <tr>
                     <td>${window.FleetmanCreatedAtCell(vehicle.createdAt || vehicle.created_at, vehicle.creatorName || vehicle.createdBy)}</td>
-                    <td><div class="vehicle-cell">${avatar}<div><b>${escapeHtml(vehicle.name)}</b><br><small>${escapeHtml(vehicle.id)} · ${escapeHtml(vehicle.model)}</small>${imageLink}</div></div></td>
+                    <td><div class="vehicle-cell">${avatar}<div><b>${escapeHtml(vehicle.name || 'Draft Vehicle')}</b><br><small>${escapeHtml(vehicle.id)} · ${escapeHtml(vehicle.model || 'Not completed')}</small>${imageLink}</div></div></td>
                     <td>${escapeHtml(vehicle.regNo)}</td>
                     <td>${escapeHtml(vehicle.category)}<br><small>${escapeHtml(vehicle.subCategory || '')}</small></td>
                     <td>${(vehicle.fuels || []).map((item) => `<span class="badge soft">${escapeHtml(item.priority)}: ${escapeHtml(item.type)} · ${escapeHtml(item.rate || '0')}</span>`).join('')}</td>
@@ -1942,7 +1936,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         });
         $('#addDocRowBtn')?.addEventListener('click', () => addDocRow());
         $('#clearVehicleBtn')?.addEventListener('click', () => resetForm());
-        $('#saveVehicleBtn')?.addEventListener('click', saveVehicle);
+        $('#saveVehicleBtn')?.addEventListener('click', () => saveVehicle('Active'));
+        $('#saveVehicleDraftBtn')?.addEventListener('click', () => saveVehicle('Draft'));
         $('#loadVehicleSampleBtn')?.addEventListener('click', loadSample);
         $('#exportVehiclesBtn')?.addEventListener('click', exportCsv);
         $('#clearVehicleFiltersBtn')?.addEventListener('click', () => { ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus'].forEach((selector) => setValue(selector, '')); renderTable(); });
@@ -2006,7 +2001,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const edit = event.target.closest('.edit-vehicle');
             if (edit) editVehicle(edit.dataset.id);
             const del = event.target.closest('.delete-vehicle');
-            if (del) deleteVehicle(del.dataset.id);
+            if (del) deleteVehicle(del.dataset.id, del);
         });
 
         $('#vehicleAddPage')?.addEventListener('input', (event) => {
@@ -2154,39 +2149,31 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function saveFuelPrice(statusOverride) {
-            const row = collect(statusOverride);
-            if (!validateFuelPrice(row)) return;
-
-            const previous = JSON.parse(JSON.stringify(prices || []));
-            upsert(row);
             const saveButton = statusOverride === 'Draft' ? $('#saveFuelPriceDraftBtn') : $('#saveFuelPriceBtn');
-            const originalText = saveButton?.textContent || '';
-            if (saveButton) {
-                saveButton.disabled = true;
-                saveButton.textContent = 'Saving...';
-            }
+            return window.FleetmanRunTransaction(saveButton, async () => {
+                const row = collect(statusOverride);
+                if (!validateFuelPrice(row)) return;
 
-            try {
-                await saveStore();
-                if (window.FleetmanListAccess.canView()) {
-                    renderList();
-                    toast(row.status === 'Draft' ? 'Draft saved.' : 'Fuel price saved.');
-                    setVisible('fuelPriceListPage');
-                } else {
-                    prices = [];
-                    resetForm();
-                    setVisible('fuelPriceAddPage');
-                    toast(window.FleetmanListAccess.savedMessage('Fuel price', row.status === 'Draft'));
+                const previous = JSON.parse(JSON.stringify(prices || []));
+                upsert(row);
+
+                try {
+                    await saveStore();
+                    if (window.FleetmanListAccess.canView()) {
+                        renderList();
+                        toast(row.status === 'Draft' ? 'Draft saved.' : 'Fuel price saved.');
+                        setVisible('fuelPriceListPage');
+                    } else {
+                        prices = [];
+                        resetForm();
+                        setVisible('fuelPriceAddPage');
+                        toast(window.FleetmanListAccess.savedMessage('Fuel price', row.status === 'Draft'));
+                    }
+                } catch (error) {
+                    prices = previous;
+                    toast(error.message || 'Fuel price save failed.');
                 }
-            } catch (error) {
-                prices = previous;
-                toast(error.message || 'Fuel price save failed.');
-            } finally {
-                if (saveButton) {
-                    saveButton.disabled = false;
-                    saveButton.textContent = originalText;
-                }
-            }
+            }, { loadingText: statusOverride === 'Draft' ? 'Saving Draft...' : 'Saving...' });
         }
 
         function editFuelPrice(id) {
@@ -2205,19 +2192,21 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setVisible('fuelPriceAddPage');
         }
 
-        async function deleteFuelPrice(id) {
+        async function deleteFuelPrice(id, triggerButton = null) {
             if (!confirm('Delete this fuel price from the list?')) return;
-            const previous = JSON.parse(JSON.stringify(prices || []));
-            prices = prices.filter((row) => row.fuelPriceId !== id);
-            try {
-                await saveStore();
-                renderList();
-                toast('Fuel price deleted.');
-            } catch (error) {
-                prices = previous;
-                renderList();
-                toast(error.message || 'Fuel price deletion failed.');
-            }
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const previous = JSON.parse(JSON.stringify(prices || []));
+                prices = prices.filter((row) => row.fuelPriceId !== id);
+                try {
+                    await saveStore();
+                    renderList();
+                    toast('Fuel price deleted.');
+                } catch (error) {
+                    prices = previous;
+                    renderList();
+                    toast(error.message || 'Fuel price deletion failed.');
+                }
+            }, { loadingText: 'Deleting...' });
         }
 
         function loadSample() {
@@ -2295,7 +2284,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const edit = event.target.closest('.edit-fuel-price');
             if (edit) editFuelPrice(edit.dataset.id);
             const del = event.target.closest('.delete-fuel-price');
-            if (del) deleteFuelPrice(del.dataset.id);
+            if (del) deleteFuelPrice(del.dataset.id, del);
         });
 
         $('#fuelPriceAddPage')?.addEventListener('input', (event) => {
@@ -3565,59 +3554,47 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function submitRecharge() {
-            await uploadManager.waitForInputs($$('.photo-card'));
-            if (!validateBeforeSubmit(true)) return;
             const submitBtn = $('#submitRechargeBtn');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = 'Submitting...';
-            }
-            const saved = await saveRecharge('Submitted', null);
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Submit';
-            }
-            if (saved) {
-                resetFuelRechargeForm();
-                toast(window.FleetmanListAccess.canView()
-                    ? 'Fuel recharge submitted successfully. Form reset for next entry.'
-                    : window.FleetmanListAccess.savedMessage('Fuel recharge'));
-            }
+            return window.FleetmanRunTransaction(submitBtn, async () => {
+                await uploadManager.waitForInputs($$('.photo-card'));
+                if (!validateBeforeSubmit(true)) return;
+                const saved = await saveRecharge('Submitted', null);
+                if (saved) {
+                    resetFuelRechargeForm();
+                    toast(window.FleetmanListAccess.canView()
+                        ? 'Fuel recharge submitted successfully. Form reset for next entry.'
+                        : window.FleetmanListAccess.savedMessage('Fuel recharge'));
+                }
+            }, { loadingText: 'Submitting...' });
         }
 
         async function saveDraft() {
-            await uploadManager.waitForInputs($$('.photo-card'));
-            clearRechargeValidation();
-            const draftErrors = [];
-            if (!value('#contractSelect') || !selectedContract()) {
-                markRechargeInvalid($('#contractSelect'), 'A valid contract is required before saving a draft.');
-                draftErrors.push($('#contractSelect'));
-            }
-            if (!value('#vehicleSelect') || !selectedVehicle()) {
-                markRechargeInvalid($('#vehicleSelect'), 'A vehicle assigned to the selected contract is required before saving a draft.');
-                draftErrors.push($('#vehicleSelect'));
-            }
-            if (draftErrors.length) {
-                focusFirstRechargeInvalid();
-                toast('Please correct the highlighted fields.');
-                return;
-            }
             const draftBtn = $('#draftRechargeBtn');
-            if (draftBtn) {
-                draftBtn.disabled = true;
-                draftBtn.textContent = 'Saving...';
-            }
-            const saved = await saveRecharge('Draft', null);
-            if (draftBtn) {
-                draftBtn.disabled = false;
-                draftBtn.textContent = 'Save Draft';
-            }
-            if (saved) {
-                resetFuelRechargeForm();
-                toast(window.FleetmanListAccess.canView()
-                    ? 'Draft saved to database. Form reset for next entry.'
-                    : window.FleetmanListAccess.savedMessage('Fuel recharge', true));
-            }
+            return window.FleetmanRunTransaction(draftBtn, async () => {
+                await uploadManager.waitForInputs($$('.photo-card'));
+                clearRechargeValidation();
+                const draftErrors = [];
+                if (!value('#contractSelect') || !selectedContract()) {
+                    markRechargeInvalid($('#contractSelect'), 'A valid contract is required before saving a draft.');
+                    draftErrors.push($('#contractSelect'));
+                }
+                if (!value('#vehicleSelect') || !selectedVehicle()) {
+                    markRechargeInvalid($('#vehicleSelect'), 'A vehicle assigned to the selected contract is required before saving a draft.');
+                    draftErrors.push($('#vehicleSelect'));
+                }
+                if (draftErrors.length) {
+                    focusFirstRechargeInvalid();
+                    toast('Please correct the highlighted fields.');
+                    return;
+                }
+                const saved = await saveRecharge('Draft', null);
+                if (saved) {
+                    resetFuelRechargeForm();
+                    toast(window.FleetmanListAccess.canView()
+                        ? 'Draft saved to database. Form reset for next entry.'
+                        : window.FleetmanListAccess.savedMessage('Fuel recharge', true));
+                }
+            }, { loadingText: 'Saving Draft...' });
         }
 
         function rechargePhotoFlag(row) {
@@ -3726,18 +3703,21 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setVisible('rechargeAddPage');
         }
 
-        async function deleteRechargeEntry(id) {
+        async function deleteRechargeEntry(id, triggerButton = null) {
             if (!confirm('Delete this fuel recharge entry?')) return;
-            const previous = JSON.parse(JSON.stringify(recharges || []));
-            recharges = recharges.filter((row) => row.rechargeId !== id);
-            const result = await syncFuelRecharges(recharges);
-            if (result?.syncFailed || result?.ok === false) {
-                recharges = previous;
-            } else if (Array.isArray(result?.rows)) {
-                recharges = result.rows;
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const previousRows = JSON.parse(JSON.stringify(recharges || []));
+                recharges = recharges.filter((row) => row.rechargeId !== id);
+                const result = await syncFuelRecharges(recharges);
+                if (result?.syncFailed || result?.ok === false) {
+                    recharges = previousRows;
+                    renderRechargeList();
+                    return;
+                }
+                if (Array.isArray(result?.rows)) recharges = result.rows;
+                renderRechargeList();
                 toast('Fuel recharge entry deleted.');
-            }
-            renderRechargeList();
+            }, { loadingText: 'Deleting...' });
         }
 
         $('#rechargeSearch')?.addEventListener('input', renderRechargeList);
@@ -3772,7 +3752,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const editButton = event.target.closest('[data-recharge-edit]');
             if (editButton) editRechargeEntry(editButton.dataset.rechargeEdit);
             const deleteButton = event.target.closest('[data-recharge-delete]');
-            if (deleteButton) deleteRechargeEntry(deleteButton.dataset.rechargeDelete);
+            if (deleteButton) deleteRechargeEntry(deleteButton.dataset.rechargeDelete, deleteButton);
         });
 
         $('#rechargeAddPage')?.addEventListener('input', (event) => {
@@ -4410,54 +4390,45 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function saveParty(statusOverride) {
-            await uploadManager.waitForInputs([$('#partyPhoto'), ...$$('#partyDocuments .partyDocFile')]);
-            const form = collect(statusOverride);
-            const party = form.party;
-
-            if (statusOverride === 'Draft') {
-                if (!party.partyName) party.partyName = 'Draft Vendor / Party';
-                if (!party.partyType) party.partyType = 'Other';
-            } else if (!validate(party)) {
-                return;
-            }
-
-            if (!validatePendingFiles(form.documentFiles)) return;
-
             const saveBtn = statusOverride === 'Draft' ? $('#savePartyDraftBtn') : $('#savePartyBtn');
-            const originalText = saveBtn?.textContent || '';
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.textContent = hasPendingFiles({ 0: form.documentFiles }) ? 'Saving & uploading...' : 'Saving...';
-            }
+            return window.FleetmanRunTransaction(saveBtn, async () => {
+                await uploadManager.waitForInputs([$('#partyPhoto'), ...$$('#partyDocuments .partyDocFile')]);
+                const form = collect(statusOverride);
+                const party = form.party;
 
-            const previousParties = cloneParties();
-            const partyIndex = upsert(party);
-            const filesForSync = hasPendingFiles({ [partyIndex]: form.documentFiles }) ? { [partyIndex]: form.documentFiles } : {};
-            const result = await saveStore(filesForSync);
+                if (statusOverride === 'Draft') {
+                    if (!party.partyName) party.partyName = 'Draft Vendor / Party';
+                    if (!party.partyType) party.partyType = 'Other';
+                } else if (!validate(party)) {
+                    return;
+                }
 
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.textContent = originalText;
-            }
+                if (!validatePendingFiles(form.documentFiles)) return;
 
-            if (result?.syncFailed || result?.ok === false) {
-                parties = previousParties;
-                renderList();
-                return;
-            }
+                const previousParties = cloneParties();
+                const partyIndex = upsert(party);
+                const filesForSync = hasPendingFiles({ [partyIndex]: form.documentFiles }) ? { [partyIndex]: form.documentFiles } : {};
+                const result = await saveStore(filesForSync);
 
-            if (Array.isArray(result?.rows)) parties = result.rows;
+                if (result?.syncFailed || result?.ok === false) {
+                    parties = previousParties;
+                    renderList();
+                    return;
+                }
 
-            if (window.FleetmanListAccess.canView()) {
-                renderList();
-                toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Vendor / Party saved.');
-                setVisible('vendorListPage');
-            } else {
-                parties = [];
-                resetForm();
-                setVisible('vendorAddPage');
-                toast(window.FleetmanListAccess.savedMessage('Vendor / Party', statusOverride === 'Draft'));
-            }
+                if (Array.isArray(result?.rows)) parties = result.rows;
+
+                if (window.FleetmanListAccess.canView()) {
+                    renderList();
+                    toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Vendor / Party saved.');
+                    setVisible('vendorListPage');
+                } else {
+                    parties = [];
+                    resetForm();
+                    setVisible('vendorAddPage');
+                    toast(window.FleetmanListAccess.savedMessage('Vendor / Party', statusOverride === 'Draft'));
+                }
+            }, { loadingText: statusOverride === 'Draft' ? 'Saving Draft...' : 'Saving...' });
         }
 
         function loadSample() {
@@ -4516,11 +4487,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setVisible('vendorAddPage');
         }
 
-        function deleteParty(id) {
+        async function deleteParty(id, triggerButton = null) {
             if (!confirm('Delete this vendor / party from list?')) return;
-            const previousParties = cloneParties();
-            parties = parties.filter((party) => party.partyId !== id);
-            saveStore().then((result) => {
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const previousParties = cloneParties();
+                parties = parties.filter((party) => party.partyId !== id);
+                const result = await saveStore();
                 if (result?.syncFailed || result?.ok === false) {
                     parties = previousParties;
                     renderList();
@@ -4528,7 +4500,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 }
                 renderList();
                 toast('Vendor / Party deleted.');
-            });
+            }, { loadingText: 'Deleting...' });
         }
 
         function viewParty(id) {
@@ -4662,7 +4634,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const edit = event.target.closest('.edit-party');
             if (edit) editParty(edit.dataset.id);
             const del = event.target.closest('.delete-party');
-            if (del) deleteParty(del.dataset.id);
+            if (del) deleteParty(del.dataset.id, del);
         });
 
         resetForm();
@@ -5065,7 +5037,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return true;
         }
 
-        function collect() {
+        function collect(savedAs = 'Submitted') {
             const vehicleText = value('#tripVehicle').trim();
             const driverText = value('#tripDriver').trim();
             const vehicle = findVehicle(vehicleText);
@@ -5075,6 +5047,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const summary = recalculatePayment();
             return {
                 tripValidationVersion: 2,
+                savedAs: savedAs === 'Draft' ? 'Draft' : 'Submitted',
                 tripId: value('#tripId').trim(),
                 startDate: value('#tripStartDate'),
                 vehicle: vehicleText,
@@ -5109,38 +5082,36 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             renderPayments([]);
         }
 
-        async function saveTrip() {
-            if (!validateTrip()) return;
-            const trip = collect();
-            const nextTrips = [...trips];
-            const index = nextTrips.findIndex((item) => item.tripId === trip.tripId);
-            if (index >= 0) nextTrips[index] = trip;
-            else nextTrips.unshift(trip);
+        async function saveTrip(savedAs = 'Submitted') {
+            const isDraft = savedAs === 'Draft';
+            const button = isDraft ? $('#saveTripDraftBtn') : $('#saveTripBtn');
+            return window.FleetmanRunTransaction(button, async () => {
+                if (!isDraft && !validateTrip()) return;
+                const trip = collect(isDraft ? 'Draft' : 'Submitted');
+                if (!trip.tripId) {
+                    trip.tripId = genId();
+                    setValue('#tripId', trip.tripId);
+                }
+                const nextTrips = [...trips];
+                const index = nextTrips.findIndex((item) => item.tripId === trip.tripId);
+                if (index >= 0) nextTrips[index] = trip;
+                else nextTrips.unshift(trip);
 
-            const button = $('#saveTripBtn');
-            const originalText = button?.textContent || 'Save Trip';
-            if (button) {
-                button.disabled = true;
-                button.textContent = 'Saving...';
-            }
-            const result = await syncResource('trips', nextTrips);
-            if (button) {
-                button.disabled = false;
-                button.textContent = originalText;
-            }
-            if (!result?.ok) return;
+                const result = await syncResource('trips', nextTrips);
+                if (!result?.ok) return;
 
-            trips = Array.isArray(result.rows) ? result.rows : nextTrips;
-            if (window.FleetmanListAccess.canView()) {
-                renderList();
-                toast('Trip saved successfully.');
-                setVisible('tripListPage');
-            } else {
-                trips = [];
-                resetForm();
-                setVisible('tripAddPage');
-                toast(window.FleetmanListAccess.savedMessage('Trip'));
-            }
+                trips = Array.isArray(result.rows) ? result.rows : nextTrips;
+                if (window.FleetmanListAccess.canView()) {
+                    renderList();
+                    toast(isDraft ? 'Trip draft saved.' : 'Trip saved successfully.');
+                    setVisible('tripListPage');
+                } else {
+                    trips = [];
+                    resetForm();
+                    setVisible('tripAddPage');
+                    toast(window.FleetmanListAccess.savedMessage('Trip', isDraft));
+                }
+            }, { loadingText: isDraft ? 'Saving Draft...' : 'Saving...' });
         }
 
         function loadTripIntoForm(trip) {
@@ -5170,14 +5141,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setVisible('tripAddPage');
         }
 
-        async function deleteTrip(id) {
+        async function deleteTrip(id, triggerButton = null) {
             if (!confirm('Delete this trip from the trip list?')) return;
-            const nextTrips = trips.filter((trip) => trip.tripId !== id);
-            const result = await syncResource('trips', nextTrips);
-            if (!result?.ok) return;
-            trips = Array.isArray(result.rows) ? result.rows : nextTrips;
-            renderList();
-            toast('Trip deleted.');
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const nextTrips = trips.filter((trip) => trip.tripId !== id);
+                const result = await syncResource('trips', nextTrips);
+                if (!result?.ok) return;
+                trips = Array.isArray(result.rows) ? result.rows : nextTrips;
+                renderList();
+                toast('Trip deleted.');
+            }, { loadingText: 'Deleting...' });
         }
 
         function viewTrip(id) {
@@ -5208,9 +5181,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const balance = balanceDue(trip);
             const state = paymentState(trip);
             const stateClass = state === 'Paid' ? 'paid' : state === 'Partially Paid' ? 'partial' : 'unpaid';
+            const isDraft = String(trip.savedAs || trip.status || '').trim().toLowerCase() === 'draft';
+            const draftBadge = isDraft ? ' <span class="badge warn">Draft</span>' : '';
             return `<tr>
                 <td>${window.FleetmanCreatedAtCell(trip.createdAt || trip.created_at, trip.creatorName || trip.createdBy)}</td>
-                <td><div class="trip-cell"><div class="trip-icon">🧭</div><div><b>${escapeHtml(trip.tripId)}</b><br><small>${escapeHtml([trip.purpose || 'Trip', trip.client || ''].filter(Boolean).join(' · '))}</small></div></div></td>
+                <td><div class="trip-cell"><div class="trip-icon">🧭</div><div><b>${escapeHtml(trip.tripId)}</b>${draftBadge}<br><small>${escapeHtml([trip.purpose || 'Trip', trip.client || ''].filter(Boolean).join(' · '))}</small></div></div></td>
                 <td>${escapeHtml(trip.startDate || '-')}</td>
                 <td><b>${escapeHtml(trip.vehicle || '-')}</b><br><small>${escapeHtml(trip.driver || '-')}</small></td>
                 <td>${escapeHtml(trip.fromLocation || '-')} → ${escapeHtml(trip.toLocation || '-')}</td>
@@ -5242,11 +5217,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function exportTrips() {
-            const rows = [['Trip ID', 'Start Date', 'Vehicle', 'Driver', 'Purpose', 'Client', 'From Location', 'To Location', 'Odo Start', 'Odo End', 'Total Cost', 'Paid Amount', 'Remaining Payment', 'Payments', 'Details']];
+            const rows = [['Trip ID', 'Saved As', 'Start Date', 'Vehicle', 'Driver', 'Purpose', 'Client', 'From Location', 'To Location', 'Odo Start', 'Odo End', 'Total Cost', 'Paid Amount', 'Remaining Payment', 'Payments', 'Details']];
             trips.forEach((trip) => {
                 const payments = tripPayments(trip).map((payment) => `${payment.method}: ${roundMoney(payment.amount).toFixed(2)}${payment.reference ? ` (${payment.reference})` : ''}`).join(' | ');
                 rows.push([
                     trip.tripId,
+                    trip.savedAs || 'Submitted',
                     trip.startDate,
                     trip.vehicle,
                     trip.driver,
@@ -5270,7 +5246,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         $('#tripTotalCost')?.addEventListener('input', recalculatePayment);
         $('#addTripPaymentBtn')?.addEventListener('click', () => addPayment());
         $('#resetTripBtn')?.addEventListener('click', resetForm);
-        $('#saveTripBtn')?.addEventListener('click', saveTrip);
+        $('#saveTripBtn')?.addEventListener('click', () => saveTrip('Submitted'));
+        $('#saveTripDraftBtn')?.addEventListener('click', () => saveTrip('Draft'));
         $('#exportTripsBtn')?.addEventListener('click', exportTrips);
         $('#applyTripFiltersBtn')?.addEventListener('click', renderList);
         $('#clearTripFiltersBtn')?.addEventListener('click', clearFilters);
@@ -5313,7 +5290,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const edit = event.target.closest('.edit-trip');
             if (edit) editTrip(edit.dataset.id);
             const del = event.target.closest('.delete-trip');
-            if (del) deleteTrip(del.dataset.id);
+            if (del) deleteTrip(del.dataset.id, del);
         });
 
         resetForm();
@@ -5741,36 +5718,39 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function saveDriver(statusOverride){
-            await uploadManager.waitForInputs([$('#driverPhoto'), ...$$('#driverDocuments .driverDocFile')]);
-            if (statusOverride !== 'Draft' && !validateDriverForm()) return;
-            if (documentSelects.hasDuplicates('#driverDocuments', '.driverDocName')) {
-                toast('Each driver document type can be selected only once.');
-                return;
-            }
-            const row = collect(statusOverride);
-            if(statusOverride==='Draft' && !row.fullName) row.fullName='Draft Driver';
-            const previous = JSON.parse(JSON.stringify(drivers || []));
-            upsert(row);
-            const result = await syncDrivers(drivers);
-            if (result?.syncFailed || result?.ok === false) { drivers = previous; renderList(); return; }
-            const savedDriverRows = Array.isArray(result?.rows) ? result.rows : [];
-            if (!savedDriverRows.some((savedRow) => String(savedRow?.driverId || '') === String(row.driverId || ''))) {
-                drivers = previous;
-                renderList();
-                toast('The driver was not found in the database response, so it was not added to the list.');
-                return;
-            }
-            drivers = savedDriverRows;
-            if (window.FleetmanListAccess.canView()) {
-                renderList();
-                toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Driver saved. Redirecting to driver list.');
-                setVisible('driverListPage');
-            } else {
-                drivers = [];
-                resetForm();
-                setVisible('driverAddPage');
-                toast(window.FleetmanListAccess.savedMessage('Driver', statusOverride === 'Draft'));
-            }
+            const saveButton = statusOverride === 'Draft' ? $('#saveDriverDraftBtn') : $('#saveDriverBtn');
+            return window.FleetmanRunTransaction(saveButton, async () => {
+                await uploadManager.waitForInputs([$('#driverPhoto'), ...$$('#driverDocuments .driverDocFile')]);
+                if (statusOverride !== 'Draft' && !validateDriverForm()) return;
+                if (documentSelects.hasDuplicates('#driverDocuments', '.driverDocName')) {
+                    toast('Each driver document type can be selected only once.');
+                    return;
+                }
+                const row = collect(statusOverride);
+                if(statusOverride==='Draft' && !row.fullName) row.fullName='Draft Driver';
+                const previous = JSON.parse(JSON.stringify(drivers || []));
+                upsert(row);
+                const result = await syncDrivers(drivers);
+                if (result?.syncFailed || result?.ok === false) { drivers = previous; renderList(); return; }
+                const savedDriverRows = Array.isArray(result?.rows) ? result.rows : [];
+                if (!savedDriverRows.some((savedRow) => String(savedRow?.driverId || '') === String(row.driverId || ''))) {
+                    drivers = previous;
+                    renderList();
+                    toast('The driver was not found in the database response, so it was not added to the list.');
+                    return;
+                }
+                drivers = savedDriverRows;
+                if (window.FleetmanListAccess.canView()) {
+                    renderList();
+                    toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Driver saved. Redirecting to driver list.');
+                    setVisible('driverListPage');
+                } else {
+                    drivers = [];
+                    resetForm();
+                    setVisible('driverAddPage');
+                    toast(window.FleetmanListAccess.savedMessage('Driver', statusOverride === 'Draft'));
+                }
+            }, { loadingText: statusOverride === 'Draft' ? 'Saving Draft...' : 'Saving...' });
         }
 
         function populateDriverForm(row) {
@@ -5881,7 +5861,21 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function viewDriver(id){ const row=drivers.find((item)=>item.driverId===id); if(row) window.FleetmanDetailViewer?.show('Driver Details', row); }
-        function deleteDriver(id){ if(!confirm('Delete this driver from prototype list?')) return; drivers=drivers.filter((row)=>row.driverId!==id); saveStore(); renderList(); toast('Driver deleted.'); }
+        async function deleteDriver(id, triggerButton = null){
+            if(!confirm('Delete this driver from prototype list?')) return;
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const previous = drivers.slice();
+                drivers = drivers.filter((row) => row.driverId !== id);
+                const result = await saveStore();
+                if (result?.syncFailed || result?.ok === false) {
+                    drivers = previous;
+                    renderList();
+                    return;
+                }
+                renderList();
+                toast('Driver deleted.');
+            }, { loadingText: 'Deleting...' });
+        }
         function exportDrivers(){ const rows=[['Driver ID','Full Name','Contact','NID','License No','License Type','License Validity','Salary','Salary Tenure','Overtime Rate/Hourly','Working Hour','Vendor','Status','Documents']]; drivers.forEach((row)=>rows.push([row.driverId,row.fullName,row.contact,row.nid,row.licenseNo,row.licenseType,row.licenseValidity,row.salary,row.salaryTenure,row.otRate,row.workingHour,row.vendor,row.status,(row.documents||[]).map((doc)=>doc.name).join('; ')])); exportCsv(rows,'fleetman-driver-list.csv'); }
 
         $('#addDriverDocumentBtn')?.addEventListener('click',()=>addDocument());
@@ -5957,7 +5951,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
             const view=event.target.closest('.view-driver'); if(view) viewDriver(view.dataset.id);
             const edit=event.target.closest('.edit-driver'); if(edit) editDriver(edit.dataset.id);
-            const del=event.target.closest('.delete-driver'); if(del) deleteDriver(del.dataset.id);
+            const del=event.target.closest('.delete-driver'); if(del) deleteDriver(del.dataset.id, del);
         });
 
         resetForm();
@@ -6117,35 +6111,50 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
         function upsert(row){ const idx=clients.findIndex((item)=>item.clientId===row.clientId); if(idx>=0) clients[idx]=row; else clients.unshift(row); return idx; }
         async function saveClient(statusOverride){
-            await uploadManager.waitForInputs([$('#clientPhoto')]);
-            const row=collect(statusOverride);
-            if(statusOverride==='Draft' && !row.clientName) row.clientName='Draft Client';
-            if(statusOverride!=='Draft' && !validate(row)) return;
-            const previous=clients.find((item)=>item.clientId===row.clientId);
-            const previousIndex=clients.findIndex((item)=>item.clientId===row.clientId);
-            upsert(row);
-            const result=await saveStore();
-            if(result?.syncFailed){
-                if(previousIndex>=0) clients[previousIndex]=previous;
-                else clients=clients.filter((item)=>item.clientId!==row.clientId);
-                return;
-            }
-            if (window.FleetmanListAccess.canView()) {
-                toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Client saved. Redirecting to client list.');
-                setTimeout(() => { renderList(); setVisible('clientListPage'); }, 450);
-            } else {
-                clients = [];
-                resetForm();
-                setVisible('clientAddPage');
-                toast(window.FleetmanListAccess.savedMessage('Client', statusOverride === 'Draft'));
-            }
+            const saveButton = statusOverride === 'Draft' ? $('#saveClientDraftBtn') : $('#saveClientBtn');
+            return window.FleetmanRunTransaction(saveButton, async () => {
+                await uploadManager.waitForInputs([$('#clientPhoto')]);
+                const row=collect(statusOverride);
+                if(statusOverride==='Draft' && !row.clientName) row.clientName='Draft Client';
+                if(statusOverride!=='Draft' && !validate(row)) return;
+                const previous=clients.find((item)=>item.clientId===row.clientId);
+                const previousIndex=clients.findIndex((item)=>item.clientId===row.clientId);
+                upsert(row);
+                const result=await saveStore();
+                if(result?.syncFailed){
+                    if(previousIndex>=0) clients[previousIndex]=previous;
+                    else clients=clients.filter((item)=>item.clientId!==row.clientId);
+                    return;
+                }
+                if (window.FleetmanListAccess.canView()) {
+                    toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Client saved. Redirecting to client list.');
+                    await new Promise((resolve) => setTimeout(resolve, 450));
+                    renderList();
+                    setVisible('clientListPage');
+                } else {
+                    clients = [];
+                    resetForm();
+                    setVisible('clientAddPage');
+                    toast(window.FleetmanListAccess.savedMessage('Client', statusOverride === 'Draft'));
+                }
+            }, { loadingText: statusOverride === 'Draft' ? 'Saving Draft...' : 'Saving...' });
         }
         function loadSample(){ resetForm(); const row=(samples.clients||[])[0]; if(!row) return; const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); setValue('#clientPhotoData',row.photo?JSON.stringify(row.photo):''); renderClientPhoto(row.photo||{}); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); toast('Sample client data added.'); }
         function rowHtml(row){ const main=(row.contacts||[])[0]||{}; const statusClass=row.status==='Active'?'ok':row.status==='Prospect'?'warn':row.status==='Draft'?'soft':'danger'; return `<tr><td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td><td><div class="client-cell">${window.FleetmanEntityAvatar.html(row.photo||{},{fallback:'🏢',alt:`${row.clientName||'Client'} logo`,size:'table'})}<div><b>${escapeHtml(row.clientName)}</b><br><small>${escapeHtml(row.clientId)}${row.reference?' · Ref: '+escapeHtml(row.reference):''}</small></div></div></td><td>${escapeHtml(row.phone||'-')}<br><small>${escapeHtml(row.email||'')}</small></td><td><b>${escapeHtml(main.name||'-')}</b><br><small>${escapeHtml(main.phone||'')}${(row.contacts||[]).length>1?' · +'+((row.contacts||[]).length-1)+' more':''}</small></td><td><span class="badge soft">${escapeHtml(row.clientType||'-')}</span></td><td><span class="badge ${statusClass}">${escapeHtml(row.status||'-')}</span></td><td>${escapeHtml(row.contactMethod||'-')}</td><td>${escapeHtml(row.address||'-')}</td><td><button type="button" class="mini-btn view-client" data-id="${escapeHtml(row.clientId)}">View</button><button type="button" class="mini-btn edit-client" data-id="${escapeHtml(row.clientId)}">Edit</button><button type="button" class="mini-btn danger delete-client" data-id="${escapeHtml(row.clientId)}">Delete</button></td></tr>`; }
         function renderList(){ const q=value('#clientSearch').toLowerCase(), status=value('#clientFilterStatus'), type=value('#clientFilterType'), method=value('#clientFilterMethod'); const rows=clients.filter((row)=>{ const people=(row.contacts||[]).map((person)=>[person.name,person.phone,person.role,person.whatsapp,person.email].join(' ')).join(' '); return (!q||[row.clientName,row.phone,row.email,row.clientId,row.reference,people].join(' ').toLowerCase().includes(q))&&(!status||row.status===status)&&(!type||row.clientType===type)&&(!method||row.contactMethod===method); }); $('#clientTbody').innerHTML=rows.length?rows.map(rowHtml).join(''):'<tr><td colspan="9" class="empty">No client found. Click “Add Client” to create one.</td></tr>'; $('#clientKpiTotal').textContent=clients.length; $('#clientKpiActive').textContent=clients.filter((c)=>c.status==='Active').length; $('#clientKpiEmail').textContent=clients.filter((c)=>c.email).length; }
         function editClient(id){ const row=clients.find((r)=>r.clientId===id); if(!row) return; resetForm(); const map={clientId:'#clientId',clientName:'#clientName',email:'#clientEmail',phone:'#clientPhone',whatsapp:'#clientWhatsapp',reference:'#clientReference',clientType:'#clientType',status:'#clientStatus',contactMethod:'#clientContactMethod',address:'#clientAddress',about:'#clientAbout'}; Object.entries(map).forEach(([key,sel])=>setValue(sel,row[key]||'')); setValue('#clientPhotoData',row.photo?JSON.stringify(row.photo):''); renderClientPhoto(row.photo||{}); $('#clientContacts').innerHTML=''; (row.contacts||[]).forEach(addContact); setVisible('clientAddPage'); }
         function viewClient(id){ const row=clients.find((r)=>r.clientId===id); if(row) window.FleetmanDetailViewer?.show('Client Details', row); }
-        async function deleteClient(id){ if(!confirm('Delete this client from prototype list?')) return; const previous=clients.slice(); clients=clients.filter((row)=>row.clientId!==id); const result=await saveStore(); if(result?.syncFailed){clients=previous;return;} renderList(); toast('Client deleted.'); }
+        async function deleteClient(id, triggerButton = null){
+            if(!confirm('Delete this client from prototype list?')) return;
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const previous=clients.slice();
+                clients=clients.filter((row)=>row.clientId!==id);
+                const result=await saveStore();
+                if(result?.syncFailed || result?.ok === false){clients=previous;renderList();return;}
+                renderList();
+                toast('Client deleted.');
+            }, { loadingText: 'Deleting...' });
+        }
         function exportClients(){ const rows=[['Client ID','Client Name','Phone','WhatsApp','Email','Reference','Client Type','Status','Preferred Contact','Address','About','Contact Persons']]; clients.forEach((row)=>rows.push([row.clientId,row.clientName,row.phone,row.whatsapp,row.email,row.reference,row.clientType,row.status,row.contactMethod,row.address,row.about,(row.contacts||[]).map((p)=>`${p.name} / ${p.role||''} / ${p.phone||''}`).join('; ')])); exportCsv(rows,'fleetman-client-list.csv'); }
 
         $('#addClientContactBtn')?.addEventListener('click',()=>addContact());
@@ -6185,7 +6194,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
             const view=e.target.closest('.view-client'); if(view) viewClient(view.dataset.id);
             const edit=e.target.closest('.edit-client'); if(edit) editClient(edit.dataset.id);
-            const del=e.target.closest('.delete-client'); if(del) deleteClient(del.dataset.id);
+            const del=e.target.closest('.delete-client'); if(del) deleteClient(del.dataset.id, del);
         });
         resetForm();
         renderList();
@@ -6548,43 +6557,48 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function saveEmployee(statusOverride) {
-            await uploadManager.waitForInputs([$('#employeePhoto'), ...$$('#employeeDocuments .empDocFile')]);
-            if (statusOverride !== 'Draft' && !validateEmployeeForm()) return;
-            if (documentSelects.hasDuplicates('#employeeDocuments', '.empDocName')) {
-                toast('Each employee document type can be selected only once.');
-                return;
-            }
-            const row = collect(statusOverride);
-            if (statusOverride === 'Draft') {
-                if (!row.fullName) row.fullName = 'Draft Employee';
-                if (!row.designation) row.designation = 'Other';
-                if (!row.contactNumber) row.contactNumber = 'Pending';
-            }
-            const previous = JSON.parse(JSON.stringify(employees || []));
-            upsert(row);
-            const result = await saveStore();
-            if (result?.syncFailed || result?.ok === false) {
-                employees = previous;
-                renderList();
-                return;
-            }
-            const savedEmployeeRows = Array.isArray(result?.rows) ? result.rows : [];
-            if (!savedEmployeeRows.some((savedRow) => String(savedRow?.employeeId || '') === String(row.employeeId || ''))) {
-                employees = previous;
-                renderList();
-                toast('The employee was not found in the database response, so it was not added to the list.');
-                return;
-            }
-            employees = savedEmployeeRows;
-            if (window.FleetmanListAccess.canView()) {
-                toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Employee saved. Redirecting to employee list.');
-                setTimeout(() => { renderList(); setVisible('employeeListPage'); }, 450);
-            } else {
-                employees = [];
-                resetForm();
-                setVisible('employeeAddPage');
-                toast(window.FleetmanListAccess.savedMessage('Employee', statusOverride === 'Draft'));
-            }
+            const saveButton = statusOverride === 'Draft' ? $('#saveEmployeeDraftBtn') : $('#saveEmployeeBtn');
+            return window.FleetmanRunTransaction(saveButton, async () => {
+                await uploadManager.waitForInputs([$('#employeePhoto'), ...$$('#employeeDocuments .empDocFile')]);
+                if (statusOverride !== 'Draft' && !validateEmployeeForm()) return;
+                if (documentSelects.hasDuplicates('#employeeDocuments', '.empDocName')) {
+                    toast('Each employee document type can be selected only once.');
+                    return;
+                }
+                const row = collect(statusOverride);
+                if (statusOverride === 'Draft') {
+                    if (!row.fullName) row.fullName = 'Draft Employee';
+                    if (!row.designation) row.designation = 'Other';
+                    if (!row.contactNumber) row.contactNumber = 'Pending';
+                }
+                const previous = JSON.parse(JSON.stringify(employees || []));
+                upsert(row);
+                const result = await saveStore();
+                if (result?.syncFailed || result?.ok === false) {
+                    employees = previous;
+                    renderList();
+                    return;
+                }
+                const savedEmployeeRows = Array.isArray(result?.rows) ? result.rows : [];
+                if (!savedEmployeeRows.some((savedRow) => String(savedRow?.employeeId || '') === String(row.employeeId || ''))) {
+                    employees = previous;
+                    renderList();
+                    toast('The employee was not found in the database response, so it was not added to the list.');
+                    return;
+                }
+                employees = savedEmployeeRows;
+                if (window.FleetmanListAccess.canView()) {
+                    toast(statusOverride === 'Draft' ? 'Draft saved.' : 'Employee saved. Redirecting to employee list.');
+                    await new Promise((resolve) => setTimeout(resolve, 450));
+                    renderList();
+                    setVisible('employeeListPage');
+                } else {
+                    employees = [];
+                    resetForm();
+                    setVisible('employeeAddPage');
+                    toast(window.FleetmanListAccess.savedMessage('Employee', statusOverride === 'Draft'));
+                }
+            }, { loadingText: statusOverride === 'Draft' ? 'Saving Draft...' : 'Saving...' });
         }
 
         function populateEmployeeForm(row) {
@@ -6689,14 +6703,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (row) window.FleetmanDetailViewer?.show('Employee Details', row);
         }
 
-        async function deleteEmployee(id) {
+        async function deleteEmployee(id, triggerButton = null) {
             if (!confirm('Delete this employee?')) return;
-            const previous = employees.slice();
-            employees = employees.filter((row) => row.employeeId !== id);
-            const result = await saveStore();
-            if (result?.syncFailed) { employees = previous; return; }
-            renderList();
-            toast('Employee deleted.');
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const previous = employees.slice();
+                employees = employees.filter((row) => row.employeeId !== id);
+                const result = await saveStore();
+                if (result?.syncFailed || result?.ok === false) { employees = previous; renderList(); return; }
+                renderList();
+                toast('Employee deleted.');
+            }, { loadingText: 'Deleting...' });
         }
 
         function exportEmployees() {
@@ -6773,7 +6789,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
             const view = event.target.closest('.view-employee'); if (view) viewEmployee(view.dataset.id);
             const edit = event.target.closest('.edit-employee'); if (edit) editEmployee(edit.dataset.id);
-            const del = event.target.closest('.delete-employee'); if (del) deleteEmployee(del.dataset.id);
+            const del = event.target.closest('.delete-employee'); if (del) deleteEmployee(del.dataset.id, del);
         });
 
         syncResource('employees', employees);
@@ -6786,8 +6802,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
     function initDriverAttendance() {
         let logs = Array.isArray(records.driver_attendance) ? [...records.driver_attendance] : [];
         const attendanceResources = resources?.driver_attendance || {};
-        const masters = data.attendanceMasters || { contracts: [], vehicle_driver_map: {}, drivers: [] };
+        const masters = data.attendanceMasters || { contracts: [], vehicle_driver_map: {}, drivers: [], yards: [] };
         let selectedStatus = 'Completed';
+        let selectedDriverMode = 'main';
         let savingLog = false;
         const transitioningLogs = new Set();
 
@@ -6843,6 +6860,35 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         const labelOf = (item) => typeof item === 'string' ? item : (item?.label || item?.name || item?.id || '');
         const contractLabel = (contract = {}) => contract.label || [contract.id || contract.contractId, contract.name || contract.partyName].filter(Boolean).join(' - ');
         const contractLabels = unique((masters.contracts || []).map(contractLabel));
+        const attendanceDrivers = Array.from(new Map((masters.drivers || []).map((item) => {
+            const driver = typeof item === 'string'
+                ? { id: item, name: item, label: item, phone: '', status: '', duty: '' }
+                : {
+                    id: normalize(item?.id || item?.driverId || item?.code),
+                    code: normalize(item?.code),
+                    name: normalize(item?.name || item?.fullName),
+                    label: normalize(item?.label || [item?.id || item?.driverId, item?.name || item?.fullName].filter(Boolean).join(' - ')),
+                    phone: normalize(item?.phone || item?.contact || item?.mobile),
+                    status: normalize(item?.status),
+                    duty: normalize(item?.duty),
+                };
+            const key = driver.id || driver.label || driver.name;
+            return [key, driver];
+        }).filter(([key, driver]) => key && normalize(driver.status).toLowerCase() === 'active')).values());
+        const attendanceYards = Array.from(new Map((masters.yards || []).map((item) => {
+            const yard = typeof item === 'string'
+                ? { id: item, code: item, name: item, label: item, status: '', location: '' }
+                : {
+                    id: normalize(item?.id || item?.yardId || item?.code),
+                    code: normalize(item?.code),
+                    name: normalize(item?.name || item?.yardName),
+                    label: normalize(item?.label || [item?.id || item?.yardId || item?.code, item?.name || item?.yardName].filter(Boolean).join(' - ')),
+                    status: normalize(item?.status),
+                    location: normalize(item?.location || [item?.area, item?.city].filter(Boolean).join(', ')),
+                };
+            const key = yard.id || yard.code || yard.label || yard.name;
+            return [key, yard];
+        }).filter(([key, yard]) => key && normalize(yard.status).toLowerCase() !== 'draft')).values());
 
         logs = logs.map((row) => {
             const startTime = normalizeTimeValue(row?.startTime);
@@ -6906,7 +6952,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function fillDatalist(id, items) {
             const node = document.getElementById(id);
             if (!node) return;
-            node.innerHTML = unique(items || []).map((item) => `<option value="${escapeHtml(item)}"></option>`).join('');
+            node.innerHTML = (items || []).map((item) => {
+                if (typeof item === 'string') {
+                    return `<option value="${escapeHtml(item)}"></option>`;
+                }
+                const itemValue = normalize(item?.value || item?.label || item?.name || item?.id);
+                const itemLabel = normalize(item?.optionLabel || item?.meta || '');
+                return itemValue
+                    ? `<option value="${escapeHtml(itemValue)}"${itemLabel ? ` label="${escapeHtml(itemLabel)}"` : ''}></option>`
+                    : '';
+            }).join('');
         }
 
         function selectedContract() {
@@ -6928,6 +6983,40 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return normalize(assignment.driverLabel || assignment.driver || assignment.driverName || assignment.driverId || assignment.id);
         }
 
+        function driverOptionLabel(driver = {}) {
+            return normalize(driver.label || [driver.id, driver.name].filter(Boolean).join(' - '));
+        }
+
+        function driverMatches(driver, candidate) {
+            const needle = normalize(candidate).replace(/\s+/g, ' ').toLowerCase();
+            if (!driver || !needle) return false;
+            return [driver.id, driver.code, driver.name, driver.label]
+                .map((value) => normalize(value).replace(/\s+/g, ' ').toLowerCase())
+                .filter(Boolean)
+                .includes(needle);
+        }
+
+        function driverByValue(candidate) {
+            return attendanceDrivers.find((driver) => driverMatches(driver, candidate)) || null;
+        }
+
+        function yardOptionLabel(yard = {}) {
+            return normalize(yard.label || [yard.id || yard.code, yard.name].filter(Boolean).join(' - '));
+        }
+
+        function yardMatches(yard, candidate) {
+            const needle = normalize(candidate).replace(/\s+/g, ' ').toLowerCase();
+            if (!yard || !needle) return false;
+            return [yard.id, yard.code, yard.name, yard.label]
+                .map((item) => normalize(item).replace(/\s+/g, ' ').toLowerCase())
+                .filter(Boolean)
+                .includes(needle);
+        }
+
+        function yardByValue(candidate) {
+            return attendanceYards.find((yard) => yardMatches(yard, candidate)) || null;
+        }
+
         function vehiclesFor(contract) {
             if (!contract) return [];
             const fromAssignments = assignmentsFor(contract).map(vehicleLabel);
@@ -6935,54 +7024,209 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return unique([...fromAssignments, ...fromContract]);
         }
 
-        function driversFor(contract, vehicle = '') {
+        function assignmentsForVehicle(contract, vehicle = '') {
             const currentVehicle = normalize(vehicle);
             if (!contract || !currentVehicle) return [];
 
-            return unique(
-                assignmentsFor(contract)
-                    .filter((assignment) => vehicleLabel(assignment) === currentVehicle)
-                    .map(driverLabel)
-            );
+            return assignmentsFor(contract)
+                .filter((assignment) => vehicleLabel(assignment) === currentVehicle);
         }
 
-        function selectedAssignment(contract = selectedContract()) {
+        function selectedVehicleAssignment(contract = selectedContract()) {
             if (!contract) return null;
 
             const currentVehicle = normalize(value('#attendanceVehicle'));
-            const currentDriver = normalize(value('#attendanceDriver'));
-            if (!currentVehicle || !currentDriver) return null;
+            if (!currentVehicle) return null;
 
-            return assignmentsFor(contract).find((assignment) => (
-                vehicleLabel(assignment) === currentVehicle
-                && driverLabel(assignment) === currentDriver
-            )) || null;
+            return assignmentsForVehicle(contract, currentVehicle)[0] || null;
+        }
+
+        function mainDriverForVehicle(contract = selectedContract(), vehicle = value('#attendanceVehicle')) {
+            const assignment = assignmentsForVehicle(contract, vehicle)[0] || null;
+            if (!assignment) return null;
+
+            // The driver chosen in the Contract module for this exact vehicle is
+            // authoritative. A vehicle's default driver must not override it.
+            const contractDriver = {
+                id: normalize(assignment.driverId),
+                code: '',
+                name: normalize(assignment.driverName),
+                label: normalize(assignment.driverLabel || assignment.driver
+                    || [assignment.driverId, assignment.driverName].filter(Boolean).join(' - ')),
+                phone: '',
+                status: '',
+                duty: '',
+            };
+            const hasContractDriver = Boolean(contractDriver.id || contractDriver.name || contractDriver.label);
+
+            if (hasContractDriver) {
+                return driverByValue(contractDriver.id)
+                    || driverByValue(contractDriver.label)
+                    || driverByValue(contractDriver.name)
+                    || contractDriver;
+            }
+
+            // Backward compatibility for older contract payloads.
+            const embedded = assignment.mainDriver && typeof assignment.mainDriver === 'object'
+                ? assignment.mainDriver
+                : null;
+            const legacyCandidate = embedded?.label
+                || assignment.mainDriverLabel
+                || embedded?.id
+                || assignment.mainDriverId
+                || embedded?.name
+                || assignment.mainDriverName
+                || '';
+
+            return driverByValue(legacyCandidate) || (embedded ? {
+                id: normalize(embedded.id || embedded.code),
+                code: normalize(embedded.code),
+                name: normalize(embedded.name),
+                label: normalize(embedded.label || [embedded.id, embedded.name].filter(Boolean).join(' - ')),
+                phone: normalize(embedded.phone),
+                status: normalize(embedded.status),
+                duty: normalize(embedded.duty),
+            } : null);
+        }
+
+        function spareDriverOptions(contract = selectedContract(), vehicle = value('#attendanceVehicle')) {
+            const mainDriver = mainDriverForVehicle(contract, vehicle);
+            const contractDriverValues = assignmentsForVehicle(contract, vehicle)
+                .map(driverLabel)
+                .filter(Boolean);
+
+            return attendanceDrivers
+                .filter((driver) => !mainDriver || !driverMatches(driver, driverOptionLabel(mainDriver)))
+                .map((driver) => {
+                    const isContractRecommended = contractDriverValues.some((candidate) => driverMatches(driver, candidate));
+                    const isSpareDuty = normalize(driver.duty).toLowerCase().includes('spare');
+                    const priority = isContractRecommended ? 0 : (isSpareDuty ? 1 : 2);
+                    const badges = [];
+                    if (isContractRecommended) badges.push('Assigned to vehicle');
+                    else if (isSpareDuty) badges.push('Spare driver');
+                    if (driver.status) badges.push(driver.status);
+
+                    return {
+                        ...driver,
+                        value: driverOptionLabel(driver),
+                        optionLabel: badges.join(' • '),
+                        priority,
+                    };
+                })
+                .sort((a, b) => a.priority - b.priority
+                    || normalize(a.name || a.label).localeCompare(normalize(b.name || b.label)));
+        }
+
+        function renderDriverModeCards({ mainAvailable = false } = {}) {
+            $$('[data-driver-mode-card]').forEach((card) => {
+                const mode = card.dataset.driverModeCard;
+                const input = $('input[name="attendanceDriverMode"]', card);
+                const disabled = mode === 'main' && !mainAvailable;
+                card.classList.toggle('active', selectedDriverMode === mode);
+                card.classList.toggle('disabled', disabled);
+                if (input) {
+                    input.checked = selectedDriverMode === mode;
+                    input.disabled = disabled;
+                }
+            });
+        }
+
+        function setSpareDriverFieldState(enabled) {
+            const field = $('#attendanceSpareDriverField');
+            const input = $('#attendanceSpareDriver');
+            const hint = $('#attendanceSpareDriverHint');
+            field?.classList.toggle('is-disabled', !enabled);
+            field?.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+            if (input) input.disabled = !enabled;
+            if (!enabled) clearFieldError(input);
+            if (hint) {
+                hint.textContent = enabled
+                    ? 'Active spare-duty drivers appear first, followed by all other active drivers.'
+                    : 'Appears only when Assign Spare Driver is selected.';
+            }
+        }
+
+        function renderDriverAssignment({ clearSpareSelection = false } = {}) {
+            const contract = selectedContract();
+            const vehicle = normalize(value('#attendanceVehicle'));
+            const vehicleAssignment = assignmentsForVehicle(contract, vehicle)[0] || null;
+            const mainDriver = vehicleAssignment ? mainDriverForVehicle(contract, vehicle) : null;
+            const mainPanel = $('#attendanceMainDriverPanel');
+            const mainName = $('#attendanceMainDriverName');
+            const mainMeta = $('#attendanceMainDriverMeta');
+            const spareInput = $('#attendanceSpareDriver');
+
+            if (clearSpareSelection) setValue('#attendanceSpareDriver', '');
+
+            if (!contract || !vehicle || !vehicleAssignment) {
+                selectedDriverMode = 'main';
+                setValue('#attendanceDriver', '');
+                mainPanel?.classList.remove('unavailable');
+                if (mainName) mainName.textContent = vehicle ? 'Select a saved vehicle' : 'Select a vehicle first';
+                if (mainMeta) mainMeta.textContent = vehicle
+                    ? 'Choose a vehicle from the filtered contract suggestions.'
+                    : "The driver assigned in the selected contract will appear here.";
+                setSpareDriverFieldState(false);
+                renderDriverModeCards({ mainAvailable: false });
+                fillDatalist('attendanceSpareDriverList', []);
+                return;
+            }
+
+            if (!mainDriver && selectedDriverMode === 'main') {
+                selectedDriverMode = 'spare';
+            }
+
+            renderDriverModeCards({ mainAvailable: Boolean(mainDriver) });
+
+            if (mainDriver) {
+                mainPanel?.classList.remove('unavailable');
+                if (mainName) mainName.textContent = mainDriver.name || driverOptionLabel(mainDriver);
+                if (mainMeta) mainMeta.textContent = "This driver is assigned to the selected vehicle in the selected contract.";
+            } else {
+                mainPanel?.classList.add('unavailable');
+                if (mainName) mainName.textContent = 'No main driver assigned';
+                if (mainMeta) mainMeta.textContent = 'Choose Assign Spare Driver to continue.';
+            }
+
+            const spareDrivers = spareDriverOptions(contract, vehicle);
+            fillDatalist('attendanceSpareDriverList', spareDrivers);
+
+            if (selectedDriverMode === 'main' && mainDriver) {
+                setSpareDriverFieldState(false);
+                setValue('#attendanceDriver', driverOptionLabel(mainDriver));
+            } else {
+                setSpareDriverFieldState(true);
+                const selectedSpare = driverByValue(spareInput?.value || '');
+                if (spareInput?.value && !selectedSpare) {
+                    setValue('#attendanceSpareDriver', '');
+                }
+                setValue('#attendanceDriver', driverOptionLabel(selectedSpare || {}));
+            }
+        }
+
+        function setDriverMode(mode, { clearSpareSelection = false } = {}) {
+            if (!['main', 'spare'].includes(mode)) return;
+            if (mode === 'main' && !mainDriverForVehicle()) return;
+            selectedDriverMode = mode;
+            clearFieldError($('#attendanceDriverAssignmentField'));
+            renderDriverAssignment({ clearSpareSelection });
         }
 
         function populateBase() {
             fillDatalist('attendanceContractList', contractLabels);
+            fillDatalist('attendanceYardList', attendanceYards.map((yard) => ({
+                value: yardOptionLabel(yard),
+                optionLabel: [yard.location, yard.status].filter(Boolean).join(' • '),
+            })));
             fillDatalist('attendanceStatusFilterList', options.attendance_statuses || ['Initiated', 'Running', 'Completed']);
             fillDatalist('attendanceFilterContractList', contractLabels);
-        }
-
-        function populateDriversBySelection({ clearSelection = false } = {}) {
-            if (clearSelection) {
-                setValue('#attendanceDriver', '');
-            }
-
-            const found = selectedContract();
-            const drivers = driversFor(found, value('#attendanceVehicle'));
-            fillDatalist('attendanceDriverList', drivers);
-
-            if (value('#attendanceDriver') && !drivers.includes(value('#attendanceDriver'))) {
-                setValue('#attendanceDriver', '');
-            }
         }
 
         function populateByContract({ clearSelection = false } = {}) {
             if (clearSelection) {
                 setValue('#attendanceVehicle', '');
                 setValue('#attendanceDriver', '');
+                setValue('#attendanceSpareDriver', '');
             }
 
             const found = selectedContract();
@@ -6993,15 +7237,17 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 setValue('#attendanceVehicle', '');
             }
 
-            populateDriversBySelection({ clearSelection });
+            renderDriverAssignment({ clearSpareSelection: clearSelection });
         }
 
         function onContractChange() {
+            selectedDriverMode = 'main';
             populateByContract({ clearSelection: true });
         }
 
         function onVehicleChange() {
-            populateDriversBySelection({ clearSelection: true });
+            selectedDriverMode = 'main';
+            renderDriverAssignment({ clearSpareSelection: true });
         }
 
         function renderStatusChoices() {
@@ -7040,12 +7286,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function resetForm() {
             clearValidation();
-            $$('#attendanceAddPage input,#attendanceAddPage textarea').forEach((el) => { el.value = ''; });
+            $$('#attendanceAddPage input:not([type="radio"]),#attendanceAddPage textarea').forEach((el) => { el.value = ''; });
             setValue('#attendanceId', genId());
             setValue('#attendanceDate', new Date().toISOString().slice(0, 10));
             selectedStatus = 'Completed';
+            selectedDriverMode = 'main';
             populateBase();
-            populateByContract();
+            populateByContract({ clearSelection: true });
             renderStatusChoices();
             updateSummary();
         }
@@ -7053,7 +7300,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function collect(statusOverride) {
             updateSummary();
             const contract = selectedContract();
-            const assignment = selectedAssignment(contract);
+            const assignment = selectedVehicleAssignment(contract);
+            const selectedDriver = selectedDriverMode === 'main'
+                ? mainDriverForVehicle(contract, value('#attendanceVehicle'))
+                : driverByValue(value('#attendanceSpareDriver'));
+            const selectedYard = yardByValue(value('#attendanceYard'));
             const startTime = normalizeTimeValue(value('#attendanceStartTime'));
             const endTime = normalizeTimeValue(value('#attendanceEndTime'));
             return {
@@ -7064,8 +7315,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 contractParty: contract?.partyName || contract?.name || '',
                 vehicle: value('#attendanceVehicle'),
                 vehicleId: assignment?.vehicleId || '',
-                driver: value('#attendanceDriver'),
-                driverId: assignment?.driverId || '',
+                yard: selectedYard ? yardOptionLabel(selectedYard) : value('#attendanceYard'),
+                yardId: selectedYard?.id || selectedYard?.code || '',
+                driverAssignmentType: selectedDriverMode,
+                driver: driverOptionLabel(selectedDriver || {}) || value('#attendanceDriver'),
+                driverId: selectedDriver?.id || '',
                 startTime,
                 endTime,
                 status: statusOverride || selectedStatus,
@@ -7115,7 +7369,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 ['#attendanceDate', 'Date is required.'],
                 ['#attendanceContract', 'Contract is required.'],
                 ['#attendanceVehicle', 'Vehicle is required.'],
-                ['#attendanceDriver', 'Driver is required.'],
             ];
 
             required.forEach(([selector, message]) => {
@@ -7140,7 +7393,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             const contractInput = $('#attendanceContract');
             const vehicleInput = $('#attendanceVehicle');
-            const driverInput = $('#attendanceDriver');
+            const yardInput = $('#attendanceYard');
+            const driverAssignmentField = $('#attendanceDriverAssignmentField');
+            const spareDriverInput = $('#attendanceSpareDriver');
             const dateInput = $('#attendanceDate');
             const startTimeInput = $('#attendanceStartTime');
             const endTimeInput = $('#attendanceEndTime');
@@ -7166,6 +7421,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 errors.push(contractInput);
             }
 
+            if (row.yard && !yardByValue(row.yard) && !yardByValue(row.yardId)) {
+                markInvalid(yardInput, 'Select a yard from the saved yard suggestions, or leave the field blank.');
+                errors.push(yardInput);
+            }
+
             if (found && row.vehicle) {
                 const allowedVehicles = vehiclesFor(found);
                 if (!allowedVehicles.includes(row.vehicle)) {
@@ -7174,11 +7434,25 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 }
             }
 
-            if (found && row.vehicle && row.driver) {
-                const allowedDrivers = driversFor(found, row.vehicle);
-                if (!allowedDrivers.includes(row.driver)) {
-                    markInvalid(driverInput, 'Select a driver assigned to the selected contract and vehicle.');
-                    errors.push(driverInput);
+            if (!row.driverAssignmentType || !['main', 'spare'].includes(row.driverAssignmentType)) {
+                markInvalid(driverAssignmentField, 'Choose Assign Main Driver or Assign Spare Driver.');
+                errors.push(driverAssignmentField);
+            } else if (found && row.vehicle && row.driverAssignmentType === 'main') {
+                const assignedMainDriver = mainDriverForVehicle(found, row.vehicle);
+                if (!assignedMainDriver) {
+                    markInvalid(driverAssignmentField, 'This contract has no driver assigned to the selected vehicle. Choose Assign Spare Driver.');
+                    errors.push(driverAssignmentField);
+                } else if (!driverMatches(assignedMainDriver, row.driver) && !driverMatches(assignedMainDriver, row.driverId)) {
+                    markInvalid(driverAssignmentField, "The selected driver does not match the driver assigned in the selected contract.");
+                    errors.push(driverAssignmentField);
+                }
+            } else if (found && row.vehicle && row.driverAssignmentType === 'spare') {
+                const selectedSpareDriver = driverByValue(row.driver) || driverByValue(row.driverId);
+                const allowedSpareDrivers = spareDriverOptions(found, row.vehicle);
+                const isAllowed = selectedSpareDriver && allowedSpareDrivers.some((driver) => driverMatches(driver, selectedSpareDriver.id) || driverMatches(driver, selectedSpareDriver.label));
+                if (!row.driver || !selectedSpareDriver || !isAllowed) {
+                    markInvalid(spareDriverInput, 'Select a valid active spare or other driver from the searchable driver list.');
+                    errors.push(spareDriverInput);
                 }
             }
 
@@ -7211,40 +7485,37 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (savingLog) return;
 
             const isDraft = statusOverride === 'Draft';
-            const row = collect(isDraft ? 'Draft' : statusOverride);
-            if (isDraft) row.status = 'Draft';
-            if (!isDraft && !validate(row)) return;
-
-            const nextRows = rowsWithUpsertedLog(row);
             const saveButton = $('#saveAttendanceBtn');
             const draftButton = $('#saveAttendanceDraftBtn');
             const activeButton = isDraft ? draftButton : saveButton;
-            const originalText = activeButton?.textContent || '';
 
-            savingLog = true;
-            [saveButton, draftButton].filter(Boolean).forEach((button) => { button.disabled = true; });
-            if (activeButton) activeButton.textContent = isDraft ? 'Saving Draft...' : 'Saving...';
+            return window.FleetmanRunTransaction(activeButton, async () => {
+                const row = collect(isDraft ? 'Draft' : statusOverride);
+                if (isDraft) row.status = 'Draft';
+                if (!isDraft && !validate(row)) return;
 
-            try {
-                const result = await saveStore(row);
-                if (result?.syncFailed || result?.ok === false) return;
+                const nextRows = rowsWithUpsertedLog(row);
+                savingLog = true;
 
-                logs = Array.isArray(result?.rows) ? result.rows : nextRows;
-                if (window.FleetmanListAccess.canView()) {
-                    renderList();
-                    setVisible('attendanceListPage');
-                    toast(isDraft ? 'Draft saved.' : 'Attendance saved successfully.');
-                } else {
-                    logs = [];
-                    resetForm();
-                    setVisible('attendanceAddPage');
-                    toast(window.FleetmanListAccess.savedMessage('Attendance', isDraft));
+                try {
+                    const result = await saveStore(row);
+                    if (result?.syncFailed || result?.ok === false) return;
+
+                    logs = Array.isArray(result?.rows) ? result.rows : nextRows;
+                    if (window.FleetmanListAccess.canView()) {
+                        renderList();
+                        setVisible('attendanceListPage');
+                        toast(isDraft ? 'Draft saved.' : 'Attendance saved successfully.');
+                    } else {
+                        logs = [];
+                        resetForm();
+                        setVisible('attendanceAddPage');
+                        toast(window.FleetmanListAccess.savedMessage('Attendance', isDraft));
+                    }
+                } finally {
+                    savingLog = false;
                 }
-            } finally {
-                savingLog = false;
-                [saveButton, draftButton].filter(Boolean).forEach((button) => { button.disabled = false; });
-                if (activeButton) activeButton.textContent = originalText;
-            }
+            }, { loadingText: isDraft ? 'Saving Draft...' : 'Saving...' });
         }
 
         function loadSample() {
@@ -7259,7 +7530,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             selectedStatus = 'Completed';
             renderStatusChoices();
             updateSummary();
-            toast('Select the contract, vehicle, and driver from the searchable lists.');
+            toast('Select the contract and vehicle, then use the main driver or choose a spare driver.');
         }
 
         function badgeClass(status) {
@@ -7275,7 +7546,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 <td>${window.FleetmanCreatedAtCell(row.createdAt || row.created_at, row.creatorName || row.createdBy)}</td>
                 <td><div class="list-cell"><div class="list-icon">📝</div><div><b>${escapeHtml(row.logId)}</b><br><small>${escapeHtml(row.date)}</small></div></div></td>
                 <td>${escapeHtml(row.date || '-')}<br><small>${escapeHtml(row.startTime || '-')} to ${escapeHtml(row.endTime || '-')}</small></td>
-                <td><b>${escapeHtml(row.contract || '-')}</b><br><small>${escapeHtml(row.vehicle || '-')}</small></td>
+                <td><b>${escapeHtml(row.contract || '-')}</b><br><small>${escapeHtml(row.vehicle || '-')}</small>${row.yard ? `<br><small>Yard: ${escapeHtml(row.yard)}</small>` : ''}</td>
                 <td><b>${escapeHtml(row.driver || '-')}</b></td>
                 <td>${escapeHtml(row.hours || '0h 0m')}</td>
                 <td><span class="badge ${cls}">${escapeHtml(row.status || '-')}</span></td>
@@ -7293,7 +7564,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const status = value('#attendanceFilterStatus');
             const contract = value('#attendanceFilterContract');
             const rows = logs.filter((row) => {
-                const haystack = [row.logId, row.contract, row.contractId, row.contractParty, row.vehicle, row.driver].join(' ').toLowerCase();
+                const haystack = [row.logId, row.contract, row.contractId, row.contractParty, row.vehicle, row.yard, row.yardId, row.driver].join(' ').toLowerCase();
                 return (!q || haystack.includes(q)) && (!status || row.status === status) && (!contract || row.contract === contract);
             });
             const tbody = $('#attendanceTbody');
@@ -7326,49 +7597,42 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return;
             }
 
-            transitioningLogs.add(id);
-            const originalText = triggerButton?.textContent || '';
-            if (triggerButton) {
-                triggerButton.disabled = true;
-                triggerButton.textContent = action === 'start' ? 'Starting...' : 'Ending...';
-            }
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                transitioningLogs.add(id);
+                try {
+                    const previousLogs = JSON.parse(JSON.stringify(logs));
+                    const now = normalizeTimeValue(new Date());
+                    const updated = { ...current, savedAt: new Date().toISOString() };
 
-            const previousLogs = JSON.parse(JSON.stringify(logs));
-            const now = normalizeTimeValue(new Date());
-            const updated = { ...current, savedAt: new Date().toISOString() };
+                    if (action === 'start') {
+                        updated.startTime = now;
+                        updated.endTime = '';
+                        updated.status = 'Running';
+                        updated.hours = '0h 0m';
+                        updated.startedAt = new Date().toISOString();
+                    } else {
+                        updated.endTime = now;
+                        updated.status = 'Completed';
+                        updated.hours = calcHours(updated.startTime, updated.endTime);
+                        updated.endedAt = new Date().toISOString();
+                    }
 
-            if (action === 'start') {
-                updated.startTime = now;
-                updated.endTime = '';
-                updated.status = 'Running';
-                updated.hours = '0h 0m';
-                updated.startedAt = new Date().toISOString();
-            } else {
-                updated.endTime = now;
-                updated.status = 'Completed';
-                updated.hours = calcHours(updated.startTime, updated.endTime);
-                updated.endedAt = new Date().toISOString();
-            }
+                    logs[index] = updated;
 
-            logs[index] = updated;
+                    const result = await saveStore(updated);
+                    if (result?.syncFailed || result?.ok === false) {
+                        logs = previousLogs;
+                        renderList();
+                        return;
+                    }
 
-            const result = await saveStore(updated);
-            if (result?.syncFailed || result?.ok === false) {
-                logs = previousLogs;
-                transitioningLogs.delete(id);
-                renderList();
-                return;
-            }
-
-            if (Array.isArray(result?.rows)) logs = result.rows;
-            transitioningLogs.delete(id);
-            renderList();
-            toast(action === 'start' ? `Trip started at ${now}.` : `Trip completed at ${now}.`);
-
-            if (triggerButton) {
-                triggerButton.disabled = false;
-                triggerButton.textContent = originalText;
-            }
+                    if (Array.isArray(result?.rows)) logs = result.rows;
+                    renderList();
+                    toast(action === 'start' ? `Trip started at ${now}.` : `Trip completed at ${now}.`);
+                } finally {
+                    transitioningLogs.delete(id);
+                }
+            }, { loadingText: action === 'start' ? 'Starting...' : 'Ending...' });
         }
 
         function editLog(id) {
@@ -7380,8 +7644,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#attendanceContract', row.contract);
             populateByContract();
             setValue('#attendanceVehicle', row.vehicle);
-            onVehicleChange();
-            setValue('#attendanceDriver', row.driver);
+            setValue('#attendanceYard', row.yard || row.yardId || '');
+            renderDriverAssignment({ clearSpareSelection: true });
+            const assignedMainDriver = mainDriverForVehicle();
+            const inferredMode = row.driverAssignmentType
+                || (assignedMainDriver && (driverMatches(assignedMainDriver, row.driver) || driverMatches(assignedMainDriver, row.driverId)) ? 'main' : 'spare');
+            selectedDriverMode = inferredMode === 'main' && assignedMainDriver ? 'main' : 'spare';
+            if (selectedDriverMode === 'spare') {
+                setValue('#attendanceSpareDriver', row.driver || row.driverId || '');
+            }
+            renderDriverAssignment();
             setTimeValue('#attendanceStartTime', row.startTime);
             setTimeValue('#attendanceEndTime', row.endTime);
             selectedStatus = row.status === 'Draft' ? 'Initiated' : row.status;
@@ -7396,26 +7668,28 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (row) window.FleetmanDetailViewer?.show('Driver Attendance Details', row);
         }
 
-        async function deleteLog(id) {
+        async function deleteLog(id, triggerButton = null) {
             if (!confirm('Delete this attendance record?')) return;
 
-            const nextRows = logs.filter((row) => row.logId !== id);
-            const endpoint = String(attendanceResources.destroy_template || '')
-                .replace('__CODE__', encodeURIComponent(id));
-            const result = endpoint
-                ? await attendanceRequest(endpoint, { method: 'DELETE' }, 'The attendance record could not be deleted.')
-                : await syncResource('driver_attendance', nextRows);
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                const nextRows = logs.filter((row) => row.logId !== id);
+                const endpoint = String(attendanceResources.destroy_template || '')
+                    .replace('__CODE__', encodeURIComponent(id));
+                const result = endpoint
+                    ? await attendanceRequest(endpoint, { method: 'DELETE' }, 'The attendance record could not be deleted.')
+                    : await syncResource('driver_attendance', nextRows);
 
-            if (result?.syncFailed || result?.ok === false) return;
+                if (result?.syncFailed || result?.ok === false) return;
 
-            logs = Array.isArray(result?.rows) ? result.rows : nextRows;
-            renderList();
-            toast(result?.message || 'Attendance deleted.');
+                logs = Array.isArray(result?.rows) ? result.rows : nextRows;
+                renderList();
+                toast(result?.message || 'Attendance deleted.');
+            }, { loadingText: 'Deleting...' });
         }
 
         function exportLogs() {
-            const rows = [['Attendance ID', 'Date', 'Contract', 'Contract ID', 'Vehicle', 'Vehicle ID', 'Driver', 'Driver ID', 'Start Time', 'End Time', 'Status', 'Hours', 'Notes']];
-            logs.forEach((row) => rows.push([row.logId, row.date, row.contract, row.contractId, row.vehicle, row.vehicleId, row.driver, row.driverId, row.startTime, row.endTime, row.status, row.hours, row.notes]));
+            const rows = [['Attendance ID', 'Date', 'Contract', 'Contract ID', 'Vehicle', 'Vehicle ID', 'Yard', 'Yard ID', 'Driver Assignment', 'Driver', 'Driver ID', 'Start Time', 'End Time', 'Status', 'Hours', 'Notes']];
+            logs.forEach((row) => rows.push([row.logId, row.date, row.contract, row.contractId, row.vehicle, row.vehicleId, row.yard || '', row.yardId || '', row.driverAssignmentType || '', row.driver, row.driverId, row.startTime, row.endTime, row.status, row.hours, row.notes]));
             exportCsv(rows, 'fleetman-driver-attendance-list.csv');
         }
 
@@ -7423,6 +7697,24 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         $('#attendanceContract')?.addEventListener('input', onContractChange);
         $('#attendanceVehicle')?.addEventListener('change', onVehicleChange);
         $('#attendanceVehicle')?.addEventListener('input', onVehicleChange);
+        $('#attendanceYard')?.addEventListener('change', () => {
+            const selectedYard = yardByValue(value('#attendanceYard'));
+            if (selectedYard) setValue('#attendanceYard', yardOptionLabel(selectedYard));
+            clearFieldError($('#attendanceYard'));
+        });
+        $$('input[name="attendanceDriverMode"]').forEach((input) => input.addEventListener('change', () => {
+            if (input.checked) setDriverMode(input.value);
+        }));
+        $('#attendanceSpareDriver')?.addEventListener('input', () => {
+            const selectedDriver = driverByValue(value('#attendanceSpareDriver'));
+            setValue('#attendanceDriver', driverOptionLabel(selectedDriver || {}));
+            clearFieldError($('#attendanceSpareDriver'));
+            clearFieldError($('#attendanceDriverAssignmentField'));
+        });
+        $('#attendanceSpareDriver')?.addEventListener('change', () => {
+            const selectedDriver = driverByValue(value('#attendanceSpareDriver'));
+            setValue('#attendanceDriver', driverOptionLabel(selectedDriver || {}));
+        });
         ['#attendanceStartTime', '#attendanceEndTime'].forEach((selector) => $(selector)?.addEventListener('input', updateSummary));
         $('#resetAttendanceBtn')?.addEventListener('click', resetForm);
         $('#saveAttendanceBtn')?.addEventListener('click', () => saveLog());
@@ -7468,7 +7760,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const edit = event.target.closest('.edit-attendance');
             if (edit) editLog(edit.dataset.id);
             const del = event.target.closest('.delete-attendance');
-            if (del) deleteLog(del.dataset.id);
+            if (del) deleteLog(del.dataset.id, del);
         });
 
         populateBase();
@@ -7641,10 +7933,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const endpoint = resources?.master_data?.sync;
             if (!endpoint) {
                 toast('Master Data route is missing. Please check routes/web.php.');
-                return;
+                return Promise.resolve({ ok: false });
             }
 
-            fetch(endpoint, {
+            return fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -7671,8 +7963,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                         fuelUnits = Array.isArray(payload.masterData.fuel_units) ? payload.masterData.fuel_units : fuelUnits;
                         renderAll();
                     }
+                    return { ok: true, payload };
                 })
-                .catch((error) => toast(error.message || 'Could not save master data to database.'));
+                .catch((error) => {
+                    toast(error.message || 'Could not save master data to database.');
+                    return { ok: false, error };
+                });
         }
 
         async function saveDocumentName(row, editingCode = '') {
@@ -8382,147 +8678,167 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             $('#driverContactTypeMasterName')?.focus();
         }
 
-        $('#vehicleCategoryMasterForm')?.addEventListener('submit', (event) => {
+        async function runMasterFormTransaction(event, task) {
             event.preventDefault();
-            const row = collectVehicleCategory();
-            if (!row) return;
-            const editingCode = value('#vehicleCategoryEditingCode');
-            vehicleCategories = upsertRow(vehicleCategories, row, editingCode);
-            if (editingCode && editingCode !== row.code) {
-                vehicleSubCategories = vehicleSubCategories.map((subRow) => subRow.vehicleCategoryCode === editingCode ? { ...subRow, vehicleCategoryCode: row.code, vehicleCategoryName: row.name } : subRow);
-            }
-            resetVehicleCategoryForm();
-            renderAll();
-            saveStore();
-            toast('Vehicle category saved to database.');
+            const form = event.currentTarget;
+            const submitter = event.submitter || form?.querySelector('button[type="submit"], input[type="submit"]');
+            return window.FleetmanRunTransaction(submitter, task, {
+                scope: form,
+                loadingText: buttonLabelForMaster(submitter).includes('update') ? 'Updating...' : 'Saving...',
+            });
+        }
+
+        function buttonLabelForMaster(button) {
+            return String(button?.textContent || button?.value || '').trim().toLowerCase();
+        }
+
+        $('#vehicleCategoryMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectVehicleCategory();
+                if (!row) return;
+                const editingCode = value('#vehicleCategoryEditingCode');
+                vehicleCategories = upsertRow(vehicleCategories, row, editingCode);
+                if (editingCode && editingCode !== row.code) {
+                    vehicleSubCategories = vehicleSubCategories.map((subRow) => subRow.vehicleCategoryCode === editingCode ? { ...subRow, vehicleCategoryCode: row.code, vehicleCategoryName: row.name } : subRow);
+                }
+                resetVehicleCategoryForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Vehicle category saved to database.');
+            });
         });
 
-        $('#vehicleSubCategoryMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectVehicleSubCategory();
-            if (!row) return;
-            vehicleSubCategories = upsertRow(vehicleSubCategories, row, value('#vehicleSubCategoryEditingCode'));
-            resetVehicleSubCategoryForm();
-            renderAll();
-            saveStore();
-            toast('Vehicle sub category saved to database.');
+        $('#vehicleSubCategoryMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectVehicleSubCategory();
+                if (!row) return;
+                vehicleSubCategories = upsertRow(vehicleSubCategories, row, value('#vehicleSubCategoryEditingCode'));
+                resetVehicleSubCategoryForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Vehicle sub category saved to database.');
+            });
         });
 
-        $('#partyTypeMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectPartyType();
-            if (!row) return;
-            partyTypes = upsertRow(partyTypes, row, value('#partyTypeEditingCode'));
-            resetPartyTypeForm();
-            renderAll();
-            saveStore();
-            toast('Party type saved to database.');
+        $('#partyTypeMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectPartyType();
+                if (!row) return;
+                partyTypes = upsertRow(partyTypes, row, value('#partyTypeEditingCode'));
+                resetPartyTypeForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Party type saved to database.');
+            });
         });
 
         $('#documentNameMasterForm')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const row = collectDocumentName();
-            if (!row) return;
+            await runMasterFormTransaction(event, async () => {
+                const row = collectDocumentName();
+                if (!row) return;
 
-            const editingCode = value('#documentNameEditingCode');
-            const previousRows = documentNames.slice();
-            const nextRows = upsertRow(documentNames, row, editingCode);
-            if (nextRows === documentNames) return;
+                const editingCode = value('#documentNameEditingCode');
+                const previousRows = documentNames.slice();
+                const nextRows = upsertRow(documentNames, row, editingCode);
+                if (nextRows === documentNames) return;
 
-            documentNames = nextRows;
-            renderDocumentNames();
-
-            const saveButton = $('#saveDocumentNameMasterBtn');
-            if (saveButton) saveButton.disabled = true;
-
-            try {
-                await saveDocumentName(row, editingCode);
-                resetDocumentNameForm();
-                toast('Document type saved to database.');
-            } catch (error) {
-                documentNames = previousRows;
+                documentNames = nextRows;
                 renderDocumentNames();
-                toast(error.message || 'Document type could not be saved.');
-            } finally {
-                if (saveButton) saveButton.disabled = false;
-            }
+
+                try {
+                    await saveDocumentName(row, editingCode);
+                    resetDocumentNameForm();
+                    toast('Document type saved to database.');
+                } catch (error) {
+                    documentNames = previousRows;
+                    renderDocumentNames();
+                    toast(error.message || 'Document type could not be saved.');
+                }
+            });
         });
 
-        $('#licenceTypeMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectLicenceType();
-            if (!row) return;
-            licenceTypes = upsertRow(licenceTypes, row, value('#licenceTypeEditingCode'));
-            resetLicenceTypeForm();
-            renderAll();
-            saveStore();
-            toast('Licence type saved to database.');
+        $('#licenceTypeMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectLicenceType();
+                if (!row) return;
+                licenceTypes = upsertRow(licenceTypes, row, value('#licenceTypeEditingCode'));
+                resetLicenceTypeForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Licence type saved to database.');
+            });
         });
 
-        $('#fuelTypeMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectFuelType();
-            if (!row) return;
-            fuelTypes = upsertRow(fuelTypes, row, value('#fuelTypeEditingCode'));
-            resetFuelTypeForm();
-            renderAll();
-            saveStore();
-            toast('Fuel type saved to database.');
+        $('#fuelTypeMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectFuelType();
+                if (!row) return;
+                fuelTypes = upsertRow(fuelTypes, row, value('#fuelTypeEditingCode'));
+                resetFuelTypeForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Fuel type saved to database.');
+            });
         });
 
-        $('#fuelUnitMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectFuelUnit();
-            if (!row) return;
-            fuelUnits = upsertRow(fuelUnits, row, value('#fuelUnitEditingCode'));
-            resetFuelUnitForm();
-            renderAll();
-            saveStore();
-            toast('Fuel unit saved to database.');
+        $('#fuelUnitMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectFuelUnit();
+                if (!row) return;
+                fuelUnits = upsertRow(fuelUnits, row, value('#fuelUnitEditingCode'));
+                resetFuelUnitForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Fuel unit saved to database.');
+            });
         });
 
-        $('#paymentTypeMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectPaymentType();
-            if (!row) return;
-            paymentTypes = upsertRow(paymentTypes, row, value('#paymentTypeEditingCode'));
-            resetPaymentTypeForm();
-            renderAll();
-            saveStore();
-            toast('Payment type saved to database.');
+        $('#paymentTypeMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectPaymentType();
+                if (!row) return;
+                paymentTypes = upsertRow(paymentTypes, row, value('#paymentTypeEditingCode'));
+                resetPaymentTypeForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Payment type saved to database.');
+            });
         });
 
-        $('#clientTypeMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectClientType();
-            if (!row) return;
-            clientTypes = upsertRow(clientTypes, row, value('#clientTypeEditingCode'));
-            resetClientTypeForm();
-            renderAll();
-            saveStore();
-            toast('Client type saved to database.');
+        $('#clientTypeMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectClientType();
+                if (!row) return;
+                clientTypes = upsertRow(clientTypes, row, value('#clientTypeEditingCode'));
+                resetClientTypeForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Client type saved to database.');
+            });
         });
 
-        $('#contactMethodMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectContactMethod();
-            if (!row) return;
-            contactMethods = upsertRow(contactMethods, row, value('#contactMethodEditingCode'));
-            resetContactMethodForm();
-            renderAll();
-            saveStore();
-            toast('Contact method saved to database.');
+        $('#contactMethodMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectContactMethod();
+                if (!row) return;
+                contactMethods = upsertRow(contactMethods, row, value('#contactMethodEditingCode'));
+                resetContactMethodForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Contact method saved to database.');
+            });
         });
 
-        $('#driverContactTypeMasterForm')?.addEventListener('submit', (event) => {
-            event.preventDefault();
-            const row = collectDriverContactType();
-            if (!row) return;
-            driverContactTypes = upsertRow(driverContactTypes, row, value('#driverContactTypeEditingCode'));
-            resetDriverContactTypeForm();
-            renderAll();
-            saveStore();
-            toast('Driver contact type saved to database.');
+        $('#driverContactTypeMasterForm')?.addEventListener('submit', async (event) => {
+            await runMasterFormTransaction(event, async () => {
+                const row = collectDriverContactType();
+                if (!row) return;
+                driverContactTypes = upsertRow(driverContactTypes, row, value('#driverContactTypeEditingCode'));
+                resetDriverContactTypeForm();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast('Driver contact type saved to database.');
+            });
         });
 
         $('#resetVehicleCategoryMasterBtn')?.addEventListener('click', resetVehicleCategoryForm);
@@ -8609,40 +8925,47 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         bindMasterCodeGenerator('#fuelUnitMasterName', '#fuelUnitMasterCode', '#fuelUnitEditingCode');
         bindMasterCodeGenerator('#paymentTypeName', '#paymentTypeCode');
 
+        async function runMasterDelete(button, confirmationMessage, mutate, successMessage) {
+            if (!button || !confirm(confirmationMessage)) return;
+            await window.FleetmanRunTransaction(button, async () => {
+                mutate();
+                renderAll();
+                const result = await saveStore();
+                if (result?.ok) toast(successMessage);
+            }, { loadingText: 'Deleting...' });
+        }
+
         document.addEventListener('click', async (event) => {
             const editVehicleCategoryBtn = event.target.closest('[data-master-edit-vehicle-category]');
             if (editVehicleCategoryBtn) editVehicleCategory(editVehicleCategoryBtn.dataset.masterEditVehicleCategory);
 
             const deleteVehicleCategoryBtn = event.target.closest('[data-master-delete-vehicle-category]');
-            if (deleteVehicleCategoryBtn && confirm('Delete this vehicle category from master data? Related sub categories will also be removed.')) {
-                const deletingCode = deleteVehicleCategoryBtn.dataset.masterDeleteVehicleCategory;
-                vehicleCategories = vehicleCategories.filter((row) => row.code !== deletingCode);
-                vehicleSubCategories = vehicleSubCategories.filter((row) => row.vehicleCategoryCode !== deletingCode);
-                renderAll();
-                saveStore();
-                toast('Vehicle category deleted from database.');
+            if (deleteVehicleCategoryBtn) {
+                await runMasterDelete(deleteVehicleCategoryBtn, 'Delete this vehicle category from master data? Related sub categories will also be removed.', () => {
+                    const deletingCode = deleteVehicleCategoryBtn.dataset.masterDeleteVehicleCategory;
+                    vehicleCategories = vehicleCategories.filter((row) => row.code !== deletingCode);
+                    vehicleSubCategories = vehicleSubCategories.filter((row) => row.vehicleCategoryCode !== deletingCode);
+                }, 'Vehicle category deleted from database.');
             }
 
             const editVehicleSubCategoryBtn = event.target.closest('[data-master-edit-vehicle-sub-category]');
             if (editVehicleSubCategoryBtn) editVehicleSubCategory(editVehicleSubCategoryBtn.dataset.masterEditVehicleSubCategory);
 
             const deleteVehicleSubCategoryBtn = event.target.closest('[data-master-delete-vehicle-sub-category]');
-            if (deleteVehicleSubCategoryBtn && confirm('Delete this vehicle sub category from master data?')) {
-                vehicleSubCategories = vehicleSubCategories.filter((row) => row.code !== deleteVehicleSubCategoryBtn.dataset.masterDeleteVehicleSubCategory);
-                renderAll();
-                saveStore();
-                toast('Vehicle sub category deleted from database.');
+            if (deleteVehicleSubCategoryBtn) {
+                await runMasterDelete(deleteVehicleSubCategoryBtn, 'Delete this vehicle sub category from master data?', () => {
+                    vehicleSubCategories = vehicleSubCategories.filter((row) => row.code !== deleteVehicleSubCategoryBtn.dataset.masterDeleteVehicleSubCategory);
+                }, 'Vehicle sub category deleted from database.');
             }
 
             const editPartyBtn = event.target.closest('[data-master-edit-party]');
             if (editPartyBtn) editParty(editPartyBtn.dataset.masterEditParty);
 
             const deletePartyBtn = event.target.closest('[data-master-delete-party]');
-            if (deletePartyBtn && confirm('Delete this party type from master data?')) {
-                partyTypes = partyTypes.filter((row) => row.code !== deletePartyBtn.dataset.masterDeleteParty);
-                renderAll();
-                saveStore();
-                toast('Party type deleted from database.');
+            if (deletePartyBtn) {
+                await runMasterDelete(deletePartyBtn, 'Delete this party type from master data?', () => {
+                    partyTypes = partyTypes.filter((row) => row.code !== deletePartyBtn.dataset.masterDeleteParty);
+                }, 'Party type deleted from database.');
             }
 
             const editDocumentBtn = event.target.closest('[data-master-edit-document]');
@@ -8655,23 +8978,21 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 const documentLabel = deletingRow?.name ? ` “${deletingRow.name}”` : '';
 
                 if (confirm(`Delete Document Type${documentLabel}? Only this selected row will be deleted.`)) {
-                    deleteDocumentBtn.disabled = true;
+                    await window.FleetmanRunTransaction(deleteDocumentBtn, async () => {
+                        try {
+                            const deletedId = await deleteDocumentName(documentId);
+                            documentNames = documentNames.filter((row) => Number(row.id) !== deletedId);
 
-                    try {
-                        const deletedId = await deleteDocumentName(documentId);
-                        documentNames = documentNames.filter((row) => Number(row.id) !== deletedId);
+                            if (deletingRow && value('#documentNameEditingCode') === deletingRow.code) {
+                                resetDocumentNameForm();
+                            }
 
-                        if (deletingRow && value('#documentNameEditingCode') === deletingRow.code) {
-                            resetDocumentNameForm();
+                            renderDocumentNames();
+                            toast('Document type deleted from database.');
+                        } catch (error) {
+                            toast(error.message || 'Document type could not be deleted.');
                         }
-
-                        renderDocumentNames();
-                        toast('Document type deleted from database.');
-                    } catch (error) {
-                        toast(error.message || 'Document type could not be deleted.');
-                    } finally {
-                        if (deleteDocumentBtn.isConnected) deleteDocumentBtn.disabled = false;
-                    }
+                    }, { loadingText: 'Deleting...' });
                 }
             }
 
@@ -8679,77 +9000,70 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (editLicenceBtn) editLicenceType(editLicenceBtn.dataset.masterEditLicence);
 
             const deleteLicenceBtn = event.target.closest('[data-master-delete-licence]');
-            if (deleteLicenceBtn && confirm('Delete this licence type from master data?')) {
-                licenceTypes = licenceTypes.filter((row) => row.code !== deleteLicenceBtn.dataset.masterDeleteLicence);
-                renderAll();
-                saveStore();
-                toast('Licence type deleted from database.');
+            if (deleteLicenceBtn) {
+                await runMasterDelete(deleteLicenceBtn, 'Delete this licence type from master data?', () => {
+                    licenceTypes = licenceTypes.filter((row) => row.code !== deleteLicenceBtn.dataset.masterDeleteLicence);
+                }, 'Licence type deleted from database.');
             }
+
             const editFuelTypeBtn = event.target.closest('[data-master-edit-fuel-type]');
             if (editFuelTypeBtn) editFuelType(editFuelTypeBtn.dataset.masterEditFuelType);
 
             const deleteFuelTypeBtn = event.target.closest('[data-master-delete-fuel-type]');
-            if (deleteFuelTypeBtn && confirm('Delete this fuel type from master data?')) {
-                fuelTypes = fuelTypes.filter((row) => row.code !== deleteFuelTypeBtn.dataset.masterDeleteFuelType);
-                renderAll();
-                saveStore();
-                toast('Fuel type deleted from database.');
+            if (deleteFuelTypeBtn) {
+                await runMasterDelete(deleteFuelTypeBtn, 'Delete this fuel type from master data?', () => {
+                    fuelTypes = fuelTypes.filter((row) => row.code !== deleteFuelTypeBtn.dataset.masterDeleteFuelType);
+                }, 'Fuel type deleted from database.');
             }
 
             const editFuelUnitBtn = event.target.closest('[data-master-edit-fuel-unit]');
             if (editFuelUnitBtn) editFuelUnit(editFuelUnitBtn.dataset.masterEditFuelUnit);
 
             const deleteFuelUnitBtn = event.target.closest('[data-master-delete-fuel-unit]');
-            if (deleteFuelUnitBtn && confirm('Delete this fuel unit from master data?')) {
-                fuelUnits = fuelUnits.filter((row) => row.code !== deleteFuelUnitBtn.dataset.masterDeleteFuelUnit);
-                renderAll();
-                saveStore();
-                toast('Fuel unit deleted from database.');
+            if (deleteFuelUnitBtn) {
+                await runMasterDelete(deleteFuelUnitBtn, 'Delete this fuel unit from master data?', () => {
+                    fuelUnits = fuelUnits.filter((row) => row.code !== deleteFuelUnitBtn.dataset.masterDeleteFuelUnit);
+                }, 'Fuel unit deleted from database.');
             }
 
             const editClientBtn = event.target.closest('[data-master-edit-client]');
             if (editClientBtn) editClientType(editClientBtn.dataset.masterEditClient);
 
             const deleteClientBtn = event.target.closest('[data-master-delete-client]');
-            if (deleteClientBtn && confirm('Delete this client type from master data?')) {
-                clientTypes = clientTypes.filter((row) => row.code !== deleteClientBtn.dataset.masterDeleteClient);
-                renderAll();
-                saveStore();
-                toast('Client type deleted from database.');
+            if (deleteClientBtn) {
+                await runMasterDelete(deleteClientBtn, 'Delete this client type from master data?', () => {
+                    clientTypes = clientTypes.filter((row) => row.code !== deleteClientBtn.dataset.masterDeleteClient);
+                }, 'Client type deleted from database.');
             }
 
             const editContactMethodBtn = event.target.closest('[data-master-edit-contact-method]');
             if (editContactMethodBtn) editContactMethod(editContactMethodBtn.dataset.masterEditContactMethod);
 
             const deleteContactMethodBtn = event.target.closest('[data-master-delete-contact-method]');
-            if (deleteContactMethodBtn && confirm('Delete this contact method from master data?')) {
-                contactMethods = contactMethods.filter((row) => row.code !== deleteContactMethodBtn.dataset.masterDeleteContactMethod);
-                renderAll();
-                saveStore();
-                toast('Contact method deleted from database.');
+            if (deleteContactMethodBtn) {
+                await runMasterDelete(deleteContactMethodBtn, 'Delete this contact method from master data?', () => {
+                    contactMethods = contactMethods.filter((row) => row.code !== deleteContactMethodBtn.dataset.masterDeleteContactMethod);
+                }, 'Contact method deleted from database.');
             }
-
 
             const editPaymentTypeBtn = event.target.closest('[data-master-edit-payment-type]');
             if (editPaymentTypeBtn) editPaymentType(editPaymentTypeBtn.dataset.masterEditPaymentType);
 
             const deletePaymentTypeBtn = event.target.closest('[data-master-delete-payment-type]');
-            if (deletePaymentTypeBtn && confirm('Delete this payment type from master data? Existing trip records will keep their saved payment method.')) {
-                paymentTypes = paymentTypes.filter((row) => row.code !== deletePaymentTypeBtn.dataset.masterDeletePaymentType);
-                renderAll();
-                saveStore();
-                toast('Payment type deleted from database.');
+            if (deletePaymentTypeBtn) {
+                await runMasterDelete(deletePaymentTypeBtn, 'Delete this payment type from master data? Existing trip records will keep their saved payment method.', () => {
+                    paymentTypes = paymentTypes.filter((row) => row.code !== deletePaymentTypeBtn.dataset.masterDeletePaymentType);
+                }, 'Payment type deleted from database.');
             }
 
             const editDriverContactTypeBtn = event.target.closest('[data-master-edit-driver-contact-type]');
             if (editDriverContactTypeBtn) editDriverContactType(editDriverContactTypeBtn.dataset.masterEditDriverContactType);
 
             const deleteDriverContactTypeBtn = event.target.closest('[data-master-delete-driver-contact-type]');
-            if (deleteDriverContactTypeBtn && confirm('Delete this driver contact type from master data?')) {
-                driverContactTypes = driverContactTypes.filter((row) => row.code !== deleteDriverContactTypeBtn.dataset.masterDeleteDriverContactType);
-                renderAll();
-                saveStore();
-                toast('Driver contact type deleted from database.');
+            if (deleteDriverContactTypeBtn) {
+                await runMasterDelete(deleteDriverContactTypeBtn, 'Delete this driver contact type from master data?', () => {
+                    driverContactTypes = driverContactTypes.filter((row) => row.code !== deleteDriverContactTypeBtn.dataset.masterDeleteDriverContactType);
+                }, 'Driver contact type deleted from database.');
             }
         });
 
@@ -9259,17 +9573,20 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function saveContract(savedAs) {
-            await uploadManager.waitForInputs($$('.contractDocFile'));
-            if (documentSelects.hasDuplicates('#contractDocuments', '.contractDocName')) {
-                toast('Each contract document name can be selected only once.');
-                return;
-            }
-            const row = collectContract(savedAs);
-            if (!validateContract(row, savedAs)) return;
-            const previousContracts = JSON.parse(JSON.stringify(contracts || []));
-            upsertLocal(row);
-            syncContracts(row.contractId)
-                .then(() => {
+            const saveButton = savedAs === 'Draft' ? $('#saveContractDraftBtn') : $('#submitContractBtn');
+            return window.FleetmanRunTransaction(saveButton, async () => {
+                await uploadManager.waitForInputs($$('.contractDocFile'));
+                if (documentSelects.hasDuplicates('#contractDocuments', '.contractDocName')) {
+                    toast('Each contract document name can be selected only once.');
+                    return;
+                }
+                const row = collectContract(savedAs);
+                if (!validateContract(row, savedAs)) return;
+                const previousContracts = JSON.parse(JSON.stringify(contracts || []));
+                upsertLocal(row);
+
+                try {
+                    await syncContracts(row.contractId);
                     if (window.FleetmanListAccess.canView()) {
                         currentPage = 1;
                         renderList();
@@ -9281,12 +9598,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                         setPage('contractCreatePage');
                         toast(window.FleetmanListAccess.savedMessage('Contract', savedAs === 'Draft'));
                     }
-                })
-                .catch((error) => {
+                } catch (error) {
                     contracts = previousContracts;
                     renderList();
                     toast(error.message || 'Contract save failed. Please check server connection.');
-                });
+                }
+            }, { loadingText: savedAs === 'Draft' ? 'Saving Draft...' : 'Submitting...' });
         }
 
         function filteredContracts() {
@@ -9401,16 +9718,19 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setPage('contractCreatePage');
         }
 
-        function deleteContract(id) {
+        async function deleteContract(id, triggerButton = null) {
             if (!confirm('Delete this contract?')) return;
-            contracts = contracts.filter((row) => row.contractId !== id);
-            syncContracts().then(() => {
-                renderList();
-                toast('Contract deleted.');
-            }).catch(() => {
-                renderList();
-                toast('Deleted locally, but database sync failed.');
-            });
+            return window.FleetmanRunTransaction(triggerButton, async () => {
+                contracts = contracts.filter((row) => row.contractId !== id);
+                try {
+                    await syncContracts();
+                    renderList();
+                    toast('Contract deleted.');
+                } catch (_) {
+                    renderList();
+                    toast('Deleted locally, but database sync failed.');
+                }
+            }, { loadingText: 'Deleting...' });
         }
 
         function loadExisting() {
@@ -9467,7 +9787,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (edit) editContract(edit.dataset.id);
 
             const del = event.target.closest('.delete-contract');
-            if (del) deleteContract(del.dataset.id);
+            if (del) deleteContract(del.dataset.id, del);
         });
 
         $('#contractParty')?.addEventListener('change', () => {

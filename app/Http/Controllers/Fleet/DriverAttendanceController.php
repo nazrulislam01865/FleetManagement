@@ -182,6 +182,8 @@ class DriverAttendanceController extends FleetBaseController
         $errors = [];
         $masters = $this->attendanceMastersFromDatabase();
         $contracts = collect($masters['contracts'] ?? []);
+        $drivers = collect($masters['drivers'] ?? [])->filter(fn ($driver) => is_array($driver));
+        $yards = collect($masters['yards'] ?? [])->filter(fn ($yard) => is_array($yard));
         $allowedStatuses = $this->values('attendance_status');
         if ($allowedStatuses === []) {
             $allowedStatuses = ['Initiated', 'Running', 'Completed'];
@@ -235,6 +237,26 @@ class DriverAttendanceController extends FleetBaseController
                 $errors["rows.$index.status"] = 'Select a valid attendance status.';
             }
 
+            $yardText = trim((string) ($row['yard'] ?? ''));
+            $yardId = trim((string) ($row['yardId'] ?? ''));
+            if ($yardText !== '' || $yardId !== '') {
+                $selectedYard = $yards->first(function (array $yard) use ($yardText, $yardId): bool {
+                    $aliases = [
+                        $yard['label'] ?? null,
+                        $yard['id'] ?? null,
+                        $yard['code'] ?? null,
+                        $yard['name'] ?? null,
+                    ];
+
+                    return ($yardText !== '' && $this->matchesAttendanceValue($yardText, $aliases))
+                        || ($yardId !== '' && $this->matchesAttendanceValue($yardId, $aliases));
+                });
+
+                if (! $selectedYard) {
+                    $errors["rows.$index.yard"] = 'Select a yard from the saved yard list.';
+                }
+            }
+
             $contractText = trim((string) ($row['contract'] ?? ''));
             if ($contractText === '') {
                 continue;
@@ -270,14 +292,72 @@ class DriverAttendanceController extends FleetBaseController
             }
 
             $driverText = trim((string) ($row['driver'] ?? ''));
-            if ($driverText !== '' && ! $vehicleAssignments->contains(function (array $assignment) use ($driverText): bool {
-                return $this->matchesAttendanceValue($driverText, [
+            $driverId = trim((string) ($row['driverId'] ?? ''));
+            $assignmentType = strtolower(trim((string) ($row['driverAssignmentType'] ?? '')));
+
+            if ($assignmentType !== '' && ! in_array($assignmentType, ['main', 'spare'], true)) {
+                $errors["rows.$index.driverAssignmentType"] = 'Select Assign Main Driver or Assign Spare Driver.';
+                continue;
+            }
+
+            if ($assignmentType === 'main') {
+                $vehicleAssignment = $vehicleAssignments->first();
+                $mainDriverValues = $this->attendanceContractDriverValues($vehicleAssignment);
+                $hasMainDriver = collect($mainDriverValues)->contains(fn ($value) => filled($value));
+                $matchesMainDriver = ($driverText !== '' && $this->matchesAttendanceValue($driverText, $mainDriverValues))
+                    || ($driverId !== '' && $this->matchesAttendanceValue($driverId, $mainDriverValues));
+
+                if (! $hasMainDriver) {
+                    $errors["rows.$index.driver"] = 'This contract has no driver assigned to the selected vehicle. Choose Assign Spare Driver.';
+                } elseif (! $matchesMainDriver) {
+                    $errors["rows.$index.driver"] = 'The selected driver does not match the driver assigned to this vehicle in the selected contract.';
+                }
+            } elseif ($assignmentType === 'spare') {
+                $selectedDriver = $drivers->first(function (array $driver) use ($driverText, $driverId): bool {
+                    $aliases = [
+                        $driver['label'] ?? null,
+                        $driver['id'] ?? null,
+                        $driver['code'] ?? null,
+                        $driver['name'] ?? null,
+                    ];
+
+                    return ($driverText !== '' && $this->matchesAttendanceValue($driverText, $aliases))
+                        || ($driverId !== '' && $this->matchesAttendanceValue($driverId, $aliases));
+                });
+
+                if (! $selectedDriver) {
+                    $errors["rows.$index.driver"] = 'Select a valid active spare or other driver from the driver list.';
+                    continue;
+                }
+
+                $vehicleAssignment = $vehicleAssignments->first();
+                $mainDriverValues = $this->attendanceContractDriverValues($vehicleAssignment);
+                $selectedDriverValues = [
+                    $selectedDriver['label'] ?? null,
+                    $selectedDriver['id'] ?? null,
+                    $selectedDriver['code'] ?? null,
+                    $selectedDriver['name'] ?? null,
+                ];
+                $isMainDriver = collect($selectedDriverValues)
+                    ->filter(fn ($value) => filled($value))
+                    ->contains(fn ($value) => $this->matchesAttendanceValue((string) $value, $mainDriverValues));
+
+                if ($isMainDriver) {
+                    $errors["rows.$index.driver"] = 'Use Assign Main Driver for the driver assigned in this contract, or choose a different spare driver.';
+                }
+            } elseif ($driverText !== '' && ! $vehicleAssignments->contains(function (array $assignment) use ($driverText, $driverId): bool {
+                $aliases = [
                     $assignment['driverLabel'] ?? null,
                     $assignment['driver'] ?? null,
                     $assignment['driverName'] ?? null,
                     $assignment['driverId'] ?? null,
-                ]);
+                ];
+
+                return $this->matchesAttendanceValue($driverText, $aliases)
+                    || ($driverId !== '' && $this->matchesAttendanceValue($driverId, $aliases));
             })) {
+                // Backward compatibility for logs created before the main/spare
+                // assignment option was introduced.
                 $errors["rows.$index.driver"] = 'Select a driver assigned to the selected contract and vehicle.';
             }
         }
@@ -304,11 +384,52 @@ class DriverAttendanceController extends FleetBaseController
         return $row;
     }
 
+    /**
+     * Return the authoritative driver aliases for one contract/vehicle assignment.
+     *
+     * The driver selected in the Contract module is the main driver for Add Log.
+     * Legacy mainDriver fields are used only as a fallback for older stored data
+     * that may not contain the direct contract driver fields.
+     */
+    protected function attendanceContractDriverValues(array $assignment): array
+    {
+        $contractDriverValues = [
+            $assignment['driverLabel'] ?? null,
+            $assignment['driver'] ?? null,
+            $assignment['driverId'] ?? null,
+            $assignment['driverName'] ?? null,
+        ];
+
+        if (collect($contractDriverValues)->contains(fn ($value) => filled($value))) {
+            return $contractDriverValues;
+        }
+
+        $legacyMainDriver = is_array($assignment['mainDriver'] ?? null)
+            ? $assignment['mainDriver']
+            : [];
+
+        return [
+            $legacyMainDriver['label'] ?? null,
+            $legacyMainDriver['id'] ?? null,
+            $legacyMainDriver['code'] ?? null,
+            $legacyMainDriver['name'] ?? null,
+            $assignment['mainDriverLabel'] ?? null,
+            $assignment['mainDriverId'] ?? null,
+            $assignment['mainDriverName'] ?? null,
+        ];
+    }
+
     protected function matchesAttendanceValue(string $needle, array $values): bool
     {
-        return collect($values)
+        $normalizedNeedle = strtolower((string) preg_replace('/\s+/', ' ', trim($needle)));
+
+        return $normalizedNeedle !== '' && collect($values)
             ->filter(fn ($value) => filled($value))
-            ->contains(fn ($value) => trim((string) $value) === $needle);
+            ->contains(function ($value) use ($normalizedNeedle): bool {
+                $normalizedValue = strtolower((string) preg_replace('/\s+/', ' ', trim((string) $value)));
+
+                return $normalizedValue === $normalizedNeedle;
+            });
     }
 
     protected function isValidDate(string $value): bool

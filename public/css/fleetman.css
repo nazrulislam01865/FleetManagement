@@ -1198,3 +1198,202 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
 .contract-expiring-mobile,.yard-expiring-mobile{grid-column:1/-1}
 .contract-expiring-mobile>.expiring-docs-cell,.yard-expiring-mobile>.expiring-docs-cell{margin-top:7px;max-width:none}
 @media(max-width:760px){.expiring-docs-cell{min-width:170px}.expiring-doc-name{max-width:100%}}
+
+/* Add Log: vehicle-driven main/spare driver assignment */
+#attendanceAddPage .attendance-driver-assignment{margin-top:16px}
+#attendanceAddPage .attendance-driver-mode-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+}
+#attendanceAddPage .attendance-driver-mode-card{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-height:72px;
+    padding:13px 15px;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:#fff;
+    cursor:pointer;
+    transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;
+}
+#attendanceAddPage .attendance-driver-mode-card:hover{border-color:#9fc5f8;background:#fbfdff}
+#attendanceAddPage .attendance-driver-mode-card.active{
+    border-color:var(--blue);
+    background:var(--soft);
+    box-shadow:0 0 0 2px rgba(11,99,206,.08);
+}
+#attendanceAddPage .attendance-driver-mode-card.disabled{
+    cursor:not-allowed;
+    opacity:.58;
+    background:#f7f8fa;
+}
+#attendanceAddPage .attendance-driver-mode-card input{
+    width:18px;
+    height:18px;
+    min-height:0;
+    margin:0;
+    flex:0 0 auto;
+    accent-color:var(--blue);
+}
+#attendanceAddPage .attendance-driver-mode-icon{
+    width:34px;
+    height:34px;
+    border-radius:10px;
+    display:grid;
+    place-items:center;
+    flex:0 0 auto;
+    background:#eef4ff;
+    font-size:18px;
+}
+#attendanceAddPage .attendance-driver-mode-copy{min-width:0}
+#attendanceAddPage .attendance-driver-mode-copy b{display:block;color:#344054;font-size:14px}
+#attendanceAddPage .attendance-driver-mode-card.active .attendance-driver-mode-copy b{color:#0b63ce}
+#attendanceAddPage .attendance-driver-mode-copy small{display:block;margin-top:3px;color:#667085;font-size:11px;line-height:1.35}
+#attendanceAddPage .attendance-driver-result-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    margin-top:12px;
+    align-items:start;
+}
+#attendanceAddPage .attendance-main-driver-panel{
+    display:flex;
+    gap:12px;
+    align-items:center;
+    min-height:82px;
+    padding:13px 15px;
+    border:1px solid #d9e8fb;
+    border-radius:14px;
+    background:#f4f8ff;
+}
+#attendanceAddPage .attendance-main-driver-panel.unavailable{
+    border-color:#f2c9c5;
+    background:#fff8f7;
+}
+#attendanceAddPage .attendance-driver-result-icon{
+    width:36px;
+    height:36px;
+    border-radius:11px;
+    display:grid;
+    place-items:center;
+    flex:0 0 auto;
+    background:#e8f2ff;
+    font-size:19px;
+}
+#attendanceAddPage .attendance-main-driver-panel small{
+    display:block;
+    margin-bottom:3px;
+    color:#667085;
+    font-size:10px;
+    font-weight:900;
+    letter-spacing:.04em;
+    text-transform:uppercase;
+}
+#attendanceAddPage .attendance-main-driver-panel b{display:block;color:#23324a;font-size:14px}
+#attendanceAddPage .attendance-main-driver-panel span{display:block;margin-top:3px;color:#667085;font-size:11px;line-height:1.35}
+#attendanceAddPage #attendanceSpareDriverField{margin:0;transition:opacity .15s ease,filter .15s ease}
+#attendanceAddPage #attendanceSpareDriverField.is-disabled{opacity:.62}
+#attendanceAddPage #attendanceSpareDriverField.is-disabled input{cursor:not-allowed;background:#f4f6f8;color:#98a2b3}
+#attendanceDriverAssignmentField.field-invalid .attendance-driver-mode-grid{
+    border:1px solid #d92d20;
+    border-radius:16px;
+    padding:7px;
+    box-shadow:0 0 0 3px rgba(217,45,32,.12);
+    background:#fffafa;
+}
+@media(max-width:760px){
+    #attendanceAddPage .attendance-driver-mode-grid,
+    #attendanceAddPage .attendance-driver-result-grid{grid-template-columns:1fr}
+}
+
+/* Global save/submit transaction protection. */
+.fleet-transaction-active{
+    display:inline-flex!important;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    cursor:wait!important;
+}
+.fleet-transaction-disabled,
+.fleet-transaction-scope-busy button:disabled,
+.fleet-transaction-scope-busy input[type="submit"]:disabled,
+.fleet-transaction-scope-busy input[type="button"]:disabled{
+    cursor:not-allowed!important;
+    pointer-events:none!important;
+    opacity:.68;
+}
+.fleet-transaction-spinner{
+    width:14px;
+    height:14px;
+    flex:0 0 14px;
+    border:2px solid currentColor;
+    border-right-color:transparent;
+    border-radius:50%;
+    animation:fleet-transaction-spin .7s linear infinite;
+}
+@keyframes fleet-transaction-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.fleet-transaction-spinner{animation-duration:1.4s}}
+
+/* Logged-in user profile and account menu */
+.fleet-notification-slot{gap:10px}
+.account-card-link{text-decoration:none;color:inherit;transition:background .16s ease,border-color .16s ease}
+.account-card-link:hover,.account-card-link:focus-visible{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.16);outline:none}
+.sidebar-account-avatar{width:36px;height:36px;border-radius:50%;background:#dff2ff;color:#172033}
+.fleet-user-menu{position:relative;z-index:42}
+.fleet-user-menu>summary{list-style:none}
+.fleet-user-menu>summary::-webkit-details-marker{display:none}
+.fleet-user-menu-trigger{min-height:44px;display:flex;align-items:center;gap:9px;padding:4px 10px 4px 5px;border:1px solid #d9e1ec;border-radius:14px;background:#fff;box-shadow:0 8px 22px rgba(16,24,40,.11);cursor:pointer;user-select:none}
+.fleet-user-menu-trigger:hover,.fleet-user-menu-trigger:focus-visible{background:#f8fbff;outline:none;border-color:#b7c7dc}
+.fleet-user-menu-avatar{width:34px;height:34px;border-radius:50%}
+.fleet-user-menu-copy{display:grid;min-width:0;line-height:1.15}
+.fleet-user-menu-copy strong{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#172033}
+.fleet-user-menu-copy small{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#667085;margin-top:3px}
+.fleet-user-menu-arrow{font-size:11px;color:#667085;transition:transform .16s ease}
+.fleet-user-menu[open] .fleet-user-menu-arrow{transform:rotate(180deg)}
+.fleet-user-menu-panel{position:absolute;top:52px;right:0;width:min(290px,calc(100vw - 28px));padding:8px;background:#fff;border:1px solid #dce4ef;border-radius:16px;box-shadow:0 20px 55px rgba(16,24,40,.22)}
+.fleet-user-menu-head{display:flex;align-items:center;gap:10px;padding:9px 9px 12px;margin-bottom:6px;border-bottom:1px solid #edf0f5;min-width:0}
+.fleet-user-menu-head>div{min-width:0}
+.fleet-user-menu-head strong,.fleet-user-menu-head small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fleet-user-menu-head strong{font-size:13px;color:#172033}
+.fleet-user-menu-head small{font-size:11px;color:#667085;margin-top:3px}
+.fleet-user-menu-link,.fleet-user-menu-logout button{width:100%;display:flex;align-items:center;gap:10px;border:0;border-radius:10px;background:transparent;padding:10px 11px;color:#344054;font-size:13px;font-weight:800;text-decoration:none;text-align:left;cursor:pointer}
+.fleet-user-menu-link:hover,.fleet-user-menu-link:focus-visible,.fleet-user-menu-logout button:hover,.fleet-user-menu-logout button:focus-visible{background:#f2f7ff;color:#0b63ce;outline:none}
+.fleet-user-menu-logout{margin:4px 0 0;padding-top:5px;border-top:1px solid #edf0f5}
+.fleet-user-menu-logout button{color:#b42318}
+.fleet-profile-page{max-width:1220px;width:100%}
+.fleet-profile-grid{display:grid;grid-template-columns:minmax(280px,.78fr) minmax(0,1.35fr);gap:18px;align-items:start}
+.fleet-profile-actions-column{min-width:0}
+.fleet-profile-summary-card{position:sticky;top:18px}
+.fleet-profile-identity{display:flex;align-items:center;gap:15px;padding-bottom:18px;margin-bottom:16px;border-bottom:1px solid #edf0f5}
+.fleet-profile-avatar{width:82px;height:82px;border-radius:22px;box-shadow:0 8px 24px rgba(16,24,40,.12)}
+.fleet-profile-kicker{display:block;color:#0b63ce;font-size:10px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.fleet-profile-identity h2{font-size:21px;margin:0 0 5px;line-height:1.25}
+.fleet-profile-identity p{margin:0;color:#667085;font-size:13px;overflow-wrap:anywhere}
+.fleet-profile-info-list{display:grid;gap:0;border:1px solid #e4e7ec;border-radius:14px;overflow:hidden}
+.fleet-profile-info-row{display:grid;grid-template-columns:115px minmax(0,1fr);gap:12px;padding:13px 14px;border-bottom:1px solid #edf0f5;background:#fff}
+.fleet-profile-info-row:last-child{border-bottom:0}
+.fleet-profile-info-row span{color:#667085;font-size:12px;font-weight:750}
+.fleet-profile-info-row strong{font-size:13px;color:#172033;overflow-wrap:anywhere}
+.fleet-profile-readonly-note{margin-top:15px;padding:12px 13px;border:1px dashed #cbdcf5;border-radius:13px;background:#f8fbff;color:#475467;font-size:12px;line-height:1.5}
+.fleet-profile-form{display:grid;gap:15px}
+.fleet-profile-form>.btn{justify-self:start;min-width:190px}
+.fleet-user-identity-cell{display:flex;align-items:center;gap:10px;min-width:180px}
+.fleet-user-identity-cell>div{min-width:0}
+.fleet-user-identity-cell b{display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+@media(max-width:1050px){
+    .fleet-user-menu-trigger{width:40px;height:40px;min-height:40px;padding:3px;border-radius:12px;justify-content:center}
+    .fleet-user-menu-avatar{width:32px;height:32px}
+    .fleet-user-menu-copy,.fleet-user-menu-arrow{display:none}
+    .fleet-user-menu-panel{top:47px}
+    .fleet-profile-grid{grid-template-columns:1fr}
+    .fleet-profile-summary-card{position:static}
+}
+@media(max-width:650px){
+    .fleet-notification-slot{gap:7px}
+    .fleet-profile-identity{align-items:flex-start}
+    .fleet-profile-avatar{width:68px;height:68px;border-radius:18px}
+    .fleet-profile-info-row{grid-template-columns:1fr;gap:4px}
+    .fleet-profile-form>.btn{width:100%;min-width:0}
+}

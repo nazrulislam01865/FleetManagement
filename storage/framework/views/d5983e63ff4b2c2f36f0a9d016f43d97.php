@@ -9,6 +9,9 @@
         $fleetCssVersion = file_exists(public_path('css/fleetman.css'))
             ? filemtime(public_path('css/fleetman.css'))
             : null;
+        $fleetTransactionGuardJsVersion = file_exists(public_path('js/fleetman-transaction-guard.js'))
+            ? filemtime(public_path('js/fleetman-transaction-guard.js'))
+            : null;
     ?>
     <link rel="stylesheet" href="<?php echo e(asset('css/fleetman.css')); ?><?php echo e($fleetCssVersion ? '?v='.$fleetCssVersion : ''); ?>">
 </head>
@@ -62,6 +65,7 @@
 <?php unset($__componentOriginal36bae408b14af0e7fcaf0db48c860d89); ?>
 <?php endif; ?>
     </main>
+    <script src="<?php echo e(asset('js/fleetman-transaction-guard.js')); ?><?php echo e($fleetTransactionGuardJsVersion ? '?v='.$fleetTransactionGuardJsVersion : ''); ?>"></script>
 </body>
 </html>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FleetManagement/resources/views/layouts/auth.blade.php ENDPATH**/ ?>

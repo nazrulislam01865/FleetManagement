@@ -11,13 +11,6 @@
         </div>
     </a>
 
-    <div class="account-card">
-        <div class="avatar"><?php echo e($account['avatar'] ?? '👤'); ?></div>
-        <div>
-            <b><?php echo e($account['title'] ?? 'My Account'); ?></b>
-            <span><?php echo e($account['name'] ?? 'User'); ?></span>
-        </div>
-    </div>
 
     <nav class="menu-nav">
         <?php $__currentLoopData = $menuGroups; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $group): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>

@@ -10,13 +10,6 @@
         </div>
     </a>
 
-    <div class="account-card">
-        <div class="avatar">{{ $account['avatar'] ?? '👤' }}</div>
-        <div>
-            <b>{{ $account['title'] ?? 'My Account' }}</b>
-            <span>{{ $account['name'] ?? 'User' }}</span>
-        </div>
-    </div>
 
     <nav class="menu-nav">
         @foreach ($menuGroups as $group)

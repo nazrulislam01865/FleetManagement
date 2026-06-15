@@ -119,10 +119,27 @@
                                 </div>
                             </td>
                             <td>
-                                <b>{{ $user->name }}</b>
-                                @if(auth()->id() === $user->id)
-                                    <span class="badge soft">You</span>
-                                @endif
+                                @php
+                                    $userNameParts = preg_split('/\s+/u', trim((string) $user->name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                                    $userInitials = collect($userNameParts)
+                                        ->take(2)
+                                        ->map(fn ($part) => mb_strtoupper(mb_substr((string) $part, 0, 1)))
+                                        ->join('');
+                                @endphp
+                                <div class="fleet-user-identity-cell">
+                                    <x-fleetman.entity-avatar
+                                        :file="$user->profile_photo_path ?? ''"
+                                        :fallback="$userInitials !== '' ? $userInitials : 'U'"
+                                        :alt="$user->name.' profile picture'"
+                                        size="compact"
+                                    />
+                                    <div>
+                                        <b>{{ $user->name }}</b>
+                                        @if(auth()->id() === $user->id)
+                                            <span class="badge soft">You</span>
+                                        @endif
+                                    </div>
+                                </div>
                             </td>
                             <td>{{ $user->email }}</td>
                             <td>

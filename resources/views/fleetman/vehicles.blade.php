@@ -126,6 +126,7 @@
 
                 <div class="save-bar">
                     <button type="button" class="btn light" id="clearVehicleBtn">Clear</button>
+                    <button type="button" class="btn secondary" id="saveVehicleDraftBtn">Save as Draft</button>
                     <button type="button" class="btn primary" id="saveVehicleBtn">Save Vehicle & Go to List</button>
                 </div>
             </div>
@@ -162,7 +163,7 @@
                 <input id="vehicleSearch" placeholder="Search by vehicle, registration, driver">
                 <x-fleetman.select id="vehicleFilterCategory" label="" :options="$fleetman['options']['vehicle_categories']" placeholder="All categories" />
                 <x-fleetman.select id="vehicleFilterFuel" label="" :options="$fleetman['options']['fuel_types']" placeholder="All fuel" />
-                <select id="vehicleFilterStatus"><option value="">All status</option><option>Active</option><option>Needs document review</option></select>
+                <select id="vehicleFilterStatus"><option value="">All status</option><option>Active</option><option>Draft</option><option>Needs document review</option></select>
                 <button type="button" class="btn light" id="clearVehicleFiltersBtn">Clear</button>
             </div>
             <div class="table-wrap">

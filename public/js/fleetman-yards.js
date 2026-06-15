@@ -354,64 +354,62 @@
     }
 
     async function saveYard(savedAs) {
-        if (!canManage) {
-            toast('Your role has read-only access to this module.');
-            return;
-        }
-
-        await uploadManager?.waitForInputs?.($$('.yard-document-input'));
-        if (!validateForm(savedAs)) return;
-
-        const endpoint = editingCode
-            ? String(resources.update_template || '').replace('__CODE__', encodeURIComponent(editingCode))
-            : resources.store;
-        if (!endpoint) {
-            toast('Yard database endpoint is unavailable.');
-            return;
-        }
-
-        const submitButtons = [$('#saveYardDraftBtn'), $('#submitYardBtn')].filter(Boolean);
-        submitButtons.forEach((button) => { button.disabled = true; });
-
-        try {
-            const response = await fetch(endpoint, {
-                method: editingCode ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken(),
-                },
-                body: JSON.stringify(payload(savedAs)),
-            });
-            let result = {};
-            try { result = await response.json(); } catch (_) {}
-            if (!response.ok || !result.record) {
-                throw new Error(responseMessage(result, 'The yard could not be saved.'));
+        const saveButton = savedAs === 'Draft' ? $('#saveYardDraftBtn') : $('#submitYardBtn');
+        return window.FleetmanRunTransaction(saveButton, async () => {
+            if (!canManage) {
+                toast('Your role has read-only access to this module.');
+                return;
             }
 
-            const savedRecord = result.record;
-            const index = records.findIndex((record) => String(record.yardId) === String(savedRecord.yardId));
-            if (index >= 0) records[index] = savedRecord;
-            else records.unshift(savedRecord);
-            nextYardId = String(result.nextYardId || nextYardId);
-            editingCode = null;
-            if (window.FleetmanListAccess?.canView?.()) {
-                toast(result.message || 'Yard saved successfully.');
-                renderList();
-                navigateTo('list');
-                resetForm();
-            } else {
-                records.splice(0, records.length);
-                resetForm();
-                navigateTo('add');
-                toast(window.FleetmanListAccess?.savedMessage?.('Yard')
-                    || 'Yard saved successfully. You are not allowed to view the list. The Add page has been reopened.');
+            await uploadManager?.waitForInputs?.($$('.yard-document-input'));
+            if (!validateForm(savedAs)) return;
+
+            const endpoint = editingCode
+                ? String(resources.update_template || '').replace('__CODE__', encodeURIComponent(editingCode))
+                : resources.store;
+            if (!endpoint) {
+                toast('Yard database endpoint is unavailable.');
+                return;
             }
-        } catch (error) {
-            toast(error?.message || 'The yard could not be saved.');
-        } finally {
-            submitButtons.forEach((button) => { button.disabled = false; });
-        }
+
+            try {
+                const response = await fetch(endpoint, {
+                    method: editingCode ? 'PUT' : 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken(),
+                    },
+                    body: JSON.stringify(payload(savedAs)),
+                });
+                let result = {};
+                try { result = await response.json(); } catch (_) {}
+                if (!response.ok || !result.record) {
+                    throw new Error(responseMessage(result, 'The yard could not be saved.'));
+                }
+
+                const savedRecord = result.record;
+                const index = records.findIndex((record) => String(record.yardId) === String(savedRecord.yardId));
+                if (index >= 0) records[index] = savedRecord;
+                else records.unshift(savedRecord);
+                nextYardId = String(result.nextYardId || nextYardId);
+                editingCode = null;
+                if (window.FleetmanListAccess?.canView?.()) {
+                    toast(result.message || 'Yard saved successfully.');
+                    renderList();
+                    navigateTo('list');
+                    resetForm();
+                } else {
+                    records.splice(0, records.length);
+                    resetForm();
+                    navigateTo('add');
+                    toast(window.FleetmanListAccess?.savedMessage?.('Yard')
+                        || 'Yard saved successfully. You are not allowed to view the list. The Add page has been reopened.');
+                }
+            } catch (error) {
+                toast(error?.message || 'The yard could not be saved.');
+            }
+        }, { loadingText: savedAs === 'Draft' ? 'Saving Draft...' : 'Submitting...' });
     }
 
     function filteredRecords() {
@@ -520,25 +518,28 @@
         navigateTo('add');
     }
 
-    async function deleteYard(code) {
+    async function deleteYard(code, triggerButton = null) {
         if (!canManage) return;
         const record = records.find((item) => String(item.yardId) === String(code));
         if (!record || !window.confirm(`Delete ${record.yardName || code}? This action cannot be undone.`)) return;
-        const endpoint = String(resources.destroy_template || '').replace('__CODE__', encodeURIComponent(code));
-        try {
-            const response = await fetch(endpoint, {
-                method: 'DELETE',
-                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
-            });
-            let result = {};
-            try { result = await response.json(); } catch (_) {}
-            if (!response.ok) throw new Error(responseMessage(result, 'The yard could not be deleted.'));
-            records = records.filter((item) => String(item.yardId) !== String(code));
-            renderList();
-            toast(result.message || 'Yard deleted successfully.');
-        } catch (error) {
-            toast(error?.message || 'The yard could not be deleted.');
-        }
+
+        return window.FleetmanRunTransaction(triggerButton, async () => {
+            const endpoint = String(resources.destroy_template || '').replace('__CODE__', encodeURIComponent(code));
+            try {
+                const response = await fetch(endpoint, {
+                    method: 'DELETE',
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken() },
+                });
+                let result = {};
+                try { result = await response.json(); } catch (_) {}
+                if (!response.ok) throw new Error(responseMessage(result, 'The yard could not be deleted.'));
+                records = records.filter((item) => String(item.yardId) !== String(code));
+                renderList();
+                toast(result.message || 'Yard deleted successfully.');
+            } catch (error) {
+                toast(error?.message || 'The yard could not be deleted.');
+            }
+        }, { loadingText: 'Deleting...' });
     }
 
     function exportCsv() {
@@ -628,7 +629,7 @@
             const edit = event.target.closest('.edit-yard');
             if (edit) { editYard(edit.dataset.yardId); return; }
             const removeYard = event.target.closest('.delete-yard');
-            if (removeYard) { deleteYard(removeYard.dataset.yardId); return; }
+            if (removeYard) { deleteYard(removeYard.dataset.yardId, removeYard); return; }
             const page = event.target.closest('[data-yard-page]');
             if (page) { currentPage = integer(page.dataset.yardPage) || 1; renderList(); }
         });

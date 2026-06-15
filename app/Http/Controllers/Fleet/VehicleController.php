@@ -256,8 +256,10 @@ class VehicleController extends FleetBaseController
 
             // Older and unchanged records remain readable and deletable. Only
             // the row being created or edited receives current master-data validation.
+            $isDraft = strcasecmp((string) ($row['status'] ?? ''), 'Draft') === 0;
             if (($strictValidationLookup !== null && ! isset($strictValidationLookup[$index]))
-                || (int) ($row['vehicleValidationVersion'] ?? 0) < 1) {
+                || (int) ($row['vehicleValidationVersion'] ?? 0) < 1
+                || $isDraft) {
                 continue;
             }
 

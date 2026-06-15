@@ -8,6 +8,7 @@
     @php
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
         $fleetJsVersion = filemtime(public_path('js/fleetman.js'));
+        $fleetTransactionGuardJsVersion = filemtime(public_path('js/fleetman-transaction-guard.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
         $fleetRbacJsVersion = filemtime(public_path('js/fleetman-rbac.js'));
         $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
@@ -88,8 +89,9 @@
         </script>
 
         <main class="main-content">
-            <div class="fleet-notification-slot" aria-label="Notification controls">
+            <div class="fleet-notification-slot" aria-label="Notification and account controls">
                 <x-fleetman.notification-bell />
+                <x-fleetman.user-menu :account="$account" />
             </div>
 
             <div class="fleet-main-body">
@@ -104,6 +106,7 @@
     <script>
         window.FLEETMAN = @json($fleetman ?? []);
     </script>
+    <script src="{{ asset('js/fleetman-transaction-guard.js') }}?v={{ $fleetTransactionGuardJsVersion }}"></script>
     <script src="{{ asset('js/fleetman.js') }}?v={{ $fleetJsVersion }}"></script>
     @if(session('login_notice'))
         <script>

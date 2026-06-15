@@ -21,7 +21,7 @@ class TripController extends FleetBaseController
     protected string $resource = 'trips';
     protected string $idKey = 'tripId';
     protected string $nameKey = 'purpose';
-    protected string $statusKey = 'status';
+    protected string $statusKey = 'savedAs';
     protected string $modelClass = FleetTrip::class;
 
     public function sync(Request $request): JsonResponse
@@ -40,48 +40,90 @@ class TripController extends FleetBaseController
             ->values()
             ->all();
 
-        $validator = Validator::make(['rows' => $normalizedRows], [
-            'rows' => ['present', 'array'],
-            'rows.*' => ['array'],
-            'rows.*.tripValidationVersion' => ['nullable', 'integer', 'min:1'],
-            'rows.*.tripId' => ['required', 'string', 'max:100', 'distinct'],
-            'rows.*.startDate' => ['required', 'date'],
-            'rows.*.vehicle' => ['required', 'string', 'max:255'],
-            'rows.*.vehicleId' => ['nullable', 'string', 'max:100'],
-            'rows.*.driver' => ['required', 'string', 'max:255'],
-            'rows.*.driverId' => ['nullable', 'string', 'max:100'],
-            'rows.*.purpose' => ['nullable', 'string', 'max:255'],
-            'rows.*.client' => ['nullable', 'string', 'max:255'],
-            'rows.*.clientId' => ['nullable', 'string', 'max:100'],
-            'rows.*.fromLocation' => ['nullable', 'string', 'max:255'],
-            'rows.*.toLocation' => ['nullable', 'string', 'max:255'],
-            'rows.*.odoStart' => ['nullable', 'numeric', 'min:0'],
-            'rows.*.odoEnd' => ['nullable', 'numeric', 'min:0'],
-            'rows.*.totalCost' => ['required', 'numeric', 'gt:0'],
-            'rows.*.payments' => ['present', 'array'],
-            'rows.*.payments.*.method' => ['required', 'string', 'max:100'],
-            'rows.*.payments.*.amount' => ['required', 'numeric', 'gt:0'],
-            'rows.*.payments.*.reference' => ['nullable', 'string', 'max:255'],
-            'rows.*.details' => ['required', 'string'],
-        ], [
-            'rows.*.tripId.required' => 'Trip ID is required.',
-            'rows.*.startDate.required' => 'Start date is required.',
-            'rows.*.vehicle.required' => 'Vehicle is required.',
-            'rows.*.driver.required' => 'Driver is required.',
-            'rows.*.totalCost.required' => 'Total cost is required.',
-            'rows.*.totalCost.gt' => 'Total cost must be greater than zero.',
-            'rows.*.payments.*.method.required' => 'A payment method is required for every entered payment.',
-            'rows.*.payments.*.amount.gt' => 'Every payment amount must be greater than zero.',
-            'rows.*.details.required' => 'Trip details are required.',
-        ]);
-
         $clientIds = collect($clientMap)->pluck('id')->filter()->unique()->all();
         $existingTrips = Schema::hasTable('fleet_trips')
             ? FleetTrip::query()->get()->mapWithKeys(fn (FleetTrip $trip) => [$trip->code => $trip->payload ?? []])->all()
             : [];
 
+        $validator = Validator::make(['rows' => $normalizedRows], [
+            'rows' => ['present', 'array'],
+            'rows.*' => ['array'],
+            'rows.*.tripId' => ['required', 'string', 'max:100', 'distinct'],
+            'rows.*.savedAs' => ['required', 'in:Draft,Submitted'],
+        ], [
+            'rows.*.tripId.required' => 'Trip ID is required.',
+            'rows.*.tripId.distinct' => 'Trip ID must be unique.',
+            'rows.*.savedAs.in' => 'Trip save status must be Draft or Submitted.',
+        ]);
+
         $validator->after(function ($validator) use ($normalizedRows, $clientIds, $existingTrips): void {
             foreach ($normalizedRows as $index => $row) {
+                $isDraft = strcasecmp((string) ($row['savedAs'] ?? ''), 'Draft') === 0;
+                $rowRules = $isDraft
+                    ? [
+                        'tripValidationVersion' => ['nullable', 'integer', 'min:1'],
+                        'startDate' => ['nullable', 'date'],
+                        'vehicle' => ['nullable', 'string', 'max:255'],
+                        'vehicleId' => ['nullable', 'string', 'max:100'],
+                        'driver' => ['nullable', 'string', 'max:255'],
+                        'driverId' => ['nullable', 'string', 'max:100'],
+                        'purpose' => ['nullable', 'string', 'max:255'],
+                        'client' => ['nullable', 'string', 'max:255'],
+                        'clientId' => ['nullable', 'string', 'max:100'],
+                        'fromLocation' => ['nullable', 'string', 'max:255'],
+                        'toLocation' => ['nullable', 'string', 'max:255'],
+                        'odoStart' => ['nullable', 'numeric', 'min:0'],
+                        'odoEnd' => ['nullable', 'numeric', 'min:0'],
+                        'totalCost' => ['nullable', 'numeric', 'min:0'],
+                        'payments' => ['present', 'array'],
+                        'payments.*.method' => ['nullable', 'string', 'max:100'],
+                        'payments.*.amount' => ['nullable', 'numeric', 'min:0'],
+                        'payments.*.reference' => ['nullable', 'string', 'max:255'],
+                        'details' => ['nullable', 'string'],
+                    ]
+                    : [
+                        'tripValidationVersion' => ['nullable', 'integer', 'min:1'],
+                        'startDate' => ['required', 'date'],
+                        'vehicle' => ['required', 'string', 'max:255'],
+                        'vehicleId' => ['nullable', 'string', 'max:100'],
+                        'driver' => ['required', 'string', 'max:255'],
+                        'driverId' => ['nullable', 'string', 'max:100'],
+                        'purpose' => ['nullable', 'string', 'max:255'],
+                        'client' => ['nullable', 'string', 'max:255'],
+                        'clientId' => ['nullable', 'string', 'max:100'],
+                        'fromLocation' => ['nullable', 'string', 'max:255'],
+                        'toLocation' => ['nullable', 'string', 'max:255'],
+                        'odoStart' => ['nullable', 'numeric', 'min:0'],
+                        'odoEnd' => ['nullable', 'numeric', 'min:0'],
+                        'totalCost' => ['required', 'numeric', 'gt:0'],
+                        'payments' => ['present', 'array'],
+                        'payments.*.method' => ['required', 'string', 'max:100'],
+                        'payments.*.amount' => ['required', 'numeric', 'gt:0'],
+                        'payments.*.reference' => ['nullable', 'string', 'max:255'],
+                        'details' => ['required', 'string'],
+                    ];
+
+                $rowValidator = Validator::make($row, $rowRules, [
+                    'startDate.required' => 'Start date is required.',
+                    'vehicle.required' => 'Vehicle is required.',
+                    'driver.required' => 'Driver is required.',
+                    'totalCost.required' => 'Total cost is required.',
+                    'totalCost.gt' => 'Total cost must be greater than zero.',
+                    'payments.*.method.required' => 'A payment method is required for every entered payment.',
+                    'payments.*.amount.gt' => 'Every payment amount must be greater than zero.',
+                    'details.required' => 'Trip details are required.',
+                ]);
+
+                foreach ($rowValidator->errors()->messages() as $key => $messages) {
+                    foreach ($messages as $message) {
+                        $validator->errors()->add("rows.$index.$key", $message);
+                    }
+                }
+
+                if ($isDraft) {
+                    continue;
+                }
+
                 $existing = $existingTrips[(string) ($row['tripId'] ?? '')] ?? null;
                 $sameHistoricalClient = is_array($existing)
                     && (string) ($existing['clientId'] ?? '') === (string) ($row['clientId'] ?? '')
@@ -112,11 +154,11 @@ class TripController extends FleetBaseController
             }
         });
 
-        $validated = $validator->validate();
-        $request->merge(['rows' => $validated['rows']]);
+        $validator->validate();
+        $request->merge(['rows' => $normalizedRows]);
         $response = parent::sync($request);
 
-        $this->syncTripBalances($validated['rows']);
+        $this->syncTripBalances($normalizedRows);
 
         return $response;
     }
@@ -152,8 +194,12 @@ class TripController extends FleetBaseController
         $balanceDue = round(max(0, $totalCost - $paidAmount), 2);
         $paymentState = $balanceDue <= 0.009 ? 'Paid' : ($paidAmount > 0 ? 'Partially Paid' : 'Unpaid');
 
+        $savedAsValue = trim((string) ($row['savedAs'] ?? $row['status'] ?? 'Submitted'));
+        $savedAs = strcasecmp($savedAsValue, 'Draft') === 0 ? 'Draft' : 'Submitted';
+
         $normalized = [
             'tripValidationVersion' => isset($row['tripValidationVersion']) ? (int) $row['tripValidationVersion'] : null,
+            'savedAs' => $savedAs,
             'tripId' => trim((string) ($row['tripId'] ?? '')),
             'startDate' => (string) ($row['startDate'] ?? ''),
             'vehicle' => trim((string) ($row['vehicle'] ?? '')),
@@ -293,6 +339,11 @@ class TripController extends FleetBaseController
                 $tripId = (string) ($row['tripId'] ?? '');
                 $balance = (float) ($row['balanceDue'] ?? 0);
                 if ($tripId === '') {
+                    continue;
+                }
+
+                if (strcasecmp((string) ($row['savedAs'] ?? ''), 'Draft') === 0) {
+                    FleetDue::query()->where('code', 'DUE-TRP-'.$tripId)->delete();
                     continue;
                 }
 

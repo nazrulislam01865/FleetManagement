@@ -8,6 +8,7 @@
     <?php
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
         $fleetJsVersion = filemtime(public_path('js/fleetman.js'));
+        $fleetTransactionGuardJsVersion = filemtime(public_path('js/fleetman-transaction-guard.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
         $fleetRbacJsVersion = filemtime(public_path('js/fleetman-rbac.js'));
         $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
@@ -102,7 +103,7 @@
         </script>
 
         <main class="main-content">
-            <div class="fleet-notification-slot" aria-label="Notification controls">
+            <div class="fleet-notification-slot" aria-label="Notification and account controls">
                 <?php if (isset($component)) { $__componentOriginal5e01f85f0f00ef042f7779f4f47d8fd5 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal5e01f85f0f00ef042f7779f4f47d8fd5 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.notification-bell','data' => []] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -122,6 +123,26 @@
 <?php if (isset($__componentOriginal5e01f85f0f00ef042f7779f4f47d8fd5)): ?>
 <?php $component = $__componentOriginal5e01f85f0f00ef042f7779f4f47d8fd5; ?>
 <?php unset($__componentOriginal5e01f85f0f00ef042f7779f4f47d8fd5); ?>
+<?php endif; ?>
+                <?php if (isset($component)) { $__componentOriginalb97e3b734f0ee9386246bace7c8a3000 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalb97e3b734f0ee9386246bace7c8a3000 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.user-menu','data' => ['account' => $account]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.user-menu'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['account' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($account)]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalb97e3b734f0ee9386246bace7c8a3000)): ?>
+<?php $attributes = $__attributesOriginalb97e3b734f0ee9386246bace7c8a3000; ?>
+<?php unset($__attributesOriginalb97e3b734f0ee9386246bace7c8a3000); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalb97e3b734f0ee9386246bace7c8a3000)): ?>
+<?php $component = $__componentOriginalb97e3b734f0ee9386246bace7c8a3000; ?>
+<?php unset($__componentOriginalb97e3b734f0ee9386246bace7c8a3000); ?>
 <?php endif; ?>
             </div>
 
@@ -156,6 +177,7 @@
     <script>
         window.FLEETMAN = <?php echo json_encode($fleetman ?? [], 15, 512) ?>;
     </script>
+    <script src="<?php echo e(asset('js/fleetman-transaction-guard.js')); ?>?v=<?php echo e($fleetTransactionGuardJsVersion); ?>"></script>
     <script src="<?php echo e(asset('js/fleetman.js')); ?>?v=<?php echo e($fleetJsVersion); ?>"></script>
     <?php if(session('login_notice')): ?>
         <script>

@@ -15,6 +15,7 @@ use App\Http\Controllers\Fleet\FleetFileController;
 use App\Http\Controllers\Fleet\TemporaryUploadController;
 use App\Http\Controllers\Fleet\MasterDataController;
 use App\Http\Controllers\Fleet\NotificationController;
+use App\Http\Controllers\Fleet\ProfileController;
 use App\Http\Controllers\Fleet\ReportController;
 use App\Http\Controllers\Fleet\ReleaseTrackerController;
 use App\Http\Controllers\Fleet\RoleMatrixController;
@@ -71,6 +72,10 @@ Route::get('/', function () {
 });
 
 Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAccess::class])->group(function () {
+    Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
+    Route::put('/profile/picture', [ProfileController::class, 'updatePicture'])->name('profile.picture');
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
+
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::get('/notifications/feed', [NotificationController::class, 'feed'])->name('notifications.feed');
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');

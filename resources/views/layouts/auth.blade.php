@@ -9,6 +9,9 @@
         $fleetCssVersion = file_exists(public_path('css/fleetman.css'))
             ? filemtime(public_path('css/fleetman.css'))
             : null;
+        $fleetTransactionGuardJsVersion = file_exists(public_path('js/fleetman-transaction-guard.js'))
+            ? filemtime(public_path('js/fleetman-transaction-guard.js'))
+            : null;
     @endphp
     <link rel="stylesheet" href="{{ asset('css/fleetman.css') }}{{ $fleetCssVersion ? '?v='.$fleetCssVersion : '' }}">
 </head>
@@ -42,5 +45,6 @@
 
         <x-fleetman.footer :brand="$brand" class="login-footer" />
     </main>
+    <script src="{{ asset('js/fleetman-transaction-guard.js') }}{{ $fleetTransactionGuardJsVersion ? '?v='.$fleetTransactionGuardJsVersion : '' }}"></script>
 </body>
 </html>
