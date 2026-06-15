@@ -9,6 +9,7 @@
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
         $fleetJsVersion = filemtime(public_path('js/fleetman.js'));
         $fleetTransactionGuardJsVersion = filemtime(public_path('js/fleetman-transaction-guard.js'));
+        $fleetActionLoaderJsVersion = filemtime(public_path('js/fleetman-action-loader.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
         $fleetRbacJsVersion = filemtime(public_path('js/fleetman-rbac.js'));
         $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
@@ -225,6 +226,7 @@
     </script>
     <script src="<?php echo e(asset('js/fleetman-session-timeout.js')); ?>?v=<?php echo e($fleetSessionJsVersion); ?>"></script>
     <?php echo $__env->yieldPushContent('scripts'); ?>
+    <script src="<?php echo e(asset('js/fleetman-action-loader.js')); ?>?v=<?php echo e($fleetActionLoaderJsVersion); ?>"></script>
 </body>
 </html>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FleetManagement/resources/views/layouts/fleetman.blade.php ENDPATH**/ ?>

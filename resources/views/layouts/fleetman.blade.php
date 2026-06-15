@@ -9,6 +9,7 @@
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
         $fleetJsVersion = filemtime(public_path('js/fleetman.js'));
         $fleetTransactionGuardJsVersion = filemtime(public_path('js/fleetman-transaction-guard.js'));
+        $fleetActionLoaderJsVersion = filemtime(public_path('js/fleetman-action-loader.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
         $fleetRbacJsVersion = filemtime(public_path('js/fleetman-rbac.js'));
         $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
@@ -154,5 +155,6 @@
     </script>
     <script src="{{ asset('js/fleetman-session-timeout.js') }}?v={{ $fleetSessionJsVersion }}"></script>
     @stack('scripts')
+    <script src="{{ asset('js/fleetman-action-loader.js') }}?v={{ $fleetActionLoaderJsVersion }}"></script>
 </body>
 </html>

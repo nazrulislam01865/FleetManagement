@@ -1397,3 +1397,24 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
     .fleet-profile-info-row{grid-template-columns:1fr;gap:4px}
     .fleet-profile-form>.btn{width:100%;min-width:0}
 }
+
+/* Global View, Edit and Delete action loader. */
+.fleet-action-loading{
+    position:relative;
+    display:inline-flex!important;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    cursor:wait!important;
+}
+.fleet-action-loading::before{
+    content:"";
+    width:13px;
+    height:13px;
+    flex:0 0 13px;
+    border:2px solid currentColor;
+    border-right-color:transparent;
+    border-radius:50%;
+    animation:fleet-transaction-spin .7s linear infinite;
+}
+@media (prefers-reduced-motion:reduce){.fleet-action-loading::before{animation-duration:1.4s}}
