@@ -14,9 +14,6 @@ class EnsureFleetPermission
      */
     public function handle(Request $request, Closure $next, string $permission): Response
     {
-        // Keep role/permission defaults available after deployments that add new modules.
-        FleetRbac::syncDefaults();
-
         $user = $request->user();
 
         if (! $user) {

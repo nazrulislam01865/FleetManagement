@@ -7,7 +7,23 @@
     <title><?php echo $__env->yieldContent('title', $brand['name'] ?? 'FleetMan'); ?></title>
     <?php
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
-        $fleetJsVersion = filemtime(public_path('js/fleetman.js'));
+        $fleetPage = (string) ($fleetman['page'] ?? '');
+        $fleetCoreAsset = 'js/dist/fleetman-core.min.js';
+        // Keep the small record API source authoritative so pagination/export
+        // safeguards work even before a production asset rebuild is run.
+        $fleetRecordApiAsset = 'js/fleetman-record-api.js';
+        $fleetModuleAsset = match (true) {
+            in_array($fleetPage, ['vehicles', 'fuel-prices', 'fuel-recharge'], true) => 'js/dist/fleetman-operations.min.js',
+            in_array($fleetPage, ['vendors', 'trips', 'drivers', 'clients', 'employees', 'driver-attendance'], true) => 'js/dist/fleetman-people.min.js',
+            $fleetPage === 'master-data' => 'js/dist/fleetman-master.min.js',
+            $fleetPage === 'contracts' => 'js/dist/fleetman-contracts.min.js',
+            default => null,
+        };
+        $fleetUseSplitAssets = file_exists(public_path($fleetCoreAsset))
+            && (! $fleetModuleAsset || file_exists(public_path($fleetModuleAsset)));
+        $fleetCoreJsVersion = $fleetUseSplitAssets ? filemtime(public_path($fleetCoreAsset)) : filemtime(public_path('js/fleetman.js'));
+        $fleetRecordApiJsVersion = filemtime(public_path($fleetRecordApiAsset));
+        $fleetModuleJsVersion = $fleetUseSplitAssets && $fleetModuleAsset ? filemtime(public_path($fleetModuleAsset)) : $fleetCoreJsVersion;
         $fleetTransactionGuardJsVersion = filemtime(public_path('js/fleetman-transaction-guard.js'));
         $fleetActionLoaderJsVersion = filemtime(public_path('js/fleetman-action-loader.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
@@ -179,7 +195,15 @@
         window.FLEETMAN = <?php echo json_encode($fleetman ?? [], 15, 512) ?>;
     </script>
     <script src="<?php echo e(asset('js/fleetman-transaction-guard.js')); ?>?v=<?php echo e($fleetTransactionGuardJsVersion); ?>"></script>
-    <script src="<?php echo e(asset('js/fleetman.js')); ?>?v=<?php echo e($fleetJsVersion); ?>"></script>
+    <script src="<?php echo e(asset($fleetRecordApiAsset)); ?>?v=<?php echo e($fleetRecordApiJsVersion); ?>"></script>
+    <?php if($fleetUseSplitAssets): ?>
+        <script src="<?php echo e(asset($fleetCoreAsset)); ?>?v=<?php echo e($fleetCoreJsVersion); ?>"></script>
+        <?php if($fleetModuleAsset): ?>
+            <script src="<?php echo e(asset($fleetModuleAsset)); ?>?v=<?php echo e($fleetModuleJsVersion); ?>"></script>
+        <?php endif; ?>
+    <?php else: ?>
+        <script src="<?php echo e(asset('js/fleetman.js')); ?>?v=<?php echo e($fleetCoreJsVersion); ?>"></script>
+    <?php endif; ?>
     <?php if(session('login_notice')): ?>
         <script>
             document.addEventListener('DOMContentLoaded', function () {

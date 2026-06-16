@@ -91,7 +91,7 @@ class ReportController extends FleetBaseController
 
     private function reportPayload(string $type): array
     {
-        $records = $this->fuelRechargeRecords();
+        $records = $this->fuelRechargeRecords($type);
         $dates = $records->pluck('date')->filter()->sort()->values();
         $maxDate = $dates->last() ?: now()->toDateString();
         $minDate = $dates->first() ?: now()->copy()->subDays(6)->toDateString();
@@ -146,36 +146,95 @@ class ReportController extends FleetBaseController
 
     //     return $this->enrichReportRecords($reportableRecords);
     // }
-    private function fuelRechargeRecords(): Collection
+    private function fuelRechargeRecords(string $type): Collection
     {
-        /*
-        * Reports must use only real fuel recharge records stored in the
-        * database. Do not load sample/demo data when the table is empty.
-        */
         if (! Schema::hasTable('fleet_fuel_recharges')) {
             return collect();
         }
 
-        $records = FleetFuelRecharge::query()
+        $hasDatabaseRows = FleetFuelRecharge::query()->exists();
+        if (! $hasDatabaseRows) {
+            return collect();
+        }
+
+        $query = FleetFuelRecharge::query()
+            ->where(function ($builder) {
+                $builder->whereNull('status')
+                    ->orWhereRaw('LOWER(status) <> ?', ['draft']);
+            });
+
+        [$fromDate, $toDate] = $this->reportSqlDateRange($type, (clone $query)->max('recharge_date'));
+        if ($fromDate !== null && $toDate !== null) {
+            $query->whereBetween('recharge_date', [$fromDate, $toDate]);
+        } elseif ($fromDate !== null) {
+            $query->whereDate('recharge_date', '>=', $fromDate);
+        } elseif ($toDate !== null) {
+            $query->whereDate('recharge_date', '<=', $toDate);
+        }
+
+        $request = request();
+        $query
+            ->when($request->filled('contract'), fn ($builder) => $builder->where('contract_code', $request->string('contract')->toString()))
+            ->when($request->filled('vehicle'), fn ($builder) => $builder->where('vehicle_code', $request->string('vehicle')->toString()))
+            ->when($request->filled('driver'), fn ($builder) => $builder->where('driver_code', $request->string('driver')->toString()))
+            ->when($request->filled('status'), fn ($builder) => $builder->where('status', $request->string('status')->toString()));
+
+        $records = $query
+            ->orderBy('recharge_date')
             ->orderBy('id')
-            ->get()
+            ->get(['id', 'code', 'status', 'payload', 'recharge_date', 'total_amount', 'total_km'])
             ->map(function (FleetFuelRecharge $row): array {
-                return $this->normalizeRecharge(
-                    is_array($row->payload) ? $row->payload : [],
-                    $row->code,
-                    $row->status
-                );
+                $payload = is_array($row->payload) ? $row->payload : [];
+                if (! isset($payload['date']) && ! isset($payload['rechargeDate']) && $row->recharge_date !== null) {
+                    $payload['date'] = $row->recharge_date instanceof \DateTimeInterface
+                        ? $row->recharge_date->format('Y-m-d')
+                        : (string) $row->recharge_date;
+                }
+                if (! array_key_exists('totalAmount', $payload) && $row->total_amount !== null) {
+                    $payload['totalAmount'] = (float) $row->total_amount;
+                }
+                if (! array_key_exists('totalKm', $payload) && $row->total_km !== null) {
+                    $payload['totalKm'] = (float) $row->total_km;
+                }
+
+                return $this->normalizeRecharge($payload, $row->code, $row->status);
             });
 
         return $this->enrichReportRecords($records);
     }
 
+    private function reportSqlDateRange(string $type, mixed $latestDate): array
+    {
+        $request = request();
+        $requestedFrom = $request->input('from_date', $request->input('from'));
+        $requestedTo = $request->input('to_date', $request->input('to'));
+
+        $from = $this->safeDate($requestedFrom) ? Carbon::parse($requestedFrom) : null;
+        $to = $this->safeDate($requestedTo) ? Carbon::parse($requestedTo) : null;
+
+        // The existing report UI filters the supplied collection in the
+        // browser. When no explicit server-side dates are supplied, retain the
+        // complete historical range so old daily, weekly and monthly periods
+        // do not disappear after the performance update.
+        if ($from === null && $to === null) {
+            return [null, null];
+        }
+
+        if ($from !== null && $to !== null && $from->greaterThan($to)) {
+            [$from, $to] = [$to, $from];
+        }
+
+        return [$from?->toDateString(), $to?->toDateString()];
+    }
+
     private function enrichReportRecords(Collection $records): Collection
     {
-        $attendanceRows = $this->driverAttendanceReportRows();
+        $fromDate = $records->pluck('date')->filter()->min();
+        $toDate = $records->pluck('date')->filter()->max();
+        $attendanceRows = $this->driverAttendanceReportRows($fromDate, $toDate);
         $tripRows = null;
 
-        return $records->map(function (array $record) use ($attendanceRows, &$tripRows): array {
+        return $records->map(function (array $record) use ($attendanceRows, &$tripRows, $fromDate, $toDate): array {
             $attendance = $this->attendanceForRecord($record, $attendanceRows);
 
             if ($attendance !== null) {
@@ -198,7 +257,7 @@ class ReportController extends FleetBaseController
             // Preserve reports for old rows created before fuel amounts were
             // stored by using the previous trip-cost matching only as fallback.
             if ($totalFuelPrice <= 0) {
-                $tripRows ??= $this->tripCostReportRows();
+                $tripRows ??= $this->tripCostReportRows($fromDate, $toDate);
                 $totalFuelPrice = $this->tripCostForRecord($record, $tripRows);
             }
 
@@ -212,15 +271,20 @@ class ReportController extends FleetBaseController
         });
     }
 
-    private function driverAttendanceReportRows(): Collection
+    private function driverAttendanceReportRows(?string $fromDate = null, ?string $toDate = null): Collection
     {
         if (! Schema::hasTable('fleet_driver_attendances')) {
             return collect();
         }
 
         return FleetDriverAttendance::query()
+            ->where(function ($query) {
+                $query->whereNull('status')->orWhereRaw('LOWER(status) <> ?', ['draft']);
+            })
+            ->when($fromDate && $toDate, fn ($query) => $query->whereBetween('log_date', [$fromDate, $toDate]))
+            ->orderBy('log_date')
             ->orderBy('id')
-            ->get()
+            ->get(['id', 'code', 'status', 'payload', 'log_date', 'duration_minutes'])
             ->map(function (FleetDriverAttendance $row): ?array {
                 $payload = $row->payload ?? [];
                 if (! is_array($payload)) {
@@ -232,14 +296,17 @@ class ReportController extends FleetBaseController
                     return null;
                 }
 
-                $date = $payload['date'] ?? $payload['attendanceDate'] ?? null;
+                $date = $payload['date'] ?? $payload['attendanceDate'] ?? $row->log_date ?? null;
                 if (! $date) {
                     return null;
                 }
 
                 $start = (string) ($payload['startTime'] ?? $payload['driverStart'] ?? '');
                 $end = (string) ($payload['endTime'] ?? $payload['driverEnd'] ?? '');
-                $minutes = $this->attendanceMinutes($payload, $start, $end);
+                $minutes = (int) ($row->duration_minutes ?? 0);
+                if ($minutes <= 0) {
+                    $minutes = $this->attendanceMinutes($payload, $start, $end);
+                }
 
                 return [
                     'logId' => (string) ($payload['logId'] ?? $row->code),
@@ -259,7 +326,7 @@ class ReportController extends FleetBaseController
             ->values();
     }
 
-    private function tripCostReportRows(): Collection
+    private function tripCostReportRows(?string $fromDate = null, ?string $toDate = null): Collection
     {
         if (! Schema::hasTable('fleet_trips')) {
             return collect();
@@ -268,8 +335,15 @@ class ReportController extends FleetBaseController
         $contractAssignments = $this->contractAssignmentReportRows();
 
         return FleetTrip::query()
+            ->where(function ($query) {
+                $query->whereNull('status')->orWhereRaw('LOWER(status) <> ?', ['draft']);
+            })
+            ->when($fromDate && $toDate, function ($query) use ($fromDate, $toDate) {
+                $query->whereBetween('trip_date', [$fromDate, $toDate]);
+            })
+            ->orderBy('trip_date')
             ->orderBy('id')
-            ->get()
+            ->get(['id', 'code', 'status', 'payload', 'trip_date', 'total_cost'])
             ->map(function (FleetTrip $row) use ($contractAssignments): ?array {
                 $payload = $row->payload ?? [];
                 if (! is_array($payload)) {
@@ -283,15 +357,15 @@ class ReportController extends FleetBaseController
 
                 $trip = [
                     'tripId' => (string) ($payload['tripId'] ?? $row->code),
-                    'startDate' => $this->safeDate($payload['startDate'] ?? $payload['date'] ?? null),
-                    'endDate' => $this->safeDate($payload['endDate'] ?? $payload['startDate'] ?? $payload['date'] ?? null),
+                    'startDate' => $this->safeDate($payload['startDate'] ?? $payload['date'] ?? $row->trip_date ?? null),
+                    'endDate' => $this->safeDate($payload['endDate'] ?? $payload['startDate'] ?? $payload['date'] ?? $row->trip_date ?? null),
                     'contractId' => (string) ($payload['contractId'] ?? ''),
                     'contract' => (string) ($payload['contract'] ?? $payload['contractLabel'] ?? ''),
                     'vehicleId' => (string) ($payload['vehicleId'] ?? ''),
                     'vehicle' => (string) ($payload['vehicle'] ?? $payload['vehicleLabel'] ?? ''),
                     'driverId' => (string) ($payload['driverId'] ?? ''),
                     'driver' => (string) ($payload['driver'] ?? $payload['driverLabel'] ?? ''),
-                    'totalCost' => (float) ($payload['totalCost'] ?? $payload['tripTotalCost'] ?? 0),
+                    'totalCost' => (float) ($payload['totalCost'] ?? $payload['tripTotalCost'] ?? $row->total_cost ?? 0),
                 ];
 
                 if ($trip['totalCost'] <= 0) {

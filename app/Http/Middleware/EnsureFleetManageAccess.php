@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Support\FleetRbac;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,8 +16,6 @@ class EnsureFleetManageAccess
      */
     public function handle(Request $request, Closure $next): Response
     {
-        FleetRbac::syncDefaults();
-
         $user = $request->user();
         if (! $user) {
             abort(401);

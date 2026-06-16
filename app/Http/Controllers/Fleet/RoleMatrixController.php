@@ -23,15 +23,12 @@ class RoleMatrixController extends FleetBaseController
 
     public function index(): View
     {
-        FleetRbac::syncDefaults();
-        FleetRbac::assignDefaultRoles();
 
         return view($this->view, $this->roleMatrixViewData());
     }
 
     public function storeRole(Request $request): RedirectResponse
     {
-        FleetRbac::syncDefaults();
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:100', Rule::unique('fleet_roles', 'name')],
@@ -79,7 +76,6 @@ class RoleMatrixController extends FleetBaseController
 
     public function update(Request $request): RedirectResponse
     {
-        FleetRbac::syncDefaults();
 
         $validated = $request->validate([
             'permissions' => ['nullable', 'array'],
@@ -141,8 +137,6 @@ class RoleMatrixController extends FleetBaseController
      */
     public function storeUser(Request $request): RedirectResponse
     {
-        FleetRbac::syncDefaults();
-        FleetRbac::assignDefaultRoles();
 
         $roleIds = $this->assignableRoles($request->user())
             ->pluck('id')

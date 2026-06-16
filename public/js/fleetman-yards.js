@@ -651,5 +651,6 @@
     populateSupervisors();
     resetForm();
     renderList();
+    window.FleetmanRecordApi?.registerInfinite('yards', () => records, (rows) => { records = rows; }, renderList);
     bindEvents();
 })();

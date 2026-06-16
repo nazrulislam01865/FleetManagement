@@ -124,6 +124,9 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/yards', [YardController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':yards.view')
         ->name('yards');
+    Route::get('/yards/records', [YardController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':yards.view')
+        ->name('yards.records.index');
     Route::post('/yards', [YardController::class, 'store'])
         ->middleware(EnsureFleetPermission::class.':yards.manage')
         ->name('yards.store');
@@ -140,6 +143,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/vehicles', [VehicleController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':vehicles.view')
         ->name('vehicles');
+    Route::get('/vehicles/records', [VehicleController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':vehicles.view')
+        ->name('vehicles.records.index');
+    Route::post('/vehicles/records', [VehicleController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':vehicles.manage')
+        ->name('vehicles.records.store');
+    Route::put('/vehicles/records/{code}', [VehicleController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':vehicles.manage')
+        ->name('vehicles.records.update');
+    Route::delete('/vehicles/records/{code}', [VehicleController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':vehicles.manage')
+        ->name('vehicles.records.destroy');
     Route::get('/vehicles/{code}', [VehicleController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':vehicles.view')
         ->name('vehicles.show');
@@ -150,6 +165,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/fuel-prices', [FuelPriceController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':fuel_prices.view')
         ->name('fuel-prices');
+    Route::get('/fuel-prices/records', [FuelPriceController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':fuel_prices.view')
+        ->name('fuel-prices.records.index');
+    Route::post('/fuel-prices/records', [FuelPriceController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':fuel_prices.manage')
+        ->name('fuel-prices.records.store');
+    Route::put('/fuel-prices/records/{code}', [FuelPriceController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':fuel_prices.manage')
+        ->name('fuel-prices.records.update');
+    Route::delete('/fuel-prices/records/{code}', [FuelPriceController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':fuel_prices.manage')
+        ->name('fuel-prices.records.destroy');
     Route::get('/fuel-prices/{code}', [FuelPriceController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':fuel_prices.view')
         ->name('fuel-prices.show');
@@ -160,6 +187,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/fuel-recharge', [FuelRechargeController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':fuel_recharge.view')
         ->name('fuel-recharge');
+    Route::get('/fuel-recharge/records', [FuelRechargeController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':fuel_recharge.view')
+        ->name('fuel-recharge.records.index');
+    Route::post('/fuel-recharge/records', [FuelRechargeController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':fuel_recharge.manage')
+        ->name('fuel-recharge.records.store');
+    Route::put('/fuel-recharge/records/{code}', [FuelRechargeController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':fuel_recharge.manage')
+        ->name('fuel-recharge.records.update');
+    Route::delete('/fuel-recharge/records/{code}', [FuelRechargeController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':fuel_recharge.manage')
+        ->name('fuel-recharge.records.destroy');
     Route::get('/fuel-recharge/{code}', [FuelRechargeController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':fuel_recharge.view')
         ->name('fuel-recharge.show');
@@ -183,6 +222,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/vendors', [VendorPartyController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':vendors.view')
         ->name('vendors');
+    Route::get('/vendors/records', [VendorPartyController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':vendors.view')
+        ->name('vendors.records.index');
+    Route::post('/vendors/records', [VendorPartyController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':vendors.manage')
+        ->name('vendors.records.store');
+    Route::put('/vendors/records/{code}', [VendorPartyController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':vendors.manage')
+        ->name('vendors.records.update');
+    Route::delete('/vendors/records/{code}', [VendorPartyController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':vendors.manage')
+        ->name('vendors.records.destroy');
     Route::get('/vendors/{code}', [VendorPartyController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':vendors.view')
         ->name('vendors.show');
@@ -196,6 +247,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/trips', [TripController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':trips.view')
         ->name('trips');
+    Route::get('/trips/records', [TripController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':trips.view')
+        ->name('trips.records.index');
+    Route::post('/trips/records', [TripController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':trips.manage')
+        ->name('trips.records.store');
+    Route::put('/trips/records/{code}', [TripController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':trips.manage')
+        ->name('trips.records.update');
+    Route::delete('/trips/records/{code}', [TripController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':trips.manage')
+        ->name('trips.records.destroy');
     Route::get('/trips/{code}', [TripController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':trips.view')
         ->name('trips.show');
@@ -206,6 +269,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/drivers', [DriverController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':drivers.view')
         ->name('drivers');
+    Route::get('/drivers/records', [DriverController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':drivers.view')
+        ->name('drivers.records.index');
+    Route::post('/drivers/records', [DriverController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':drivers.manage')
+        ->name('drivers.records.store');
+    Route::put('/drivers/records/{code}', [DriverController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':drivers.manage')
+        ->name('drivers.records.update');
+    Route::delete('/drivers/records/{code}', [DriverController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':drivers.manage')
+        ->name('drivers.records.destroy');
     Route::get('/drivers/{code}', [DriverController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':drivers.view')
         ->name('drivers.show');
@@ -216,6 +291,9 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/driver-attendance', [DriverAttendanceController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':driver_attendance.view')
         ->name('driver-attendance');
+    Route::get('/driver-attendance/records', [DriverAttendanceController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':driver_attendance.view')
+        ->name('driver-attendance.records.index');
     Route::post('/driver-attendance', [DriverAttendanceController::class, 'store'])
         ->middleware(EnsureFleetPermission::class.':driver_attendance.manage')
         ->name('driver-attendance.store');
@@ -232,6 +310,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/employees', [EmployeeController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':employees.view')
         ->name('employees');
+    Route::get('/employees/records', [EmployeeController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':employees.view')
+        ->name('employees.records.index');
+    Route::post('/employees/records', [EmployeeController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':employees.manage')
+        ->name('employees.records.store');
+    Route::put('/employees/records/{code}', [EmployeeController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':employees.manage')
+        ->name('employees.records.update');
+    Route::delete('/employees/records/{code}', [EmployeeController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':employees.manage')
+        ->name('employees.records.destroy');
     Route::get('/employees/{code}', [EmployeeController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':employees.view')
         ->name('employees.show');
@@ -242,6 +332,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/contracts', [ContractController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':contracts.view')
         ->name('contracts');
+    Route::get('/contracts/records', [ContractController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':contracts.view')
+        ->name('contracts.records.index');
+    Route::post('/contracts/records', [ContractController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':contracts.manage')
+        ->name('contracts.records.store');
+    Route::put('/contracts/records/{code}', [ContractController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':contracts.manage')
+        ->name('contracts.records.update');
+    Route::delete('/contracts/records/{code}', [ContractController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':contracts.manage')
+        ->name('contracts.records.destroy');
     Route::get('/contracts/{code}', [ContractController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':contracts.view')
         ->name('contracts.show');
@@ -252,6 +354,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::get('/clients', [ClientController::class, 'index'])
         ->middleware(EnsureFleetPermission::class.':clients.view')
         ->name('clients');
+    Route::get('/clients/records', [ClientController::class, 'paginatedRecords'])
+        ->middleware(EnsureFleetPermission::class.':clients.view')
+        ->name('clients.records.index');
+    Route::post('/clients/records', [ClientController::class, 'storeRecord'])
+        ->middleware(EnsureFleetPermission::class.':clients.manage')
+        ->name('clients.records.store');
+    Route::put('/clients/records/{code}', [ClientController::class, 'updateRecord'])
+        ->middleware(EnsureFleetPermission::class.':clients.manage')
+        ->name('clients.records.update');
+    Route::delete('/clients/records/{code}', [ClientController::class, 'destroyRecord'])
+        ->middleware(EnsureFleetPermission::class.':clients.manage')
+        ->name('clients.records.destroy');
     Route::get('/clients/{code}', [ClientController::class, 'show'])
         ->middleware(EnsureFleetPermission::class.':clients.view')
         ->name('clients.show');

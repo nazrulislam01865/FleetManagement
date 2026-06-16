@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Fleet;
 
 use App\Http\Controllers\Controller;
 use App\Support\FleetPhoto;
-use App\Support\FleetRbac;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -70,8 +69,6 @@ class FleetFileController extends Controller
     {
         $user = $request->user();
         abort_unless($user, 401);
-
-        FleetRbac::syncDefaults();
 
         $normalized = strtolower(ltrim($path, '/'));
 

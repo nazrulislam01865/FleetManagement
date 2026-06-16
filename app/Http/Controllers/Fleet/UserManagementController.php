@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Fleet;
 use App\Models\Fleet\FleetPermission;
 use App\Models\Fleet\FleetRole;
 use App\Models\User;
-use App\Support\FleetRbac;
 use App\Services\FleetRecordOwnershipService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,15 +22,12 @@ class UserManagementController extends FleetBaseController
 
     public function index(): View
     {
-        FleetRbac::syncDefaults();
-        FleetRbac::assignDefaultRoles();
 
         return view($this->view, $this->viewData());
     }
 
     public function store(Request $request): RedirectResponse
     {
-        FleetRbac::syncDefaults();
 
         $roleIds = $this->assignableRoles($request->user())->pluck('id')->map(fn ($id) => (int) $id)->all();
 
@@ -77,7 +73,6 @@ class UserManagementController extends FleetBaseController
 
     public function update(Request $request, User $user): RedirectResponse
     {
-        FleetRbac::syncDefaults();
 
         $actor = $request->user();
         abort_unless($actor, 401);

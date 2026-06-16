@@ -108,6 +108,9 @@
 
     <div class="dashboard-grid dashboard-grid-wide">
         <x-fleetman.section-card title="Recent Notifications" class="dashboard-panel">
+            <x-slot:action>
+                <a class="dashboard-view-all" href="{{ route('fleet.notifications.index') }}" aria-label="View all notifications">View All <span aria-hidden="true">→</span></a>
+            </x-slot:action>
             <div class="compact-list">
                 @forelse(($recent['notifications'] ?? []) as $notification)
                     <a href="{{ $notification['url'] ?: route('fleet.notifications.index') }}" class="compact-row">
@@ -132,12 +135,19 @@
         </x-fleetman.section-card>
 
         <x-fleetman.section-card title="Recent Employees" class="dashboard-panel">
+            <x-slot:action>
+                @if($access['employees'] ?? false)
+                    <a class="dashboard-view-all" href="{{ route('fleet.employees') }}" aria-label="View all employees">View All <span aria-hidden="true">→</span></a>
+                @else
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                @endif
+            </x-slot:action>
             <div class="compact-list">
                 @if(!($access['employees'] ?? false))
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 @else
                 @forelse(($recent['employees'] ?? []) as $employee)
-                    <a href="{{ route('fleet.employees') }}" class="compact-row">
+                    <a href="{{ ($employee['_dashboardViewUrl'] ?? '') ?: route('fleet.employees') }}" class="compact-row">
                         <x-fleetman.entity-avatar
                             :file="$employee['_dashboardMediaUrl'] ?? ($employee['photo'] ?? null)"
                             fallback="👤"
@@ -157,12 +167,19 @@
 
     <div class="dashboard-grid dashboard-grid-wide">
         <x-fleetman.section-card title="Recent Vehicles" class="dashboard-panel">
+            <x-slot:action>
+                @if($access['vehicles'] ?? false)
+                    <a class="dashboard-view-all" href="{{ route('fleet.vehicles') }}" aria-label="View all vehicles">View All <span aria-hidden="true">→</span></a>
+                @else
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                @endif
+            </x-slot:action>
             <div class="compact-list">
                 @if(!($access['vehicles'] ?? false))
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 @else
                 @forelse(($recent['vehicles'] ?? []) as $vehicle)
-                    <a href="{{ route('fleet.vehicles') }}" class="compact-row">
+                    <a href="{{ ($vehicle['_dashboardViewUrl'] ?? '') ?: route('fleet.vehicles') }}" class="compact-row">
                         <x-fleetman.entity-avatar
                             :file="$vehicle['_dashboardMediaUrl'] ?? ($vehicle['image'] ?? null)"
                             fallback="🚗"
@@ -180,13 +197,20 @@
         </x-fleetman.section-card>
 
         <x-fleetman.section-card title="Recent Fuel Recharge" class="dashboard-panel">
+            <x-slot:action>
+                @if($access['fuelRecharge'] ?? false)
+                    <a class="dashboard-view-all" href="{{ route('fleet.fuel-recharge') }}" aria-label="View all fuel recharge entries">View All <span aria-hidden="true">→</span></a>
+                @else
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                @endif
+            </x-slot:action>
             <div class="compact-list">
                 @if(!($access['fuelRecharge'] ?? false))
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 @else
                 @forelse(($recent['fuel_recharges'] ?? []) as $recharge)
                     @php($rechargeStatus = $recharge['status'] ?? 'Draft')
-                    <a href="{{ route('fleet.fuel-recharge') }}" class="compact-row">
+                    <a href="{{ ($recharge['_dashboardViewUrl'] ?? '') ?: route('fleet.fuel-recharge') }}" class="compact-row">
                         <div class="compact-icon">⛽</div>
                         <div>
                             <b>{{ $recharge['rechargeId'] ?? '-' }} · {{ $recharge['vehicle'] ?? 'Vehicle' }}</b>
@@ -210,12 +234,19 @@
 
     <div class="dashboard-grid dashboard-grid-wide">
         <x-fleetman.section-card title="Recent Drivers" class="dashboard-panel">
+            <x-slot:action>
+                @if($access['drivers'] ?? false)
+                    <a class="dashboard-view-all" href="{{ route('fleet.drivers') }}" aria-label="View all drivers">View All <span aria-hidden="true">→</span></a>
+                @else
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                @endif
+            </x-slot:action>
             <div class="compact-list">
                 @if(!($access['drivers'] ?? false))
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 @else
                 @forelse(($recent['drivers'] ?? []) as $driver)
-                    <a href="{{ route('fleet.drivers') }}" class="compact-row">
+                    <a href="{{ ($driver['_dashboardViewUrl'] ?? '') ?: route('fleet.drivers') }}" class="compact-row">
                         <x-fleetman.entity-avatar
                             :file="$driver['_dashboardMediaUrl'] ?? ($driver['photo'] ?? null)"
                             fallback="🧑‍✈️"
@@ -233,12 +264,19 @@
         </x-fleetman.section-card>
 
         <x-fleetman.section-card title="Recent Trips" class="dashboard-panel">
+            <x-slot:action>
+                @if($access['trips'] ?? false)
+                    <a class="dashboard-view-all" href="{{ route('fleet.trips') }}" aria-label="View all trips">View All <span aria-hidden="true">→</span></a>
+                @else
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                @endif
+            </x-slot:action>
             <div class="compact-list">
                 @if(!($access['trips'] ?? false))
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 @else
                 @forelse(($recent['trips'] ?? []) as $trip)
-                    <a href="{{ route('fleet.trips') }}" class="compact-row">
+                    <a href="{{ ($trip['_dashboardViewUrl'] ?? '') ?: route('fleet.trips') }}" class="compact-row">
                         <div class="compact-icon">🧭</div>
                         <div><b>{{ $trip['tripId'] ?? '-' }} · {{ $trip['purpose'] ?? 'Trip' }}</b><span>{{ $trip['vehicle'] ?? '-' }} / {{ $trip['driver'] ?? '-' }}</span></div>
                         @php($tripBalance = (float) ($trip['balanceDue'] ?? max(0, (float) ($trip['totalCost'] ?? 0) - (float) ($trip['paidAmount'] ?? 0))))
@@ -254,12 +292,19 @@
 
     <div class="dashboard-grid dashboard-grid-wide">
         <x-fleetman.section-card title="Recent Clients" class="dashboard-panel">
+            <x-slot:action>
+                @if($access['clients'] ?? false)
+                    <a class="dashboard-view-all" href="{{ route('fleet.clients') }}" aria-label="View all clients">View All <span aria-hidden="true">→</span></a>
+                @else
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                @endif
+            </x-slot:action>
             <div class="compact-list">
                 @if(!($access['clients'] ?? false))
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 @else
                 @forelse(($recent['clients'] ?? []) as $client)
-                    <a href="{{ route('fleet.clients') }}" class="compact-row">
+                    <a href="{{ ($client['_dashboardViewUrl'] ?? '') ?: route('fleet.clients') }}" class="compact-row">
                         <x-fleetman.entity-avatar
                             :file="$client['_dashboardMediaUrl'] ?? ($client['photo'] ?? null)"
                             fallback="🏢"
@@ -277,12 +322,19 @@
         </x-fleetman.section-card>
 
         <x-fleetman.section-card title="Recent Vendors" class="dashboard-panel">
+            <x-slot:action>
+                @if($access['vendors'] ?? false)
+                    <a class="dashboard-view-all" href="{{ route('fleet.vendors') }}" aria-label="View all vendors">View All <span aria-hidden="true">→</span></a>
+                @else
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                @endif
+            </x-slot:action>
             <div class="compact-list">
                 @if(!($access['vendors'] ?? false))
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 @else
                 @forelse(($recent['vendors'] ?? []) as $vendor)
-                    <a href="{{ route('fleet.vendors') }}" class="compact-row">
+                    <a href="{{ ($vendor['_dashboardViewUrl'] ?? '') ?: route('fleet.vendors') }}" class="compact-row">
                         <x-fleetman.entity-avatar
                             :file="$vendor['_dashboardMediaUrl'] ?? ($vendor['photo'] ?? null)"
                             fallback="🏪"

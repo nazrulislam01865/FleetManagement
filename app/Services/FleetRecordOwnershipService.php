@@ -21,6 +21,24 @@ class FleetRecordOwnershipService
         'fleet.contracts.sync' => ['contracts', 'contractId'],
         'fleet.clients.sync' => ['clients', 'clientId'],
         'fleet.dues.sync' => ['dues', 'code', false],
+        'fleet.vehicles.records.store' => ['vehicles', 'id', false],
+        'fleet.vehicles.records.update' => ['vehicles', 'id', false],
+        'fleet.fuel-prices.records.store' => ['fuel_prices', 'fuelPriceId', false],
+        'fleet.fuel-prices.records.update' => ['fuel_prices', 'fuelPriceId', false],
+        'fleet.fuel-recharge.records.store' => ['fuel_recharges', 'rechargeId', false],
+        'fleet.fuel-recharge.records.update' => ['fuel_recharges', 'rechargeId', false],
+        'fleet.vendors.records.store' => ['parties', 'partyId', false],
+        'fleet.vendors.records.update' => ['parties', 'partyId', false],
+        'fleet.trips.records.store' => ['trips', 'tripId', false],
+        'fleet.trips.records.update' => ['trips', 'tripId', false],
+        'fleet.drivers.records.store' => ['drivers', 'driverId', false],
+        'fleet.drivers.records.update' => ['drivers', 'driverId', false],
+        'fleet.employees.records.store' => ['employees', 'employeeId', false],
+        'fleet.employees.records.update' => ['employees', 'employeeId', false],
+        'fleet.contracts.records.store' => ['contracts', 'contractId', false],
+        'fleet.contracts.records.update' => ['contracts', 'contractId', false],
+        'fleet.clients.records.store' => ['clients', 'clientId', false],
+        'fleet.clients.records.update' => ['clients', 'clientId', false],
     ];
 
     /**
@@ -144,6 +162,9 @@ class FleetRecordOwnershipService
 
         if (isset(self::SYNC_RESOURCES[$routeName])) {
             [$resource, $idKey, $replaceAll] = array_pad(self::SYNC_RESOURCES[$routeName], 3, true);
+            // Full ownership replacement is safe only when the caller explicitly
+            // confirms that the request contains every row in the resource.
+            $replaceAll = (bool) $replaceAll && $request->boolean('_legacy_replace_all');
 
             // The activity middleware already compared the database state with
             // the incoming rows. Use that result so an edit never assigns an

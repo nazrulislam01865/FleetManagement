@@ -170,6 +170,9 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Notifications','class' => 'dashboard-panel']); ?>
+             <?php $__env->slot('action', null, []); ?> 
+                <a class="dashboard-view-all" href="<?php echo e(route('fleet.notifications.index')); ?>" aria-label="View all notifications">View All <span aria-hidden="true">→</span></a>
+             <?php $__env->endSlot(); ?>
             <div class="compact-list">
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['notifications'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $notification): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <a href="<?php echo e($notification['url'] ?: route('fleet.notifications.index')); ?>" class="compact-row">
@@ -215,12 +218,19 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Employees','class' => 'dashboard-panel']); ?>
+             <?php $__env->slot('action', null, []); ?> 
+                <?php if($access['employees'] ?? false): ?>
+                    <a class="dashboard-view-all" href="<?php echo e(route('fleet.employees')); ?>" aria-label="View all employees">View All <span aria-hidden="true">→</span></a>
+                <?php else: ?>
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                <?php endif; ?>
+             <?php $__env->endSlot(); ?>
             <div class="compact-list">
                 <?php if(!($access['employees'] ?? false)): ?>
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['employees'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $employee): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                    <a href="<?php echo e(route('fleet.employees')); ?>" class="compact-row">
+                    <a href="<?php echo e(($employee['_dashboardViewUrl'] ?? '') ?: route('fleet.employees')); ?>" class="compact-row">
                         <?php if (isset($component)) { $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.entity-avatar','data' => ['file' => $employee['_dashboardMediaUrl'] ?? ($employee['photo'] ?? null),'fallback' => '👤','alt' => ($employee['fullName'] ?? 'Employee').' photo','size' => 'compact']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -272,12 +282,19 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Vehicles','class' => 'dashboard-panel']); ?>
+             <?php $__env->slot('action', null, []); ?> 
+                <?php if($access['vehicles'] ?? false): ?>
+                    <a class="dashboard-view-all" href="<?php echo e(route('fleet.vehicles')); ?>" aria-label="View all vehicles">View All <span aria-hidden="true">→</span></a>
+                <?php else: ?>
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                <?php endif; ?>
+             <?php $__env->endSlot(); ?>
             <div class="compact-list">
                 <?php if(!($access['vehicles'] ?? false)): ?>
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['vehicles'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $vehicle): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                    <a href="<?php echo e(route('fleet.vehicles')); ?>" class="compact-row">
+                    <a href="<?php echo e(($vehicle['_dashboardViewUrl'] ?? '') ?: route('fleet.vehicles')); ?>" class="compact-row">
                         <?php if (isset($component)) { $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.entity-avatar','data' => ['file' => $vehicle['_dashboardMediaUrl'] ?? ($vehicle['image'] ?? null),'fallback' => '🚗','alt' => ($vehicle['name'] ?? 'Vehicle').' image','size' => 'compact']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -327,13 +344,20 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Fuel Recharge','class' => 'dashboard-panel']); ?>
+             <?php $__env->slot('action', null, []); ?> 
+                <?php if($access['fuelRecharge'] ?? false): ?>
+                    <a class="dashboard-view-all" href="<?php echo e(route('fleet.fuel-recharge')); ?>" aria-label="View all fuel recharge entries">View All <span aria-hidden="true">→</span></a>
+                <?php else: ?>
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                <?php endif; ?>
+             <?php $__env->endSlot(); ?>
             <div class="compact-list">
                 <?php if(!($access['fuelRecharge'] ?? false)): ?>
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['fuel_recharges'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $recharge): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                     <?php ($rechargeStatus = $recharge['status'] ?? 'Draft'); ?>
-                    <a href="<?php echo e(route('fleet.fuel-recharge')); ?>" class="compact-row">
+                    <a href="<?php echo e(($recharge['_dashboardViewUrl'] ?? '') ?: route('fleet.fuel-recharge')); ?>" class="compact-row">
                         <div class="compact-icon">⛽</div>
                         <div>
                             <b><?php echo e($recharge['rechargeId'] ?? '-'); ?> · <?php echo e($recharge['vehicle'] ?? 'Vehicle'); ?></b>
@@ -378,12 +402,19 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Drivers','class' => 'dashboard-panel']); ?>
+             <?php $__env->slot('action', null, []); ?> 
+                <?php if($access['drivers'] ?? false): ?>
+                    <a class="dashboard-view-all" href="<?php echo e(route('fleet.drivers')); ?>" aria-label="View all drivers">View All <span aria-hidden="true">→</span></a>
+                <?php else: ?>
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                <?php endif; ?>
+             <?php $__env->endSlot(); ?>
             <div class="compact-list">
                 <?php if(!($access['drivers'] ?? false)): ?>
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['drivers'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $driver): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                    <a href="<?php echo e(route('fleet.drivers')); ?>" class="compact-row">
+                    <a href="<?php echo e(($driver['_dashboardViewUrl'] ?? '') ?: route('fleet.drivers')); ?>" class="compact-row">
                         <?php if (isset($component)) { $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.entity-avatar','data' => ['file' => $driver['_dashboardMediaUrl'] ?? ($driver['photo'] ?? null),'fallback' => '🧑‍✈️','alt' => ($driver['fullName'] ?? 'Driver').' photo','size' => 'compact']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -433,12 +464,19 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Trips','class' => 'dashboard-panel']); ?>
+             <?php $__env->slot('action', null, []); ?> 
+                <?php if($access['trips'] ?? false): ?>
+                    <a class="dashboard-view-all" href="<?php echo e(route('fleet.trips')); ?>" aria-label="View all trips">View All <span aria-hidden="true">→</span></a>
+                <?php else: ?>
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                <?php endif; ?>
+             <?php $__env->endSlot(); ?>
             <div class="compact-list">
                 <?php if(!($access['trips'] ?? false)): ?>
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['trips'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $trip): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                    <a href="<?php echo e(route('fleet.trips')); ?>" class="compact-row">
+                    <a href="<?php echo e(($trip['_dashboardViewUrl'] ?? '') ?: route('fleet.trips')); ?>" class="compact-row">
                         <div class="compact-icon">🧭</div>
                         <div><b><?php echo e($trip['tripId'] ?? '-'); ?> · <?php echo e($trip['purpose'] ?? 'Trip'); ?></b><span><?php echo e($trip['vehicle'] ?? '-'); ?> / <?php echo e($trip['driver'] ?? '-'); ?></span></div>
                         <?php ($tripBalance = (float) ($trip['balanceDue'] ?? max(0, (float) ($trip['totalCost'] ?? 0) - (float) ($trip['paidAmount'] ?? 0)))); ?>
@@ -472,12 +510,19 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Clients','class' => 'dashboard-panel']); ?>
+             <?php $__env->slot('action', null, []); ?> 
+                <?php if($access['clients'] ?? false): ?>
+                    <a class="dashboard-view-all" href="<?php echo e(route('fleet.clients')); ?>" aria-label="View all clients">View All <span aria-hidden="true">→</span></a>
+                <?php else: ?>
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                <?php endif; ?>
+             <?php $__env->endSlot(); ?>
             <div class="compact-list">
                 <?php if(!($access['clients'] ?? false)): ?>
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['clients'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $client): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                    <a href="<?php echo e(route('fleet.clients')); ?>" class="compact-row">
+                    <a href="<?php echo e(($client['_dashboardViewUrl'] ?? '') ?: route('fleet.clients')); ?>" class="compact-row">
                         <?php if (isset($component)) { $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.entity-avatar','data' => ['file' => $client['_dashboardMediaUrl'] ?? ($client['photo'] ?? null),'fallback' => '🏢','alt' => ($client['clientName'] ?? 'Client').' logo','size' => 'compact']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -527,12 +572,19 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['title' => 'Recent Vendors','class' => 'dashboard-panel']); ?>
+             <?php $__env->slot('action', null, []); ?> 
+                <?php if($access['vendors'] ?? false): ?>
+                    <a class="dashboard-view-all" href="<?php echo e(route('fleet.vendors')); ?>" aria-label="View all vendors">View All <span aria-hidden="true">→</span></a>
+                <?php else: ?>
+                    <span class="dashboard-view-all is-disabled" aria-disabled="true" title="Access not granted for your role">🔒 View All</span>
+                <?php endif; ?>
+             <?php $__env->endSlot(); ?>
             <div class="compact-list">
                 <?php if(!($access['vendors'] ?? false)): ?>
                     <div class="empty compact-empty">🔒 Access not granted for your role.</div>
                 <?php else: ?>
                 <?php $__empty_1 = true; $__currentLoopData = ($recent['vendors'] ?? []); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $vendor): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
-                    <a href="<?php echo e(route('fleet.vendors')); ?>" class="compact-row">
+                    <a href="<?php echo e(($vendor['_dashboardViewUrl'] ?? '') ?: route('fleet.vendors')); ?>" class="compact-row">
                         <?php if (isset($component)) { $__componentOriginal697ea74cffe7bdef02e879ddb0d6a733 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal697ea74cffe7bdef02e879ddb0d6a733 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.entity-avatar','data' => ['file' => $vendor['_dashboardMediaUrl'] ?? ($vendor['photo'] ?? null),'fallback' => '🏪','alt' => ($vendor['partyName'] ?? 'Vendor').' photo','size' => 'compact']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

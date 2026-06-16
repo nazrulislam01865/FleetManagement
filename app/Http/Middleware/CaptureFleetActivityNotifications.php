@@ -48,6 +48,24 @@ class CaptureFleetActivityNotifications
         'fleet.clients.sync' => [FleetClient::class, 'clientId', true],
         // Dues sync updates only the supplied rows and does not delete omitted rows.
         'fleet.dues.sync' => [FleetDue::class, 'code', false],
+        'fleet.vehicles.records.store' => [FleetVehicle::class, 'id', false],
+        'fleet.vehicles.records.update' => [FleetVehicle::class, 'id', false],
+        'fleet.fuel-prices.records.store' => [FleetFuelPrice::class, 'fuelPriceId', false],
+        'fleet.fuel-prices.records.update' => [FleetFuelPrice::class, 'fuelPriceId', false],
+        'fleet.fuel-recharge.records.store' => [FleetFuelRecharge::class, 'rechargeId', false],
+        'fleet.fuel-recharge.records.update' => [FleetFuelRecharge::class, 'rechargeId', false],
+        'fleet.vendors.records.store' => [FleetVendorParty::class, 'partyId', false],
+        'fleet.vendors.records.update' => [FleetVendorParty::class, 'partyId', false],
+        'fleet.trips.records.store' => [FleetTrip::class, 'tripId', false],
+        'fleet.trips.records.update' => [FleetTrip::class, 'tripId', false],
+        'fleet.drivers.records.store' => [FleetDriver::class, 'driverId', false],
+        'fleet.drivers.records.update' => [FleetDriver::class, 'driverId', false],
+        'fleet.employees.records.store' => [FleetEmployee::class, 'employeeId', false],
+        'fleet.employees.records.update' => [FleetEmployee::class, 'employeeId', false],
+        'fleet.contracts.records.store' => [FleetContract::class, 'contractId', false, ['fuel_recharge', 'attendance']],
+        'fleet.contracts.records.update' => [FleetContract::class, 'contractId', false, ['fuel_recharge', 'attendance']],
+        'fleet.clients.records.store' => [FleetClient::class, 'clientId', false],
+        'fleet.clients.records.update' => [FleetClient::class, 'clientId', false],
     ];
 
     private const MODULE_LABELS = [
@@ -276,6 +294,9 @@ class CaptureFleetActivityNotifications
         }
 
         [$modelClass, $idKey, $deleteMissing] = array_pad($configuration, 3, null);
+        // Omission-based deletion is intentionally opt-in. Paginated and
+        // single-record requests never represent the complete table.
+        $deleteMissing = (bool) $deleteMissing && $request->boolean('_legacy_replace_all');
         $excludedStatuses = $configuration[3] ?? [];
         $rows = $request->input('rows', []);
         if (is_string($rows)) {
@@ -285,14 +306,24 @@ class CaptureFleetActivityNotifications
             return null;
         }
 
+        $incomingCodes = collect($rows)
+            ->filter(fn ($row): bool => is_array($row))
+            ->map(fn (array $row): string => trim((string) ($row[$idKey] ?? '')))
+            ->filter()
+            ->unique()
+            ->values();
+
         /** @var class-string<Model> $modelClass */
         $existingQuery = $modelClass::query();
         if (is_array($excludedStatuses) && $excludedStatuses !== []) {
             $existingQuery->whereNotIn('status', $excludedStatuses);
         }
+        if (! $deleteMissing && $incomingCodes->isNotEmpty()) {
+            $existingQuery->whereIn('code', $incomingCodes->all());
+        }
 
         $existing = $existingQuery
-            ->get()
+            ->get(['code', 'payload'])
             ->mapWithKeys(function (Model $record): array {
                 $payload = is_array($record->getAttribute('payload'))
                     ? $record->getAttribute('payload')
@@ -378,7 +409,7 @@ class CaptureFleetActivityNotifications
             'message' => $message,
             'category' => 'activity',
             'icon' => $action === 'deleted' ? '🗑️' : ($action === 'created' ? '➕' : '✏️'),
-            'url' => $this->safeCurrentModuleUrl($request),
+            'url' => $this->safeCurrentModuleUrl($request, $recordCode, $action),
             'actor_name' => $actor->name,
             'resource' => $moduleKey,
             'resource_code' => $recordCode,
@@ -407,9 +438,10 @@ class CaptureFleetActivityNotifications
         return '';
     }
 
-    private function safeCurrentModuleUrl(Request $request): string
+    private function safeCurrentModuleUrl(Request $request, string $recordCode = '', string $action = ''): string
     {
         $routeName = (string) $request->route()?->getName();
+        $moduleKey = explode('.', $routeName)[1] ?? '';
         $indexRoutes = [
             'yards' => 'fleet.yards',
             'vehicles' => 'fleet.vehicles',
@@ -428,7 +460,28 @@ class CaptureFleetActivityNotifications
             'role-matrix' => 'fleet.role-matrix',
             'settings' => 'fleet.settings',
         ];
-        $moduleKey = explode('.', $routeName)[1] ?? '';
+        $showRoutes = [
+            'yards' => 'fleet.yards.show',
+            'vehicles' => 'fleet.vehicles.show',
+            'fuel-prices' => 'fleet.fuel-prices.show',
+            'fuel-recharge' => 'fleet.fuel-recharge.show',
+            'vendors' => 'fleet.vendors.show',
+            'trips' => 'fleet.trips.show',
+            'drivers' => 'fleet.drivers.show',
+            'driver-attendance' => 'fleet.driver-attendance.show',
+            'employees' => 'fleet.employees.show',
+            'contracts' => 'fleet.contracts.show',
+            'clients' => 'fleet.clients.show',
+        ];
+        $showRoute = $showRoutes[$moduleKey] ?? null;
+
+        if ($action !== 'deleted'
+            && $recordCode !== ''
+            && $showRoute !== null
+            && \Illuminate\Support\Facades\Route::has($showRoute)) {
+            return route($showRoute, ['code' => $recordCode]);
+        }
+
         $indexRoute = $indexRoutes[$moduleKey] ?? null;
 
         return $indexRoute && \Illuminate\Support\Facades\Route::has($indexRoute)

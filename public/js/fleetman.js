@@ -1101,6 +1101,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
     }
 
     function syncResource(resource, rows) {
+        if (window.FleetmanRecordApi && resources?.[resource]?.store) {
+            return window.FleetmanRecordApi.persistCollection(resource, rows || []);
+        }
         const endpoint = resources?.[resource]?.sync;
         if (!endpoint) return;
 
@@ -1492,6 +1495,24 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function syncVehicles(rows, filesByVehicle = {}) {
+            if (window.FleetmanRecordApi && resources?.vehicles?.store) {
+                try {
+                    return await window.FleetmanRecordApi.persistCollection('vehicles', rows || [], {
+                        formDataForRow: (row, rowIndex) => {
+                            const formData = new FormData();
+                            const files = filesByVehicle?.[rowIndex] || {};
+                            if (files.imageFile) formData.append('vehicle_image_files[0]', files.imageFile);
+                            Object.entries(files.documentFiles || {}).forEach(([documentIndex, file]) => {
+                                if (file) formData.append(`vehicle_document_files[0][${documentIndex}]`, file);
+                            });
+                            return formData;
+                        },
+                    });
+                } catch (error) {
+                    toast(error.message || 'Vehicle could not be saved.');
+                    return { ok: false, syncFailed: true, message: error.message };
+                }
+            }
             const endpoint = resources?.vehicles?.sync;
             if (!endpoint) return { ok: true, skipped: true };
 
@@ -2087,6 +2108,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         resetForm();
         renderTable();
+        window.FleetmanRecordApi?.registerInfinite('vehicles', () => vehicles, (rows) => { vehicles = rows; }, renderTable);
         if (window.location.search.includes('action=add')) {
             setVisible('vehicleAddPage');
         } else {
@@ -2099,6 +2121,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         let prices = Array.isArray(records.fuel_prices) ? records.fuel_prices : (samples.fuel_prices || []);
 
         async function saveStore() {
+            if (window.FleetmanRecordApi && resources?.fuel_prices?.store) {
+                const payload = await window.FleetmanRecordApi.persistCollection('fuel_prices', prices);
+                if (Array.isArray(payload?.rows)) prices = payload.rows;
+                return payload;
+            }
             const url = resources?.fuel_prices?.sync;
             if (!url) return { ok: true, rows: prices };
             const response = await fetch(url, {
@@ -2372,6 +2399,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         resetForm();
         renderList();
+        window.FleetmanRecordApi?.registerInfinite('fuel_prices', () => prices, (rows) => { prices = rows; }, renderList);
         if (window.location.search.includes('action=add')) {
             setVisible('fuelPriceAddPage');
         } else {
@@ -2398,6 +2426,22 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function syncFuelRecharges(rows, filesByRow = {}) {
+            if (window.FleetmanRecordApi && resources?.fuel_recharges?.store) {
+                try {
+                    return await window.FleetmanRecordApi.persistCollection('fuel_recharges', rows || [], {
+                        formDataForRow: (row, rowIndex) => {
+                            const formData = new FormData();
+                            Object.entries(filesByRow?.[rowIndex] || {}).forEach(([photoKey, file]) => {
+                                if (file) formData.append(`fuel_recharge_photos[0][${photoKey}]`, file);
+                            });
+                            return formData;
+                        },
+                    });
+                } catch (error) {
+                    toast(error.message || 'Fuel recharge could not be saved.');
+                    return { ok: false, syncFailed: true, message: error.message };
+                }
+            }
             const url = endpoint();
             if (!url) return { ok: true, skipped: true };
             const hasFiles = Object.values(filesByRow || {}).some((photos) => Object.values(photos || {}).some(Boolean));
@@ -3886,6 +3930,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         updateCounter();
         recalculate();
         renderRechargeList();
+        window.FleetmanRecordApi?.registerInfinite('fuel_recharges', () => recharges, (rows) => { recharges = rows; }, renderRechargeList);
         if (window.location.search.includes('action=add')) {
             setVisible('rechargeAddPage');
         } else {
@@ -3914,6 +3959,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
     }
 
     async function syncResource(resource, rows) {
+        if (window.FleetmanRecordApi && resources?.[resource]?.store) {
+            try {
+                return await window.FleetmanRecordApi.persistCollection(resource, rows || []);
+            } catch (error) {
+                return { ok: false, syncFailed: true, message: error?.message || 'Database save failed.' };
+            }
+        }
         const endpoint = resources?.[resource]?.sync;
         if (!endpoint) return { ok: true, skipped: true };
 
@@ -4132,6 +4184,22 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         async function syncParties(rows, documentFilesByParty = {}) {
+            if (window.FleetmanRecordApi && resources?.parties?.store) {
+                try {
+                    return await window.FleetmanRecordApi.persistCollection('parties', rows || [], {
+                        formDataForRow: (row, rowIndex) => {
+                            const formData = new FormData();
+                            Object.entries(documentFilesByParty?.[rowIndex] || {}).forEach(([documentIndex, file]) => {
+                                if (file) formData.append(`document_files[0][${documentIndex}]`, file);
+                            });
+                            return formData;
+                        },
+                    });
+                } catch (error) {
+                    toast(error.message || 'Vendor / Party could not be saved.');
+                    return { ok: false, syncFailed: true, message: error.message };
+                }
+            }
             const endpoint = resources?.parties?.sync;
             if (!endpoint) return { ok: true, skipped: true };
 
@@ -4713,6 +4781,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         resetForm();
         renderList();
+        window.FleetmanRecordApi?.registerInfinite('parties', () => parties, (rows) => { parties = rows; }, renderList);
         if (window.location.search.includes('action=add')) {
             setVisible('vendorAddPage');
         } else {
@@ -5369,6 +5438,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         resetForm();
         renderList();
+        window.FleetmanRecordApi?.registerInfinite('trips', () => trips, (rows) => { trips = rows; }, renderList);
         if (window.location.search.includes('action=add')) setVisible('tripAddPage');
         else setVisible('tripListPage');
     }
@@ -6037,6 +6107,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         renderList();
+        window.FleetmanRecordApi?.registerInfinite('drivers', () => drivers, (rows) => { drivers = rows; }, renderList);
         if (window.location.search.includes('action=add')) setVisible('driverAddPage');
         else setVisible('driverListPage');
     }
@@ -6272,6 +6343,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         });
         resetForm();
         renderList();
+        window.FleetmanRecordApi?.registerInfinite('clients', () => clients, (rows) => { clients = rows; }, renderList);
         if(window.location.search.includes('action=add')) setVisible('clientAddPage'); else setVisible('clientListPage');
     }
 
@@ -6869,6 +6941,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         syncResource('employees', employees);
         resetForm();
         renderList();
+        window.FleetmanRecordApi?.registerInfinite('employees', () => employees, (rows) => { employees = rows; }, renderList);
         if (window.location.search.includes('action=add')) setVisible('employeeAddPage');
         else setVisible('employeeListPage');
     }
@@ -7840,6 +7913,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         populateBase();
         resetForm();
         renderList();
+        window.FleetmanRecordApi?.registerInfinite('driver_attendance', () => logs, (rows) => { logs = rows; }, renderList);
         if (window.location.search.includes('action=add')) {
             setVisible('attendanceAddPage');
         } else {
@@ -9625,6 +9699,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function syncContracts(validateContractId = '') {
+            if (window.FleetmanRecordApi && resources?.contracts?.store) {
+                return window.FleetmanRecordApi.persistCollection('contracts', contracts, {
+                    extra: { validateContractId },
+                }).then((payload) => {
+                    if (Array.isArray(payload?.rows)) contracts = payload.rows;
+                    return payload;
+                });
+            }
             const saveUrl = endpoint();
             if (!saveUrl) return Promise.resolve();
             return fetch(saveUrl, {
@@ -9912,6 +9994,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         resetForm();
         renderList();
+        window.FleetmanRecordApi?.registerInfinite('contracts', () => contracts, (rows) => { contracts = rows; }, renderList);
         if (window.location.search.includes('action=add')) {
             setPage('contractCreatePage');
         } else {

@@ -597,8 +597,56 @@ class DriverController extends FleetBaseController
         }
         unset($row);
 
+        $this->validateDriverDatabaseUniqueness($rows, $errors);
+
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function validateDriverDatabaseUniqueness(array $rows, array &$errors): void
+    {
+        $candidates = collect($rows)
+            ->map(function ($row, $index): ?array {
+                if (! is_array($row)) {
+                    return null;
+                }
+
+                return [
+                    'index' => $index,
+                    'code' => trim((string) ($row['_recordCode'] ?? $row[$this->idKey] ?? '')),
+                    'nid' => mb_strtolower(trim((string) ($row['nid'] ?? ''))),
+                    'license' => mb_strtolower(trim((string) ($row['licenseNo'] ?? ''))),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        if ($candidates->isEmpty()) {
+            return;
+        }
+
+        $nidOwners = FleetDriver::query()
+            ->whereIn('nid_number', $candidates->pluck('nid')->filter()->unique()->all())
+            ->get(['code', 'nid_number'])
+            ->groupBy('nid_number');
+        $licenseOwners = FleetDriver::query()
+            ->whereIn('license_number', $candidates->pluck('license')->filter()->unique()->all())
+            ->get(['code', 'license_number'])
+            ->groupBy('license_number');
+
+        foreach ($candidates as $candidate) {
+            if ($candidate['nid'] !== '' && $nidOwners
+                ->get($candidate['nid'], collect())
+                ->contains(fn (FleetDriver $driver): bool => (string) $driver->code !== $candidate['code'])) {
+                $errors["rows.{$candidate['index']}.nid"] = 'NID must be unique.';
+            }
+
+            if ($candidate['license'] !== '' && $licenseOwners
+                ->get($candidate['license'], collect())
+                ->contains(fn (FleetDriver $driver): bool => (string) $driver->code !== $candidate['code'])) {
+                $errors["rows.{$candidate['index']}.licenseNo"] = 'Driving License No. must be unique.';
+            }
         }
     }
 

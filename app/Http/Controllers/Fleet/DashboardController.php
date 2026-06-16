@@ -11,8 +11,8 @@ use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
 use App\Models\Fleet\FleetVendorParty;
 use App\Support\FleetPhoto;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
 
@@ -37,16 +37,74 @@ class DashboardController extends FleetBaseController
             || ! method_exists($user, 'canFleet')
             || $user->canFleet($permission);
 
-        // Dashboard summaries must not leak module data to roles that cannot
-        // open the corresponding module.
-        $vehicles = $can('vehicles.view') ? $this->rows(FleetVehicle::class) : [];
-        $drivers = $can('drivers.view') ? $this->rows(FleetDriver::class) : [];
-        $trips = $can('trips.view') ? $this->rows(FleetTrip::class) : [];
-        $fuelRecharges = $can('fuel_recharge.view') ? $this->rows(FleetFuelRecharge::class) : [];
-        $clients = $can('clients.view') ? $this->rows(FleetClient::class) : [];
-        $vendors = $can('vendors.view') ? $this->rows(FleetVendorParty::class) : [];
-        $attendance = $can('driver_attendance.view') ? $this->rows(FleetDriverAttendance::class) : [];
-        $employees = $can('employees.view') ? $this->rows(FleetEmployee::class) : [];
+        $access = [
+            'vehicles' => $can('vehicles.view'),
+            'drivers' => $can('drivers.view'),
+            'trips' => $can('trips.view'),
+            'clients' => $can('clients.view'),
+            'vendors' => $can('vendors.view'),
+            'attendance' => $can('driver_attendance.view'),
+            'fuelPrices' => $can('fuel_prices.view'),
+            'fuelRecharge' => $can('fuel_recharge.view'),
+            'employees' => $can('employees.view'),
+        ];
+
+        $vehicleCount = $access['vehicles'] ? FleetVehicle::query()->count() : 0;
+        $activeVehicleCount = $access['vehicles']
+            ? FleetVehicle::query()
+                ->where(function ($query): void {
+                    $query->whereNull('status')
+                        ->orWhereIn('status', ['Active', 'Needs document review']);
+                })
+                ->count()
+            : 0;
+
+        $driverCount = $access['drivers'] ? FleetDriver::query()->count() : 0;
+        $expiringDrivers = $access['drivers']
+            ? FleetDriver::query()
+                ->whereNotNull('license_validity')
+                ->whereBetween('license_validity', [now()->toDateString(), now()->addDays(180)->toDateString()])
+                ->count()
+            : 0;
+
+        $tripCount = $access['trips'] ? FleetTrip::query()->count() : 0;
+        $tripSummary = $access['trips']
+            ? FleetTrip::query()->selectRaw(
+                'COALESCE(SUM(total_cost), 0) as total_cost, '
+                .'COALESCE(SUM(paid_amount), 0) as paid_amount, '
+                .'COALESCE(SUM(balance_due), 0) as balance_due, '
+                .'COALESCE(SUM(CASE WHEN total_cost > 0 AND balance_due <= 0.009 THEN 1 ELSE 0 END), 0) as paid_trips'
+            )->first()
+            : null;
+
+        $clientCount = $access['clients'] ? FleetClient::query()->count() : 0;
+        $activeClientCount = $access['clients']
+            ? FleetClient::query()->whereRaw('LOWER(status) = ?', ['active'])->count()
+            : 0;
+
+        $totalTripCost = (float) ($tripSummary?->total_cost ?? 0);
+        $totalTripPaid = (float) ($tripSummary?->paid_amount ?? 0);
+        $totalTripBalance = (float) ($tripSummary?->balance_due ?? 0);
+        $paidTrips = (int) ($tripSummary?->paid_trips ?? 0);
+
+        $totalPayroll = 0.0;
+        if ($access['drivers']) {
+            $totalPayroll += (float) FleetDriver::query()->sum('salary_amount');
+        }
+        if ($access['employees']) {
+            $totalPayroll += (float) FleetEmployee::query()->sum('salary_amount');
+        }
+
+        $totalFuelExpense = $access['fuelRecharge']
+            ? (float) FleetFuelRecharge::query()
+                ->whereRaw('LOWER(status) = ?', ['submitted'])
+                ->sum('total_amount')
+            : 0.0;
+
+        $totalAttendanceKm = $access['attendance']
+            ? (float) FleetDriverAttendance::query()->sum('distance_km')
+            : 0.0;
+
         $notifications = $user && Schema::hasTable('notifications')
             ? $user->notifications()
                 ->latest()
@@ -60,7 +118,7 @@ class DashboardController extends FleetBaseController
                         'title' => trim((string) ($data['title'] ?? 'FleetMan Notification')),
                         'message' => trim((string) ($data['message'] ?? '')),
                         'icon' => trim((string) ($data['icon'] ?? '🔔')) ?: '🔔',
-                        'url' => trim((string) ($data['url'] ?? '')),
+                        'url' => $this->notificationTargetUrl($data),
                         'is_unread' => $notification->read_at === null,
                         'created_at' => optional($notification->created_at)
                             ->timezone('Asia/Dhaka')
@@ -71,52 +129,11 @@ class DashboardController extends FleetBaseController
                 ->all()
             : [];
 
-        $activeVehicleCount = collect($vehicles)->filter(function (array $row) {
-            return in_array($row['status'] ?? 'Active', ['Active', 'Needs document review'], true);
-        })->count();
-
-        $totalTripCost = collect($trips)->sum(fn (array $row) => (float) ($row['totalCost'] ?? 0));
-        $totalTripPaid = collect($trips)->sum(fn (array $row) => (float) ($row['paidAmount'] ?? 0));
-        $totalTripBalance = collect($trips)->sum(fn (array $row) => max(0, (float) ($row['balanceDue'] ?? ((float) ($row['totalCost'] ?? 0) - (float) ($row['paidAmount'] ?? 0)))));
-        $paidTrips = collect($trips)->filter(function (array $row): bool {
-            $total = (float) ($row['totalCost'] ?? 0);
-            $balance = max(0, (float) ($row['balanceDue'] ?? ($total - (float) ($row['paidAmount'] ?? 0))));
-
-            return $total > 0 && $balance <= 0.009;
-        })->count();
-        $totalPayroll = collect($drivers)->sum(fn (array $row) => (float) ($row['salary'] ?? 0))
-            + collect($employees)->sum(fn (array $row) => (float) ($row['salary'] ?? 0));
-        $totalFuelExpense = collect($fuelRecharges)
-            ->filter(fn (array $row): bool => strcasecmp(trim((string) ($row['status'] ?? '')), 'Submitted') === 0)
-            ->sum(fn (array $row): float => (float) ($row['totalAmount'] ?? 0));
-        $expiringDrivers = collect($drivers)->filter(function (array $row) {
-            $date = $row['licenseValidity'] ?? null;
-            if (! $date) {
-                return false;
-            }
-
-            try {
-                $daysRemaining = now()->startOfDay()->diffInDays(
-                    Carbon::parse($date)->startOfDay(),
-                    false
-                );
-
-                return $daysRemaining >= 0 && $daysRemaining <= 180;
-            } catch (\Throwable) {
-                return false;
-            }
-        })->count();
-
-        $totalAttendanceKm = collect($attendance)->sum(fn (array $row) => (float) ($row['distance'] ?? 0));
-        $activeClientCount = collect($clients)->filter(
-            fn (array $row): bool => strcasecmp(trim((string) ($row['status'] ?? '')), 'Active') === 0
-        )->count();
-
         return [
             'stats' => [
                 [
                     'label' => 'Total Vehicles',
-                    'value' => count($vehicles),
+                    'value' => $vehicleCount,
                     'helper' => $activeVehicleCount.' active / usable',
                     'icon' => '🚗',
                     'route' => 'fleet.vehicles',
@@ -124,7 +141,7 @@ class DashboardController extends FleetBaseController
                 ],
                 [
                     'label' => 'Drivers',
-                    'value' => count($drivers),
+                    'value' => $driverCount,
                     'helper' => $expiringDrivers.' license warning',
                     'icon' => '🧑‍✈️',
                     'route' => 'fleet.drivers',
@@ -132,7 +149,7 @@ class DashboardController extends FleetBaseController
                 ],
                 [
                     'label' => 'Trips',
-                    'value' => count($trips),
+                    'value' => $tripCount,
                     'helper' => $paidTrips.' fully paid · ৳'.number_format($totalTripBalance, 2).' balance',
                     'icon' => '🧭',
                     'route' => 'fleet.trips',
@@ -140,7 +157,7 @@ class DashboardController extends FleetBaseController
                 ],
                 [
                     'label' => 'Clients',
-                    'value' => count($clients),
+                    'value' => $clientCount,
                     'helper' => $activeClientCount.' active client'.($activeClientCount === 1 ? '' : 's'),
                     'icon' => '🏢',
                     'route' => 'fleet.clients',
@@ -157,31 +174,21 @@ class DashboardController extends FleetBaseController
             ],
             'recent' => [
                 'notifications' => $notifications,
-                'fuel_recharges' => array_slice($fuelRecharges, 0, 5),
-                'vehicles' => $this->recentRowsWithMedia($vehicles, 'image'),
-                'trips' => array_slice($trips, 0, 5),
-                'drivers' => $this->recentRowsWithMedia($drivers, 'photo'),
-                'clients' => $this->recentRowsWithMedia($clients, 'photo'),
-                'vendors' => $this->recentRowsWithMedia($vendors, 'photo'),
-                'employees' => $this->recentRowsWithMedia($employees, 'photo'),
+                'fuel_recharges' => $access['fuelRecharge'] ? $this->recentRowsFromModel(FleetFuelRecharge::class, 'rechargeId', 'fleet.fuel-recharge.show') : [],
+                'vehicles' => $access['vehicles'] ? $this->recentRowsFromModel(FleetVehicle::class, 'id', 'fleet.vehicles.show', 'image') : [],
+                'trips' => $access['trips'] ? $this->recentRowsFromModel(FleetTrip::class, 'tripId', 'fleet.trips.show') : [],
+                'drivers' => $access['drivers'] ? $this->recentRowsFromModel(FleetDriver::class, 'driverId', 'fleet.drivers.show', 'photo') : [],
+                'clients' => $access['clients'] ? $this->recentRowsFromModel(FleetClient::class, 'clientId', 'fleet.clients.show', 'photo') : [],
+                'vendors' => $access['vendors'] ? $this->recentRowsFromModel(FleetVendorParty::class, 'partyId', 'fleet.vendors.show', 'photo') : [],
+                'employees' => $access['employees'] ? $this->recentRowsFromModel(FleetEmployee::class, 'employeeId', 'fleet.employees.show', 'photo') : [],
             ],
-            'access' => [
-                'vehicles' => $can('vehicles.view'),
-                'drivers' => $can('drivers.view'),
-                'trips' => $can('trips.view'),
-                'clients' => $can('clients.view'),
-                'vendors' => $can('vendors.view'),
-                'attendance' => $can('driver_attendance.view'),
-                'fuelPrices' => $can('fuel_prices.view'),
-                'fuelRecharge' => $can('fuel_recharge.view'),
-                'employees' => $can('employees.view'),
-            ],
+            'access' => $access,
             'warnings' => [
                 [
                     'title' => 'Driver license review',
                     'value' => $expiringDrivers,
                     'description' => 'Drivers with license validity within 180 days.',
-                    'url' => $can('drivers.view')
+                    'url' => $access['drivers']
                         ? route('fleet.drivers', ['license_filter' => 'within-180-days'])
                         : null,
                 ],
@@ -191,17 +198,63 @@ class DashboardController extends FleetBaseController
         ];
     }
 
-    private function recentRowsWithMedia(array $rows, string $mediaKey): array
+    /**
+     * Query only the five rows shown by a recent-activity card.
+     *
+     * @param class-string<Model> $modelClass
+     */
+    private function recentRowsFromModel(string $modelClass, string $idKey, string $showRoute, ?string $mediaKey = null): array
     {
-        return collect($rows)
-            ->take(5)
-            ->map(function (array $row) use ($mediaKey): array {
-                $row['_dashboardMediaUrl'] = $this->dashboardMediaUrl($row[$mediaKey] ?? null);
+        return $modelClass::query()
+            ->latest('id')
+            ->limit(5)
+            ->get(['code', 'payload'])
+            ->map(function (Model $record) use ($idKey, $showRoute, $mediaKey): array {
+                $row = is_array($record->payload) ? $record->payload : [];
+                $code = trim((string) ($row[$idKey] ?? $record->code));
+                $row['_recordCode'] = (string) $record->code;
+                $row['_dashboardViewUrl'] = $this->canViewRecordDetails() && $code !== '' && Route::has($showRoute)
+                    ? route($showRoute, ['code' => $code])
+                    : '';
+
+                if ($mediaKey !== null) {
+                    $row['_dashboardMediaUrl'] = $this->dashboardMediaUrl($row[$mediaKey] ?? null);
+                }
 
                 return $row;
             })
             ->values()
             ->all();
+    }
+
+    private function notificationTargetUrl(array $data): string
+    {
+        $resource = trim((string) ($data['resource'] ?? ''));
+        $code = trim((string) ($data['resource_code'] ?? ''));
+        $showRoutes = [
+            'yards' => 'fleet.yards.show',
+            'vehicles' => 'fleet.vehicles.show',
+            'fuel-prices' => 'fleet.fuel-prices.show',
+            'fuel-recharge' => 'fleet.fuel-recharge.show',
+            'vendors' => 'fleet.vendors.show',
+            'trips' => 'fleet.trips.show',
+            'contracts' => 'fleet.contracts.show',
+            'drivers' => 'fleet.drivers.show',
+            'clients' => 'fleet.clients.show',
+            'driver-attendance' => 'fleet.driver-attendance.show',
+            'employees' => 'fleet.employees.show',
+        ];
+        $showRoute = $showRoutes[$resource] ?? null;
+
+        if ($this->canViewRecordDetails()
+            && ($data['action'] ?? '') !== 'deleted'
+            && $code !== ''
+            && $showRoute !== null
+            && Route::has($showRoute)) {
+            return route($showRoute, ['code' => $code]);
+        }
+
+        return trim((string) ($data['url'] ?? ''));
     }
 
     private function dashboardMediaUrl(mixed $file): string
@@ -257,16 +310,4 @@ class DashboardController extends FleetBaseController
         return '';
     }
 
-    /**
-     * @param class-string<Model> $modelClass
-     */
-    private function rows(string $modelClass): array
-    {
-        return $modelClass::query()
-            ->latest('id')
-            ->get()
-            ->map(fn (Model $row) => $row->payload ?? [])
-            ->values()
-            ->all();
-    }
 }

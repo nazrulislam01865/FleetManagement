@@ -237,7 +237,7 @@ class VehicleController extends FleetBaseController
     {
         $errors = [];
         $vehicleVendors = $this->vehicleVendorValues();
-        $drivers = $this->optionsFromDatabase()['drivers'] ?? [];
+        $drivers = $this->optionsFromDatabase(['drivers'])['drivers'] ?? [];
         $categories = array_keys($this->vehicleCategoryOptions());
         $usageTypes = collect($this->choiceValues('usage_type'))->pluck('value')->filter()->values()->all();
         $fuelTypes = $this->fuelTypeValues();
@@ -353,6 +353,43 @@ class VehicleController extends FleetBaseController
             ->filter();
         if ($registrations->duplicates()->isNotEmpty()) {
             $errors['rows'] = 'Registration Number must be unique.';
+        }
+
+        $registrationCandidates = collect($rows)
+            ->map(function ($row, $index): ?array {
+                if (! is_array($row) || (int) ($row['vehicleValidationVersion'] ?? 0) < 1) {
+                    return null;
+                }
+
+                $registration = mb_strtolower(trim((string) ($row['regNo'] ?? '')));
+                if ($registration === '') {
+                    return null;
+                }
+
+                return [
+                    'index' => $index,
+                    'value' => $registration,
+                    'code' => trim((string) ($row['_recordCode'] ?? $row[$this->idKey] ?? '')),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        if ($registrationCandidates->isNotEmpty()) {
+            $existingRegistrations = FleetVehicle::query()
+                ->whereIn('registration_number', $registrationCandidates->pluck('value')->unique()->all())
+                ->get(['code', 'registration_number'])
+                ->groupBy('registration_number');
+
+            foreach ($registrationCandidates as $candidate) {
+                $belongsToAnotherRecord = $existingRegistrations
+                    ->get($candidate['value'], collect())
+                    ->contains(fn (FleetVehicle $vehicle): bool => (string) $vehicle->code !== $candidate['code']);
+
+                if ($belongsToAnotherRecord) {
+                    $errors["rows.{$candidate['index']}.regNo"] = 'Registration Number must be unique.';
+                }
+            }
         }
 
         if ($errors !== []) {

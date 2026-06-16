@@ -102,14 +102,18 @@ abstract class FleetBaseController extends Controller
 
     protected function ensureRecordDetailsAccess(): void
     {
+        abort_unless($this->canViewRecordDetails(), 403, 'Only Super Admin and Admin User can view full details.');
+    }
+
+    protected function canViewRecordDetails(): bool
+    {
         $user = auth()->user();
         $roleSlug = strtolower((string) ($user?->fleetRole?->slug ?? ''));
         $roleName = strtolower((string) ($user?->fleetRole?->name ?? ''));
-        $allowed = (bool) ($user?->isFleetSuperAdmin())
+
+        return (bool) ($user?->isFleetSuperAdmin())
             || in_array($roleSlug, ['super_admin', 'admin_user'], true)
             || $roleName === 'admin user';
-
-        abort_unless($allowed, 403, 'Only Super Admin and Admin User can view full details.');
     }
 
     protected function recordDetailDefinition(): array
@@ -191,6 +195,142 @@ abstract class FleetBaseController extends Controller
         ];
     }
 
+    /**
+     * Cursor-paginated JSON source used by list pages and infinite scrolling.
+     */
+    public function paginatedRecords(Request $request): JsonResponse
+    {
+        $perPage = max(10, min(100, (int) $request->integer('per_page', 50)));
+        $query = $this->recordQuery();
+
+        $search = mb_substr(trim((string) $request->query('q', '')), 0, 120);
+        if ($search !== '') {
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], $search).'%';
+            $query->where(function (Builder $builder) use ($like): void {
+                $builder->where('code', 'like', $like)
+                    ->orWhere('name', 'like', $like)
+                    ->orWhere('status', 'like', $like)
+                    ->orWhere('payload', 'like', $like);
+            });
+        }
+
+        $status = mb_substr(trim((string) $request->query('status', '')), 0, 80);
+        if ($status !== '') {
+            $query->where('status', $status);
+        }
+
+        $cursor = max(0, (int) $request->integer('cursor', 0));
+        $knownTotal = max(0, (int) $request->integer('known_total', 0));
+        $total = $cursor > 0 && $knownTotal > 0
+            ? $knownTotal
+            : (clone $query)->count();
+        if ($cursor > 0) {
+            $query->where('id', '<', $cursor);
+        }
+
+        $records = $query
+            ->orderByDesc('id')
+            ->limit($perPage + 1)
+            ->get();
+        $hasMore = $records->count() > $perPage;
+        $pageRecords = $records->take($perPage)->values();
+        $nextCursor = $hasMore ? (int) $pageRecords->last()?->getKey() : null;
+
+        return response()->json([
+            'ok' => true,
+            'rows' => $this->recordPayloadsWithCreator(
+                $pageRecords,
+                $this->ownershipResourceForModel($this->modelClass)
+            ),
+            'pagination' => [
+                'per_page' => $perPage,
+                'total' => $total,
+                'has_more' => $hasMore,
+                'next_cursor' => $nextCursor,
+            ],
+        ]);
+    }
+
+    /**
+     * Single-record endpoints keep every existing module validator and upload
+     * workflow by forwarding one normalized row into the module's sync method.
+     */
+    public function storeRecord(Request $request): JsonResponse
+    {
+        $row = $request->input('row', $request->input('rows.0', []));
+        if (is_string($row)) {
+            $row = json_decode($row, true);
+        }
+
+        $code = is_array($row) ? trim((string) ($row[$this->idKey] ?? '')) : '';
+        $modelClass = $this->modelClass;
+        if ($code !== '' && $modelClass::query()->where('code', $code)->exists()) {
+            throw ValidationException::withMessages([
+                "rows.0.{$this->idKey}" => 'This record ID already exists. Open the existing record to edit it.',
+            ]);
+        }
+
+        return $this->persistSingleRecord($request);
+    }
+
+    public function updateRecord(Request $request, string $code): JsonResponse
+    {
+        return $this->persistSingleRecord($request, $code);
+    }
+
+    public function destroyRecord(string $code): JsonResponse
+    {
+        $record = $this->recordQuery()->where('code', $code)->firstOrFail();
+
+        DB::transaction(function () use ($record, $code): void {
+            $record->delete();
+            app(FleetRecordOwnershipService::class)->forgetRecord($this->resource, $code);
+        }, 3);
+
+        return response()->json([
+            'ok' => true,
+            'code' => $code,
+        ]);
+    }
+
+    private function persistSingleRecord(Request $request, ?string $forcedCode = null): JsonResponse
+    {
+        $row = $request->input('row', $request->input('rows.0', []));
+        if (is_string($row)) {
+            $row = json_decode($row, true);
+        }
+
+        if (! is_array($row)) {
+            throw ValidationException::withMessages([
+                'row' => 'The record payload is invalid.',
+            ]);
+        }
+
+        if ($forcedCode !== null && trim($forcedCode) !== '') {
+            $row[$this->idKey] = trim($forcedCode);
+        }
+
+        $request->merge([
+            'row' => $row,
+            'rows' => [$row],
+            '_partial_sync' => true,
+        ]);
+
+        return $this->sync($request);
+    }
+
+    protected function recordQuery(): Builder
+    {
+        $modelClass = $this->modelClass;
+        $query = $modelClass::query();
+
+        if ($this->resource === 'contracts') {
+            $query->whereNotIn('status', ['fuel_recharge', 'attendance']);
+        }
+
+        return $query;
+    }
+
     public function sync(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -244,6 +384,13 @@ abstract class FleetBaseController extends Controller
      */
     protected function deleteMissingRecords(Builder $query, iterable $incomingCodes, string $column = 'code'): void
     {
+        // Omission-based deletion is intentionally disabled for normal web
+        // requests because list pages now load one cursor page at a time.
+        // Records are deleted only through an explicit DELETE endpoint.
+        if (! request()->boolean('_legacy_replace_all')) {
+            return;
+        }
+
         // A manage-only role may create records but must not receive the list.
         // Its request therefore contains only the submitted record, not the
         // complete table. Never interpret omitted rows as deletions in that mode.
@@ -290,7 +437,19 @@ abstract class FleetBaseController extends Controller
      */
     protected function changedRowIndexesForSync(array $rows, string $modelClass, string $idKey): array
     {
-        $storedPayloads = $modelClass::query()
+        $submittedCodes = collect($rows)
+            ->filter(fn ($row): bool => is_array($row))
+            ->map(fn (array $row): string => trim((string) ($row[$idKey] ?? '')))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $storedQuery = $modelClass::query();
+        if (request()->boolean('_partial_sync') && $submittedCodes->isNotEmpty()) {
+            $storedQuery->whereIn('code', $submittedCodes->all());
+        }
+
+        $storedPayloads = $storedQuery
             ->get(['code', 'payload'])
             ->mapWithKeys(function (Model $record): array {
                 $payload = is_array($record->payload) ? $record->payload : [];
@@ -403,6 +562,7 @@ abstract class FleetBaseController extends Controller
         $roleName = $user?->fleetRole?->name ?? 'User';
         $currentPage = strtolower(trim((string) ($pageData['page'] ?? $this->page)));
         $records = $this->recordsFromDatabase($currentPage);
+        $recordPagination = $this->recordPaginationForPage($currentPage, $records);
         $isFuelRechargePage = $currentPage === 'fuel-recharge';
         $isVehiclePage = $currentPage === 'vehicles';
 
@@ -433,8 +593,9 @@ abstract class FleetBaseController extends Controller
                 'contracts' => $isFuelRechargePage ? $this->fuelRechargeContracts() : [],
                 'photoRequirements' => $isFuelRechargePage ? $this->photoRequirements() : [],
                 'fuelStations' => $isFuelRechargePage ? $this->fuelStationOptions() : [],
-                'samples' => $records,
+                'samples' => $this->samplesForPage($currentPage),
                 'records' => $records,
+                'recordPagination' => $recordPagination,
                 'tripMasters' => $currentPage === 'trips' ? $this->tripMastersFromDatabase() : [],
                 'contractMasters' => $currentPage === 'contracts' ? $this->contractMastersFromDatabase() : [],
                 'attendanceMasters' => $currentPage === 'driver-attendance' ? $this->attendanceMastersFromDatabase() : [],
@@ -534,9 +695,14 @@ abstract class FleetBaseController extends Controller
     protected function fleetAuthPayload(?string $currentPage = null): array
     {
         $user = auth()->user();
-        $permissionKeys = collect(FleetRbac::permissions())->pluck('key')->values()->all();
-        $allowedPermissions = collect($permissionKeys)
-            ->filter(fn (string $permission): bool => ! $user || ! method_exists($user, 'canFleet') || $user->canFleet($permission))
+        $permissionMap = $user && method_exists($user, 'fleetPermissionMap')
+            ? $user->fleetPermissionMap()
+            : collect(FleetRbac::permissions())
+                ->mapWithKeys(fn (array $permission): array => [(string) $permission['key'] => true])
+                ->all();
+        $allowedPermissions = collect($permissionMap)
+            ->filter(fn (bool $allowed): bool => $allowed)
+            ->keys()
             ->values()
             ->all();
         $pageAccess = $this->pagePermissionAccess($currentPage);
@@ -627,51 +793,89 @@ abstract class FleetBaseController extends Controller
     {
         return [
             'yards' => [
+                'records' => route('fleet.yards.records.index'),
                 'store' => route('fleet.yards.store'),
                 'update_template' => route('fleet.yards.update', ['code' => '__CODE__']),
                 'destroy_template' => route('fleet.yards.destroy', ['code' => '__CODE__']),
                 'show_template' => route('fleet.yards.show', ['code' => '__CODE__']),
             ],
             'vehicles' => [
+                'records' => route('fleet.vehicles.records.index'),
+                'store' => route('fleet.vehicles.records.store'),
+                'update_template' => route('fleet.vehicles.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.vehicles.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.vehicles.sync'),
                 'show_template' => route('fleet.vehicles.show', ['code' => '__CODE__']),
             ],
             'fuel_prices' => [
+                'records' => route('fleet.fuel-prices.records.index'),
+                'store' => route('fleet.fuel-prices.records.store'),
+                'update_template' => route('fleet.fuel-prices.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.fuel-prices.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.fuel-prices.sync'),
                 'show_template' => route('fleet.fuel-prices.show', ['code' => '__CODE__']),
             ],
             'fuel_recharges' => [
+                'records' => route('fleet.fuel-recharge.records.index'),
+                'store' => route('fleet.fuel-recharge.records.store'),
+                'update_template' => route('fleet.fuel-recharge.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.fuel-recharge.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.fuel-recharge.sync'),
                 'show_template' => route('fleet.fuel-recharge.show', ['code' => '__CODE__']),
             ],
             'parties' => array_filter([
+                'records' => route('fleet.vendors.records.index'),
+                'store' => route('fleet.vendors.records.store'),
+                'update_template' => route('fleet.vendors.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.vendors.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.vendors.sync'),
                 'show_template' => route('fleet.vendors.show', ['code' => '__CODE__']),
                 'document_upload' => Route::has('fleet.vendors.documents.upload') ? route('fleet.vendors.documents.upload') : null,
             ]),
             'trips' => [
+                'records' => route('fleet.trips.records.index'),
+                'store' => route('fleet.trips.records.store'),
+                'update_template' => route('fleet.trips.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.trips.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.trips.sync'),
                 'show_template' => route('fleet.trips.show', ['code' => '__CODE__']),
             ],
             'contracts' => Route::has('fleet.contracts.sync') ? [
+                'records' => route('fleet.contracts.records.index'),
+                'store' => route('fleet.contracts.records.store'),
+                'update_template' => route('fleet.contracts.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.contracts.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.contracts.sync'),
                 'show_template' => route('fleet.contracts.show', ['code' => '__CODE__']),
             ] : [],
             'drivers' => [
+                'records' => route('fleet.drivers.records.index'),
+                'store' => route('fleet.drivers.records.store'),
+                'update_template' => route('fleet.drivers.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.drivers.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.drivers.sync'),
                 'show_template' => route('fleet.drivers.show', ['code' => '__CODE__']),
             ],
             'clients' => [
+                'records' => route('fleet.clients.records.index'),
+                'store' => route('fleet.clients.records.store'),
+                'update_template' => route('fleet.clients.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.clients.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.clients.sync'),
                 'show_template' => route('fleet.clients.show', ['code' => '__CODE__']),
             ],
             'driver_attendance' => [
+                'records' => route('fleet.driver-attendance.records.index'),
                 'store' => route('fleet.driver-attendance.store'),
                 'sync' => route('fleet.driver-attendance.sync'),
                 'destroy_template' => route('fleet.driver-attendance.destroy', ['code' => '__CODE__']),
                 'show_template' => route('fleet.driver-attendance.show', ['code' => '__CODE__']),
             ],
             'employees' => [
+                'records' => route('fleet.employees.records.index'),
+                'store' => route('fleet.employees.records.store'),
+                'update_template' => route('fleet.employees.records.update', ['code' => '__CODE__']),
+                'destroy_template' => route('fleet.employees.records.destroy', ['code' => '__CODE__']),
                 'sync' => route('fleet.employees.sync'),
                 'show_template' => route('fleet.employees.show', ['code' => '__CODE__']),
             ],
@@ -695,7 +899,6 @@ abstract class FleetBaseController extends Controller
 
     protected function optionsForPage(string $currentPage): array
     {
-        $allOptions = $this->optionsFromDatabase();
         $page = strtolower(trim($currentPage));
         $keys = [
             'vehicles' => [
@@ -722,53 +925,61 @@ abstract class FleetBaseController extends Controller
             'fuel-recharge' => ['fuel_types', 'fuel_units'],
         ][$page] ?? [];
 
-        return collect($keys)
-            ->mapWithKeys(fn (string $key): array => [$key => $allOptions[$key] ?? []])
-            ->all();
+        return $this->optionsFromDatabase($keys);
     }
 
-    protected function optionsFromDatabase(): array
+    protected function optionsFromDatabase(?array $only = null): array
     {
-        return [
-            'vendors' => $this->uniqueValues($this->payloadColumn(FleetVendorParty::class, 'partyName')),
-            'vehicle_vendors' => $this->vehicleVendorValues(),
-            'driver_vendors' => $this->driverVendorValues(),
-            'drivers' => $this->uniqueValues($this->payloadColumn(FleetDriver::class, 'fullName')),
-            'vehicle_categories' => $this->vehicleCategoryOptions(),
-            'usage_types' => $this->choiceValues('usage_type'),
-            'fuel_types' => $this->fuelTypeValues(),
-            'fuel_price_types' => $this->fuelTypeValues(),
-            'fuel_units' => $this->fuelUnitValues(),
-            'fuel_statuses' => $this->values('fuel_status'),
-            'document_templates' => $this->documentNameValues('Vehicles', 'document_template'),
-            'document_reminders' => $this->values('document_reminder'),
-            'party_types' => $this->partyTypeValues(),
-            'party_statuses' => $this->values('party_status'),
-            'vendor_contractor_types' => $this->vendorContractorTypeValues(),
-            'payment_terms' => $this->values('payment_term'),
-            'payment_types' => $this->paymentTypeValues(),
-            'party_document_templates' => $this->documentNameValues(['Vendors', 'Vendors & Parties'], 'party_document_template'),
-            'trip_statuses' => $this->values('trip_status'),
-            'trip_around' => $this->values('trip_around'),
-            'trip_periods' => $this->values('trip_period'),
-            'trip_purposes' => $this->values('trip_purpose'),
-            'driver_license_types' => $this->driverLicenseTypeValues(),
-            'driver_contact_types' => $this->driverContactTypeValues(),
-            'driver_salary_tenures' => $this->values('driver_salary_tenure'),
-            'rental_payment_cycles' => config('fleetman.options.rental_payment_cycles', ['Daily', 'Weekly', 'Monthly', 'Contract']),
-            'driver_statuses' => $this->values('driver_status'),
-            'driver_duty_types' => $this->choiceValues('driver_duty_type'),
-            'driver_document_templates' => $this->documentNameValues('Drivers', 'driver_document_template'),
-            'client_types' => $this->clientTypeValues(),
-            'client_statuses' => $this->values('client_status'),
-            'client_contact_methods' => $this->contactMethodValues(),
-            'attendance_statuses' => $this->values('attendance_status'),
-            'employee_statuses' => $this->values('employee_status'),
-            'employee_salary_tenures' => $this->values('employee_salary_tenure'),
-            'employee_designations' => $this->values('employee_designation'),
-            'employee_document_templates' => $this->documentNameValues('Employees', 'employee_document_template'),
-            'contract_document_templates' => $this->documentNameValues('Contracts', 'contract_document_template'),
+        $loaders = [
+            'vendors' => fn (): array => $this->uniqueValues($this->payloadColumn(FleetVendorParty::class, 'partyName')),
+            'vehicle_vendors' => fn (): array => $this->vehicleVendorValues(),
+            'driver_vendors' => fn (): array => $this->driverVendorValues(),
+            'drivers' => fn (): array => $this->uniqueValues($this->payloadColumn(FleetDriver::class, 'fullName')),
+            'vehicle_categories' => fn (): array => $this->vehicleCategoryOptions(),
+            'usage_types' => fn (): array => $this->choiceValues('usage_type'),
+            'fuel_types' => fn (): array => $this->fuelTypeValues(),
+            'fuel_price_types' => fn (): array => $this->fuelTypeValues(),
+            'fuel_units' => fn (): array => $this->fuelUnitValues(),
+            'fuel_statuses' => fn (): array => $this->values('fuel_status'),
+            'document_templates' => fn (): array => $this->documentNameValues('Vehicles', 'document_template'),
+            'document_reminders' => fn (): array => $this->values('document_reminder'),
+            'party_types' => fn (): array => $this->partyTypeValues(),
+            'party_statuses' => fn (): array => $this->values('party_status'),
+            'vendor_contractor_types' => fn (): array => $this->vendorContractorTypeValues(),
+            'payment_terms' => fn (): array => $this->values('payment_term'),
+            'payment_types' => fn (): array => $this->paymentTypeValues(),
+            'party_document_templates' => fn (): array => $this->documentNameValues(['Vendors', 'Vendors & Parties'], 'party_document_template'),
+            'trip_statuses' => fn (): array => $this->values('trip_status'),
+            'trip_around' => fn (): array => $this->values('trip_around'),
+            'trip_periods' => fn (): array => $this->values('trip_period'),
+            'trip_purposes' => fn (): array => $this->values('trip_purpose'),
+            'driver_license_types' => fn (): array => $this->driverLicenseTypeValues(),
+            'driver_contact_types' => fn (): array => $this->driverContactTypeValues(),
+            'driver_salary_tenures' => fn (): array => $this->values('driver_salary_tenure'),
+            'rental_payment_cycles' => fn (): array => config('fleetman.options.rental_payment_cycles', ['Daily', 'Weekly', 'Monthly', 'Contract']),
+            'driver_statuses' => fn (): array => $this->values('driver_status'),
+            'driver_duty_types' => fn (): array => $this->choiceValues('driver_duty_type'),
+            'driver_document_templates' => fn (): array => $this->documentNameValues('Drivers', 'driver_document_template'),
+            'client_types' => fn (): array => $this->clientTypeValues(),
+            'client_statuses' => fn (): array => $this->values('client_status'),
+            'client_contact_methods' => fn (): array => $this->contactMethodValues(),
+            'attendance_statuses' => fn (): array => $this->values('attendance_status'),
+            'employee_statuses' => fn (): array => $this->values('employee_status'),
+            'employee_salary_tenures' => fn (): array => $this->values('employee_salary_tenure'),
+            'employee_designations' => fn (): array => $this->values('employee_designation'),
+            'employee_document_templates' => fn (): array => $this->documentNameValues('Employees', 'employee_document_template'),
+            'contract_document_templates' => fn (): array => $this->documentNameValues('Contracts', 'contract_document_template'),
         ];
+
+        $keys = $only === null ? array_keys($loaders) : array_values(array_unique($only));
+        $result = [];
+        foreach ($keys as $key) {
+            if (isset($loaders[$key])) {
+                $result[$key] = $loaders[$key]();
+            }
+        }
+
+        return $result;
     }
 
     protected function values(string $group): array
@@ -1172,6 +1383,77 @@ abstract class FleetBaseController extends Controller
             ->all();
     }
 
+    protected function recordPaginationForPage(string $currentPage, array $records): array
+    {
+        $definitions = [
+            'contracts' => ['contracts', FleetContract::class, 'contracts.view'],
+            'yards' => ['yards', FleetYard::class, 'yards.view'],
+            'vehicles' => ['vehicles', FleetVehicle::class, 'vehicles.view'],
+            'fuel-prices' => ['fuel_prices', FleetFuelPrice::class, 'fuel_prices.view'],
+            'fuel-recharge' => ['fuel_recharges', FleetFuelRecharge::class, 'fuel_recharge.view'],
+            'vendors' => ['parties', FleetVendorParty::class, 'vendors.view'],
+            'trips' => ['trips', FleetTrip::class, 'trips.view'],
+            'drivers' => ['drivers', FleetDriver::class, 'drivers.view'],
+            'clients' => ['clients', FleetClient::class, 'clients.view'],
+            'driver-attendance' => ['driver_attendance', FleetDriverAttendance::class, 'driver_attendance.view'],
+            'employees' => ['employees', FleetEmployee::class, 'employees.view'],
+        ];
+
+        $definition = $definitions[strtolower(trim($currentPage))] ?? null;
+        if (! is_array($definition)) {
+            return [];
+        }
+
+        [$key, $modelClass, $permission] = $definition;
+        $user = auth()->user();
+        if ($user && method_exists($user, 'canFleet') && ! $user->canFleet($permission)) {
+            return [];
+        }
+
+        $query = $modelClass::query();
+        if ($modelClass === FleetContract::class) {
+            $query->whereNotIn('status', ['fuel_recharge', 'attendance']);
+        }
+
+        $loaded = count((array) ($records[$key] ?? []));
+        $total = $query->count();
+
+        $lastRow = collect((array) ($records[$key] ?? []))->last();
+
+        return [
+            'resource' => $key,
+            'per_page' => 50,
+            'loaded' => $loaded,
+            'total' => $total,
+            'has_more' => $loaded < $total,
+            'next_cursor' => is_array($lastRow) ? (int) ($lastRow['_recordDbId'] ?? 0) : null,
+        ];
+    }
+
+    protected function samplesForPage(string $currentPage): array
+    {
+        $pageToSampleKey = [
+            'vehicles' => 'vehicles',
+            'fuel-prices' => 'fuel_prices',
+            'fuel-recharge' => 'fuel_recharges',
+            'vendors' => 'parties',
+            'trips' => 'trips',
+            'drivers' => 'drivers',
+            'clients' => 'clients',
+            'driver-attendance' => 'driver_attendance',
+            'employees' => 'employees',
+            'contracts' => 'contracts',
+            'yards' => 'yards',
+        ];
+
+        $key = $pageToSampleKey[strtolower(trim($currentPage))] ?? null;
+        if ($key === null) {
+            return [];
+        }
+
+        return [$key => config("fleetman.samples.{$key}", [])];
+    }
+
     protected function recordsFromDatabase(?string $currentPage = null): array
     {
         $user = auth()->user();
@@ -1214,11 +1496,13 @@ abstract class FleetBaseController extends Controller
         return $empty;
     }
 
-    protected function recordsFor(string $modelClass): array
+    protected function recordsFor(string $modelClass, ?int $limit = 50): array
     {
-        $rows = $modelClass::query()
-            ->latest('id')
-            ->get();
+        $query = $modelClass::query()->latest('id');
+        if ($limit !== null) {
+            $query->limit(max(1, $limit));
+        }
+        $rows = $query->get();
 
         return $this->recordPayloadsWithCreator(
             $rows,
@@ -1241,8 +1525,8 @@ abstract class FleetBaseController extends Controller
      */
     protected function syncResponseRows(string $modelClass, array $submittedRows, ?string $idKey = null): array
     {
-        if ($this->currentUserCanViewPage()) {
-            return $this->recordsFor($modelClass);
+        if ($this->currentUserCanViewPage() && request()->boolean('_legacy_replace_all')) {
+            return $this->recordsFor($modelClass, 50);
         }
 
         $key = $idKey ?: $this->idKey;
@@ -1284,6 +1568,8 @@ abstract class FleetBaseController extends Controller
             ->map(function (Model $row) use ($resource, $creatorNames): array {
                 $payload = is_array($row->payload) ? $row->payload : [];
                 $code = (string) $row->code;
+                $payload['_recordDbId'] = (int) $row->getKey();
+                $payload['_recordCode'] = $code;
                 $payload['createdAt'] = optional($row->created_at)->toIso8601String();
                 $payload['updatedAt'] = optional($row->updated_at)->toIso8601String();
                 $payload['creatorName'] = $creatorNames[$code]
@@ -1329,6 +1615,24 @@ abstract class FleetBaseController extends Controller
             'fleet.contracts.sync' => ['contracts', 'contractId'],
             'fleet.clients.sync' => ['clients', 'clientId'],
             'fleet.dues.sync' => ['dues', 'code'],
+            'fleet.vehicles.records.store' => ['vehicles', 'id'],
+            'fleet.vehicles.records.update' => ['vehicles', 'id'],
+            'fleet.fuel-prices.records.store' => ['fuel_prices', 'fuelPriceId'],
+            'fleet.fuel-prices.records.update' => ['fuel_prices', 'fuelPriceId'],
+            'fleet.fuel-recharge.records.store' => ['fuel_recharges', 'rechargeId'],
+            'fleet.fuel-recharge.records.update' => ['fuel_recharges', 'rechargeId'],
+            'fleet.vendors.records.store' => ['parties', 'partyId'],
+            'fleet.vendors.records.update' => ['parties', 'partyId'],
+            'fleet.trips.records.store' => ['trips', 'tripId'],
+            'fleet.trips.records.update' => ['trips', 'tripId'],
+            'fleet.drivers.records.store' => ['drivers', 'driverId'],
+            'fleet.drivers.records.update' => ['drivers', 'driverId'],
+            'fleet.employees.records.store' => ['employees', 'employeeId'],
+            'fleet.employees.records.update' => ['employees', 'employeeId'],
+            'fleet.contracts.records.store' => ['contracts', 'contractId'],
+            'fleet.contracts.records.update' => ['contracts', 'contractId'],
+            'fleet.clients.records.store' => ['clients', 'clientId'],
+            'fleet.clients.records.update' => ['clients', 'clientId'],
         ];
 
         if (isset($syncRoutes[$routeName])) {
@@ -1382,16 +1686,19 @@ abstract class FleetBaseController extends Controller
     }
 
 
-    protected function contractRecordsFromDatabase(): array
+    protected function contractRecordsFromDatabase(?int $limit = 50): array
     {
         if (! Schema::hasTable('fleet_contracts')) {
             return [];
         }
 
-        $rows = FleetContract::query()
+        $query = FleetContract::query()
             ->whereNotIn('status', ['fuel_recharge', 'attendance'])
-            ->latest('id')
-            ->get();
+            ->latest('id');
+        if ($limit !== null) {
+            $query->limit(max(1, $limit));
+        }
+        $rows = $query->get();
 
         return $this->recordPayloadsWithCreator($rows, 'contracts');
     }

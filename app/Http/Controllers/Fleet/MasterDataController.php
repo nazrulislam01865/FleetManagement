@@ -369,6 +369,12 @@ class MasterDataController extends FleetBaseController
 
     public function sync(Request $request): JsonResponse
     {
+        // Master Data is still submitted as one complete collection. Explicitly
+        // mark this request as a replace-all operation so removed rows continue
+        // to be deleted exactly as they were before list-page pagination was
+        // introduced for the operational modules.
+        $request->merge(['_legacy_replace_all' => true]);
+
         $validated = $request->validate([
             'vehicle_categories' => ['present', 'array'],
             'vehicle_categories.*' => ['array'],

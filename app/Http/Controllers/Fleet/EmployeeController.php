@@ -252,6 +252,41 @@ class EmployeeController extends FleetBaseController
             }
         }
 
+        $nidCandidates = collect($rows)
+            ->map(function ($row, $index): ?array {
+                if (! is_array($row)) {
+                    return null;
+                }
+
+                $nid = mb_strtolower(trim((string) ($row['nid'] ?? '')));
+                if ($nid === '') {
+                    return null;
+                }
+
+                return [
+                    'index' => $index,
+                    'value' => $nid,
+                    'code' => trim((string) ($row['_recordCode'] ?? $row[$this->idKey] ?? '')),
+                ];
+            })
+            ->filter()
+            ->values();
+
+        if ($nidCandidates->isNotEmpty()) {
+            $existingNids = FleetEmployee::query()
+                ->whereIn('nid_number', $nidCandidates->pluck('value')->unique()->all())
+                ->get(['code', 'nid_number'])
+                ->groupBy('nid_number');
+
+            foreach ($nidCandidates as $candidate) {
+                if ($existingNids
+                    ->get($candidate['value'], collect())
+                    ->contains(fn (FleetEmployee $employee): bool => (string) $employee->code !== $candidate['code'])) {
+                    $errors["rows.{$candidate['index']}.nid"] = 'NID must be unique.';
+                }
+            }
+        }
+
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }

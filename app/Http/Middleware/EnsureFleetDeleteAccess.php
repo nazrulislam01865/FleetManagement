@@ -24,8 +24,6 @@ class EnsureFleetDeleteAccess
             return $next($request);
         }
 
-        FleetRbac::syncDefaults();
-
         $user = $request->user();
         if (! $user) {
             abort(401);
