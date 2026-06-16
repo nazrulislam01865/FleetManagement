@@ -1422,3 +1422,310 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
 /* Dashboard recent-card navigation */
 .dashboard-view-all{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:7px 11px;border:1px solid #d9eaff;border-radius:10px;background:#f8fbff;color:#0b63ce;text-decoration:none;font-size:12px;font-weight:900;white-space:nowrap;transition:background .16s ease,border-color .16s ease,transform .16s ease}.dashboard-view-all:hover{background:#eef6ff;border-color:#9fc8ff;transform:translateY(-1px)}.dashboard-view-all:focus-visible{outline:3px solid rgba(11,99,206,.2);outline-offset:2px}.dashboard-view-all.is-disabled{background:#f2f4f7;border-color:#e4e7ec;color:#98a2b3;cursor:not-allowed;transform:none}
 @media(max-width:520px){.dashboard-panel .section-head{align-items:center}.dashboard-view-all{padding:6px 9px}.dashboard-view-all span[aria-hidden="true"]{display:none}}
+
+/* Unified responsive searchable dropdowns (desktop, tablet and mobile). */
+.fleet-searchable-dropdown{
+    position:relative;
+    width:100%;
+    min-width:0;
+}
+.fleet-searchable-trigger{
+    width:100%;
+    min-height:48px;
+    padding-right:74px!important;
+    border-radius:12px!important;
+    cursor:pointer;
+    background:#fff!important;
+    text-overflow:ellipsis;
+}
+.fleet-searchable-trigger:focus,
+.fleet-searchable-trigger.active{
+    outline:none;
+    border-color:#0f766e!important;
+    box-shadow:0 0 0 4px rgba(15,118,110,.1)!important;
+}
+.fleet-searchable-dropdown.is-disabled .fleet-searchable-trigger{
+    cursor:not-allowed;
+    background:#eef1f5!important;
+    color:#667085;
+}
+.fleet-searchable-arrow{
+    position:absolute;
+    z-index:2;
+    right:15px;
+    top:50%;
+    transform:translateY(-53%);
+    color:#64748b;
+    font-size:20px;
+    line-height:1;
+    pointer-events:none;
+    transition:transform .2s ease;
+}
+.fleet-searchable-dropdown.open .fleet-searchable-arrow{
+    transform:translateY(-47%) rotate(180deg);
+}
+.fleet-searchable-clear{
+    position:absolute;
+    z-index:3;
+    right:38px;
+    top:50%;
+    transform:translateY(-50%);
+    width:28px;
+    height:28px;
+    display:grid;
+    place-items:center;
+    border:0;
+    border-radius:999px;
+    background:transparent;
+    color:#64748b;
+    font-size:20px;
+    line-height:1;
+    cursor:pointer;
+}
+.fleet-searchable-clear:hover,
+.fleet-searchable-clear:focus-visible{
+    background:#eef2f6;
+    color:#111827;
+    outline:none;
+}
+.fleet-searchable-clear[hidden]{display:none!important;}
+.fleet-searchable-panel{
+    display:none;
+    position:absolute;
+    z-index:1200;
+    top:calc(100% + 8px);
+    left:0;
+    right:0;
+    min-width:min(100%,320px);
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    box-shadow:0 18px 35px rgba(15,23,42,.14);
+    overflow:hidden;
+}
+.fleet-searchable-dropdown.drop-up .fleet-searchable-panel{
+    top:auto;
+    bottom:calc(100% + 8px);
+}
+.fleet-searchable-dropdown.open .fleet-searchable-panel{display:block;}
+.fleet-searchable-panel-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:13px 14px 8px;
+}
+.fleet-searchable-panel-title{
+    min-width:0;
+    color:#111827;
+    font-size:14px;
+    font-weight:800;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.fleet-searchable-close{
+    width:32px;
+    height:32px;
+    display:grid;
+    place-items:center;
+    flex:0 0 auto;
+    border:0;
+    border-radius:9px;
+    background:#f1f5f9;
+    color:#475569;
+    font-size:22px;
+    line-height:1;
+    cursor:pointer;
+}
+.fleet-searchable-close:hover,
+.fleet-searchable-close:focus-visible{
+    background:#e2e8f0;
+    color:#111827;
+    outline:none;
+}
+.fleet-searchable-search-box{
+    position:relative;
+    padding:8px 12px 12px;
+    border-bottom:1px solid #e5e7eb;
+    background:#f9fafb;
+}
+.fleet-searchable-search-icon{
+    position:absolute;
+    left:25px;
+    top:50%;
+    transform:translateY(-53%);
+    color:#64748b;
+    font-size:18px;
+    pointer-events:none;
+}
+.fleet-searchable-search-input{
+    width:100%!important;
+    height:42px!important;
+    min-height:42px!important;
+    padding:0 12px 0 38px!important;
+    border:1px solid #d1d5db!important;
+    border-radius:10px!important;
+    background:#fff!important;
+    color:#1f2937!important;
+    font-size:15px!important;
+    box-shadow:none!important;
+}
+.fleet-searchable-search-input:focus{
+    outline:none!important;
+    border-color:#0f766e!important;
+    box-shadow:0 0 0 3px rgba(15,118,110,.1)!important;
+}
+.fleet-searchable-option-list{
+    max-height:270px;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding:6px;
+    -webkit-overflow-scrolling:touch;
+}
+.fleet-searchable-option{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    width:100%;
+    min-height:52px;
+    border:0;
+    background:transparent;
+    padding:11px 12px;
+    border-radius:10px;
+    cursor:pointer;
+    text-align:left;
+    color:inherit;
+}
+.fleet-searchable-option:hover,
+.fleet-searchable-option.active,
+.fleet-searchable-option.selected{
+    background:#eefaf6;
+}
+.fleet-searchable-option:focus-visible{
+    outline:2px solid #0f766e;
+    outline-offset:-2px;
+}
+.fleet-searchable-option:disabled{
+    opacity:.55;
+    cursor:not-allowed;
+}
+.fleet-searchable-option-copy{
+    display:block;
+    min-width:0;
+    flex:1 1 auto;
+}
+.fleet-searchable-option-title{
+    display:block;
+    color:#111827;
+    font-size:14px;
+    font-weight:800;
+    line-height:1.35;
+    overflow-wrap:anywhere;
+}
+.fleet-searchable-option-meta{
+    display:block;
+    margin-top:3px;
+    color:#64748b;
+    font-size:12px;
+    line-height:1.35;
+    overflow-wrap:anywhere;
+}
+.fleet-searchable-status,
+.fleet-searchable-selected-mark{
+    align-self:center;
+    flex:0 0 auto;
+    padding:5px 8px;
+    border-radius:999px;
+    background:#e8f5ef;
+    color:#0f766e;
+    font-size:12px;
+    font-weight:800;
+    white-space:nowrap;
+}
+.fleet-searchable-selected-mark{
+    min-width:28px;
+    text-align:center;
+}
+.fleet-searchable-empty{
+    display:none;
+    padding:20px 14px;
+    color:#64748b;
+    text-align:center;
+    font-size:14px;
+}
+.fleet-searchable-mobile-handle{display:none;}
+.fleet-searchable-backdrop{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:1190;
+    width:100%;
+    height:100%;
+    border:0;
+    padding:0;
+    background:rgba(15,23,42,.38);
+    cursor:default;
+}
+.field-invalid .fleet-searchable-trigger,
+.fleet-searchable-trigger[aria-invalid="true"]{
+    border-color:#d92d20!important;
+    box-shadow:0 0 0 3px rgba(217,45,32,.12)!important;
+    background:#fffafa!important;
+}
+
+@media(max-width:760px){
+    body.fleet-searchable-open{overflow:hidden;touch-action:none;}
+    .fleet-searchable-backdrop.show{display:block;}
+    .fleet-searchable-dropdown.open{z-index:1200;}
+    .fleet-searchable-panel,
+    .fleet-searchable-dropdown.drop-up .fleet-searchable-panel{
+        position:fixed;
+        z-index:1200;
+        left:10px;
+        right:10px;
+        top:auto;
+        bottom:max(10px,env(safe-area-inset-bottom));
+        width:auto;
+        max-height:min(78vh,620px);
+        border-radius:18px;
+        box-shadow:0 24px 60px rgba(15,23,42,.28);
+    }
+    .fleet-searchable-mobile-handle{
+        display:block;
+        width:44px;
+        height:5px;
+        margin:9px auto 2px;
+        border-radius:999px;
+        background:#cbd5e1;
+    }
+    .fleet-searchable-panel-head{padding:8px 14px 10px;}
+    .fleet-searchable-panel-title{font-size:16px;}
+    .fleet-searchable-search-box{padding:12px;}
+    .fleet-searchable-search-input{
+        height:46px!important;
+        min-height:46px!important;
+        font-size:16px!important;
+    }
+    .fleet-searchable-option-list{
+        max-height:calc(min(78vh,620px) - 145px);
+        padding:7px;
+    }
+    .fleet-searchable-option{
+        min-height:58px;
+        padding:13px 12px;
+    }
+    .fleet-searchable-option-title{font-size:15px;}
+    .fleet-searchable-option-meta{font-size:13px;}
+}
+
+@media(max-width:390px){
+    .fleet-searchable-panel,
+    .fleet-searchable-dropdown.drop-up .fleet-searchable-panel{
+        left:6px;
+        right:6px;
+        bottom:max(6px,env(safe-area-inset-bottom));
+    }
+    .fleet-searchable-status{max-width:100px;overflow:hidden;text-overflow:ellipsis;}
+}

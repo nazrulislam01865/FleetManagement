@@ -302,7 +302,7 @@ return [
                         ['key' => 'master-data-payment-types', 'label' => 'Payment Types', 'icon' => '↳', 'route' => 'fleet.master-data.payment-types', 'permission' => 'master_data.view'],
                     ],
                 ],
-                ['key' => 'settings', 'label' => 'Settings', 'icon' => '⚙️', 'route' => 'fleet.settings', 'permission' => 'settings.manage'],
+                ['key' => 'settings', 'label' => 'Settings', 'icon' => '⚙️', 'route' => 'fleet.settings', 'super_admin_only' => true],
             ],
         ],
     ],

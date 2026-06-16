@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', $brand['name'] ?? 'FleetMan')</title>
+    @if(!empty($brand['favicon_url']))
+        <link rel="icon" href="{{ $brand['favicon_url'] }}">
+        <link rel="shortcut icon" href="{{ $brand['favicon_url'] }}">
+        <link rel="apple-touch-icon" href="{{ $brand['favicon_url'] }}">
+    @endif
     @php
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
         $fleetPage = (string) ($fleetman['page'] ?? '');
@@ -26,6 +31,7 @@
         $fleetModuleJsVersion = $fleetUseSplitAssets && $fleetModuleAsset ? filemtime(public_path($fleetModuleAsset)) : $fleetCoreJsVersion;
         $fleetTransactionGuardJsVersion = filemtime(public_path('js/fleetman-transaction-guard.js'));
         $fleetActionLoaderJsVersion = filemtime(public_path('js/fleetman-action-loader.js'));
+        $fleetSearchableDropdownJsVersion = filemtime(public_path('js/fleetman-searchable-dropdown.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
         $fleetRbacJsVersion = filemtime(public_path('js/fleetman-rbac.js'));
         $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
@@ -124,6 +130,7 @@
         window.FLEETMAN = @json($fleetman ?? []);
     </script>
     <script src="{{ asset('js/fleetman-transaction-guard.js') }}?v={{ $fleetTransactionGuardJsVersion }}"></script>
+    <script src="{{ asset('js/fleetman-searchable-dropdown.js') }}?v={{ $fleetSearchableDropdownJsVersion }}"></script>
     <script src="{{ asset($fleetRecordApiAsset) }}?v={{ $fleetRecordApiJsVersion }}"></script>
     @if($fleetUseSplitAssets)
         <script src="{{ asset($fleetCoreAsset) }}?v={{ $fleetCoreJsVersion }}"></script>

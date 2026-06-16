@@ -24,6 +24,7 @@ class LoginController extends Controller
         }
 
         $logoUrl = FleetBrand::logoUrl();
+        $faviconUrl = FleetBrand::faviconUrl();
         $logoutNotice = '';
 
         // A background fetch may follow an authentication redirect to /login.
@@ -40,6 +41,7 @@ class LoginController extends Controller
         return view('auth.login', [
             'brand' => array_merge(config('fleetman.brand'), [
                 'logo_url' => $logoUrl,
+                'favicon_url' => $faviconUrl,
             ]),
             'logoutNotice' => $logoutNotice,
         ]);

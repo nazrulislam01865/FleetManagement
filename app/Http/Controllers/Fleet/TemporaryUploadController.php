@@ -19,7 +19,7 @@ class TemporaryUploadController extends Controller
         $uploadKind = (string) $request->input('upload_kind', 'generic');
         $rules = $uploadKind === 'document'
             ? FleetDocumentUploadPolicy::rules()
-            : ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif,svg,pdf,doc,docx,xls,xlsx', 'max:10240'];
+            : ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif,svg,ico,pdf,doc,docx,xls,xlsx', 'max:10240'];
 
         $validated = $request->validate([
             'upload_kind' => ['nullable', Rule::in(['generic', 'document', 'image'])],

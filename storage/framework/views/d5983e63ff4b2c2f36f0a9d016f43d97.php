@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <title><?php echo $__env->yieldContent('title', 'Secure Access'); ?> · <?php echo e($brand['name'] ?? 'FleetMan'); ?></title>
+    <?php if(!empty($brand['favicon_url'])): ?>
+        <link rel="icon" href="<?php echo e($brand['favicon_url']); ?>">
+        <link rel="shortcut icon" href="<?php echo e($brand['favicon_url']); ?>">
+        <link rel="apple-touch-icon" href="<?php echo e($brand['favicon_url']); ?>">
+    <?php endif; ?>
     <?php
         $fleetCssVersion = file_exists(public_path('css/fleetman.css'))
             ? filemtime(public_path('css/fleetman.css'))

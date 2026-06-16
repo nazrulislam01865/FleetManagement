@@ -25,47 +25,105 @@ class SettingsController extends FleetBaseController
 
     public function updateLogo(Request $request, FleetTemporaryUploadService $uploads): JsonResponse
     {
-        $disk = Storage::disk('public');
-        $storedPath = null;
+        $storedPath = $this->storeBrandAsset(
+            request: $request,
+            uploads: $uploads,
+            field: 'logo',
+            directory: 'logo',
+            extensions: ['png', 'jpg', 'jpeg', 'svg', 'webp'],
+            maxKilobytes: 5120,
+            imageOnly: true,
+            directRules: ['required', 'file', 'mimes:png,jpg,jpeg,svg,webp', 'max:5120']
+        );
 
-        $temporaryLogo = $request->input('logo');
-        if (is_string($temporaryLogo)) {
-            $temporaryLogo = json_decode($temporaryLogo, true);
-        }
-
-        if (is_array($temporaryLogo) && ! empty($temporaryLogo['tempToken'])) {
-            $payload = $uploads->claim(
-                $temporaryLogo,
-                (int) $request->user()->id,
-                'logo',
-                ['png', 'jpg', 'jpeg', 'svg', 'webp'],
-                5120,
-                true
-            );
-            $storedPath = $payload['filePath'];
-        } elseif ($request->hasFile('logo')) {
-            $validated = $request->validate([
-                'logo' => ['required', 'image', 'mimes:png,jpg,jpeg,svg,webp', 'max:5120'],
-            ]);
-            $storedPath = $validated['logo']->store('logo', 'public');
-        }
-
-        if (! $storedPath) {
-            throw ValidationException::withMessages([
-                'logo' => 'Please choose and finish uploading a logo before saving.',
-            ]);
-        }
-
-        foreach ($disk->files('logo') as $existingPath) {
-            if ($existingPath !== $storedPath) {
-                $disk->delete($existingPath);
-            }
-        }
+        $this->deleteOtherBrandAssets('logo', $storedPath);
 
         return response()->json([
             'ok' => true,
             'message' => 'Logo updated successfully!',
             'logo_url' => FleetBrand::logoUrl(),
         ]);
+    }
+
+    public function updateFavicon(Request $request, FleetTemporaryUploadService $uploads): JsonResponse
+    {
+        $storedPath = $this->storeBrandAsset(
+            request: $request,
+            uploads: $uploads,
+            field: 'favicon',
+            directory: 'favicon',
+            extensions: ['ico', 'png', 'jpg', 'jpeg', 'webp'],
+            maxKilobytes: 1024,
+            imageOnly: false,
+            directRules: ['required', 'file', 'mimes:ico,png,jpg,jpeg,webp', 'max:1024']
+        );
+
+        $this->deleteOtherBrandAssets('favicon', $storedPath);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Company favicon updated successfully!',
+            'favicon_url' => FleetBrand::faviconUrl(),
+        ]);
+    }
+
+    /**
+     * @param array<int, string> $extensions
+     * @param array<int, string> $directRules
+     */
+    private function storeBrandAsset(
+        Request $request,
+        FleetTemporaryUploadService $uploads,
+        string $field,
+        string $directory,
+        array $extensions,
+        int $maxKilobytes,
+        bool $imageOnly,
+        array $directRules
+    ): string {
+        $temporaryFile = $request->input($field);
+        if (is_string($temporaryFile)) {
+            $temporaryFile = json_decode($temporaryFile, true);
+        }
+
+        if (is_array($temporaryFile) && filled($temporaryFile['tempToken'] ?? null)) {
+            $payload = $uploads->claim(
+                $temporaryFile,
+                (int) $request->user()->id,
+                $directory,
+                $extensions,
+                $maxKilobytes,
+                $imageOnly,
+                true
+            );
+
+            $storedPath = trim((string) ($payload['filePath'] ?? ''));
+            if ($storedPath !== '') {
+                return $storedPath;
+            }
+        }
+
+        if ($request->hasFile($field)) {
+            $validated = $request->validate([
+                $field => $directRules,
+            ]);
+
+            return $validated[$field]->store($directory, 'public');
+        }
+
+        throw ValidationException::withMessages([
+            $field => 'Please choose and finish uploading the '.$field.' before saving.',
+        ]);
+    }
+
+    private function deleteOtherBrandAssets(string $directory, string $storedPath): void
+    {
+        $disk = Storage::disk('public');
+
+        foreach ($disk->files($directory) as $existingPath) {
+            if ($existingPath !== $storedPath) {
+                $disk->delete($existingPath);
+            }
+        }
     }
 }

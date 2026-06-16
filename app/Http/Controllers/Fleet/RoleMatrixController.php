@@ -103,7 +103,9 @@ class RoleMatrixController extends FleetBaseController
                     ->all();
 
                 foreach ($permissions as $permission) {
-                    if ($permission->key === FleetRbac::DELETE_PERMISSION_KEY) {
+                    if ($permission->key === 'settings.manage') {
+                        $allowed = $role->isSuperAdmin();
+                    } elseif ($permission->key === FleetRbac::DELETE_PERMISSION_KEY) {
                         $allowed = $role->isSuperAdmin()
                             || ($canManageDeletePermission
                                 ? in_array($permission->key, $allowedKeys, true)
@@ -180,6 +182,7 @@ class RoleMatrixController extends FleetBaseController
     private function roleMatrixViewData(): array
     {
         $permissions = FleetPermission::query()
+            ->where('key', '!=', 'settings.manage')
             ->orderBy('sort_order')
             ->orderBy('module')
             ->orderBy('label')

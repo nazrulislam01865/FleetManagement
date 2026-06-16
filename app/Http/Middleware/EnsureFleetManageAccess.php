@@ -37,19 +37,30 @@ class EnsureFleetManageAccess
             'contracts' => 'contracts.manage',
         ];
 
-        $requiredPermission = $scopePermissions[$scope] ?? null;
-        $allowed = $requiredPermission
-            && method_exists($user, 'canFleet')
-            && $user->canFleet($requiredPermission);
+        if ($scope === 'settings') {
+            $role = $user->fleetRole;
+            $allowed = $user->isAccountActive()
+                && $role?->slug === 'super_admin'
+                && (bool) $role?->is_active;
+        } else {
+            $requiredPermission = $scopePermissions[$scope] ?? null;
+            $allowed = $requiredPermission
+                && method_exists($user, 'canFleet')
+                && $user->canFleet($requiredPermission);
+        }
 
         if (! $allowed) {
             if ($request->expectsJson()) {
                 return response()->json([
-                    'message' => 'You do not have permission to upload files for this module.',
+                    'message' => $scope === 'settings'
+                        ? 'Only Super Admin can upload company branding files.'
+                        : 'You do not have permission to upload files for this module.',
                 ], 403);
             }
 
-            abort(403, 'You do not have permission to upload files for this module.');
+            abort(403, $scope === 'settings'
+                ? 'Only Super Admin can upload company branding files.'
+                : 'You do not have permission to upload files for this module.');
         }
 
         return $next($request);

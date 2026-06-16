@@ -272,7 +272,7 @@
                     <div class="grid3">
                         <div class="field">
                             <label for="employeeDesignation">Designation <span class="req">*</span></label>
-                            <input id="employeeDesignation" list="employeeDesignationList" placeholder="Example: Office Assistant" required aria-required="true">
+                            <input id="employeeDesignation" list="employeeDesignationList" data-searchable-allow-custom="true" placeholder="Example: Office Assistant" required aria-required="true">
                             <datalist id="employeeDesignationList">
                                 <?php $__currentLoopData = $fleetman['options']['employee_designations'] ?? []; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $designation): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                                     <option value="<?php echo e($designation); ?>"></option>

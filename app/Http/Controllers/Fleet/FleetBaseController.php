@@ -567,6 +567,7 @@ abstract class FleetBaseController extends Controller
         $isVehiclePage = $currentPage === 'vehicles';
 
         $logoUrl = FleetBrand::logoUrl();
+        $faviconUrl = FleetBrand::faviconUrl();
         $accountName = trim((string) ($user?->name ?? (config('fleetman.account.name') ?? 'User')));
         $nameParts = preg_split('/\s+/u', $accountName, -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $accountInitials = collect($nameParts)
@@ -577,6 +578,7 @@ abstract class FleetBaseController extends Controller
         return [
             'brand' => array_merge(config('fleetman.brand'), [
                 'logo_url' => $logoUrl,
+                'favicon_url' => $faviconUrl,
             ]),
             'account' => array_merge(config('fleetman.account'), [
                 'title' => $roleName,
@@ -768,9 +770,23 @@ abstract class FleetBaseController extends Controller
             'dues' => ['dues.view', 'dues.manage'],
         ];
 
+        $user = auth()->user();
+
+        if ($page === 'settings') {
+            $isSuperAdmin = $user?->isFleetSuperAdmin() ?? false;
+
+            return [
+                'viewPermission' => null,
+                'managePermission' => null,
+                'canView' => $isSuperAdmin,
+                'canManage' => $isSuperAdmin,
+                'readOnly' => false,
+                'createOnly' => false,
+            ];
+        }
+
         [$viewPermission, $managePermission] = $pageMap[$page]
             ?? ($page === 'record-detail' ? ($resourceMap[$this->resource] ?? [null, null]) : [null, null]);
-        $user = auth()->user();
         $can = static fn (?string $permission): bool => $permission === null
             || ! $user
             || ! method_exists($user, 'canFleet')

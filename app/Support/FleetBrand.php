@@ -7,19 +7,55 @@ use Throwable;
 
 final class FleetBrand
 {
+    private const LOGO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'svg', 'webp'];
+
+    private const FAVICON_EXTENSIONS = ['ico', 'png', 'jpg', 'jpeg', 'webp'];
+
     /**
-     * Return the newest supported logo file stored on the public disk.
+     * Return the newest supported company logo stored on the public disk.
      */
     public static function logoPath(): ?string
+    {
+        return self::newestAssetPath('logo', self::LOGO_EXTENSIONS);
+    }
+
+    /**
+     * Return the newest supported company favicon stored on the public disk.
+     */
+    public static function faviconPath(): ?string
+    {
+        return self::newestAssetPath('favicon', self::FAVICON_EXTENSIONS);
+    }
+
+    /**
+     * Generate a request-aware logo URL instead of relying on public/storage.
+     */
+    public static function logoUrl(): ?string
+    {
+        return self::versionedRouteUrl(self::logoPath(), 'brand.logo');
+    }
+
+    /**
+     * Generate a cache-safe favicon URL for browser tabs and bookmarks.
+     */
+    public static function faviconUrl(): ?string
+    {
+        return self::versionedRouteUrl(self::faviconPath(), 'brand.favicon');
+    }
+
+    /**
+     * @param array<int, string> $allowedExtensions
+     */
+    private static function newestAssetPath(string $directory, array $allowedExtensions): ?string
     {
         $disk = Storage::disk('public');
 
         try {
             $files = array_values(array_filter(
-                $disk->files('logo'),
+                $disk->files($directory),
                 static fn (string $path): bool => in_array(
                     strtolower(pathinfo($path, PATHINFO_EXTENSION)),
-                    ['png', 'jpg', 'jpeg', 'svg', 'webp'],
+                    $allowedExtensions,
                     true
                 )
             ));
@@ -38,13 +74,8 @@ final class FleetBrand
         }
     }
 
-    /**
-     * Generate a request-aware URL instead of relying on public/storage.
-     */
-    public static function logoUrl(): ?string
+    private static function versionedRouteUrl(?string $path, string $routeName): ?string
     {
-        $path = self::logoPath();
-
         if ($path === null) {
             return null;
         }
@@ -57,6 +88,6 @@ final class FleetBrand
             $version = (string) time();
         }
 
-        return route('brand.logo', ['v' => $version], false);
+        return route($routeName, ['v' => $version], false);
     }
 }

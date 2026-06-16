@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Fleet;
 use App\Models\Fleet\FleetDue;
 use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetEmployee;
+use App\Models\Fleet\FleetVehicle;
+use App\Services\FleetDueService;
+use App\Services\FleetPayrollCalculator;
 use App\Services\FleetRecordOwnershipService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
@@ -83,16 +86,24 @@ class DueController extends FleetBaseController
     }
 
     /**
-     * Generate monthly payroll dues during the permitted business window.
+     * Generate one aggregate due per payable entity for the selected month.
      *
-     * Payroll can be generated only from the 26th through the 30th day of
-     * a month (Asia/Dhaka time). Generation is limited to the current
-     * month and the two immediately previous months. Existing monthly records
-     * are preserved so historical/paid payroll is
-     * never reset by generating the same month again.
+     * The saved salary/payment tenure controls the calculation:
+     * Monthly, Contract and Other keep the saved amount; Weekly is accrued by
+     * the days in the selected month; Daily is multiplied by the month length;
+     * driver Hourly payroll continues to come from completed attendance logs;
+     * employee Hourly payroll keeps the existing 200-hour monthly basis because
+     * there is no employee-attendance module yet.
+     *
+     * Every generated record uses a deterministic code and the database's
+     * unique code constraint, so repeated or simultaneous generation cannot
+     * create a duplicate payroll due.
      */
-    public function generatePayroll(Request $request, FleetRecordOwnershipService $ownership): JsonResponse
-    {
+    public function generatePayroll(
+        Request $request,
+        FleetDueService $dueService,
+        FleetPayrollCalculator $calculator
+    ): JsonResponse {
         $validated = $request->validate([
             'month' => ['required', 'date_format:Y-m'],
         ], [
@@ -136,139 +147,218 @@ class DueController extends FleetBaseController
 
         $creatorUserId = (int) ($request->user()?->id ?? 0);
 
-        $result = DB::transaction(function () use ($month, $today, $ownership, $creatorUserId): array {
+        $result = DB::transaction(function () use (
+            $month,
+            $payrollMonth,
+            $today,
+            $creatorUserId,
+            $dueService,
+            $calculator
+        ): array {
             $created = 0;
             $existing = 0;
+            $skipped = 0;
 
-            // 1. Driver Salaries
-            $drivers = FleetDriver::where('status', 'Active')->get();
-            foreach ($drivers as $driver) {
-                $payload = $driver->payload ?? [];
-                $salary = (float) ($payload['salary'] ?? 0);
-                $tenure = $payload['salaryTenure'] ?? 'Monthly';
+            // Driver payroll: hourly drivers are generated exactly once per
+            // completed attendance log by DriverAttendanceController.
+            FleetDriver::query()
+                ->where('status', 'Active')
+                ->orderBy('id')
+                ->each(function (FleetDriver $driver) use (
+                    $month,
+                    $payrollMonth,
+                    $today,
+                    $creatorUserId,
+                    $dueService,
+                    $calculator,
+                    &$created,
+                    &$existing,
+                    &$skipped
+                ): void {
+                    $payload = is_array($driver->payload) ? $driver->payload : [];
+                    $salary = (float) ($payload['salary'] ?? 0);
+                    $tenure = trim((string) ($payload['salaryTenure'] ?? 'Monthly')) ?: 'Monthly';
 
-                if ($salary <= 0 || $tenure === 'Hourly') {
-                    // Hourly drivers are generated per attendance log in DriverAttendanceController@sync.
-                    continue;
-                }
+                    if (strcasecmp($tenure, 'Hourly') === 0) {
+                        $skipped++;
+                        return;
+                    }
 
-                $due = FleetDue::firstOrCreate(
-                    ['code' => "PAY-DRV-{$driver->code}-{$month}"],
-                    [
+                    $calculation = $calculator->monthlyAmount($salary, $tenure, $payrollMonth);
+                    if (! $calculation || $calculation['amount'] <= 0) {
+                        $skipped++;
+                        return;
+                    }
+
+                    $saved = $dueService->createOnce([
+                        'code' => "PAY-DRV-{$driver->code}-{$month}",
                         'type' => 'Driver Salary',
                         'party_type' => 'Driver',
                         'party_id' => $driver->code,
                         'source_type' => 'Payroll',
-                        'source_id' => $month,
-                        'amount' => $salary,
+                        'source_id' => "driver:{$driver->code}:{$month}",
+                        'amount' => $calculation['amount'],
                         'status' => 'Pending',
                         'due_date' => $month.'-05',
-                        'payload' => [
-                            'month' => $month,
-                            'tenure' => $tenure,
-                            'driverName' => $payload['fullName'] ?? $driver->name,
-                            'generatedAt' => $today->toIso8601String(),
-                        ],
-                    ]
-                );
+                        'payload' => $this->payrollPayload(
+                            $month,
+                            $payrollMonth,
+                            $today,
+                            $salary,
+                            $calculation,
+                            [
+                                'driverName' => $payload['fullName'] ?? $driver->name,
+                                'driverId' => $driver->code,
+                            ]
+                        ),
+                    ], $creatorUserId);
 
-                if ($due->wasRecentlyCreated) {
-                    $created++;
-                    if ($creatorUserId > 0) {
-                        $ownership->claimRecord('dues', (string) $due->code, $creatorUserId);
+                    $saved['created'] ? $created++ : $existing++;
+                });
+
+            // Employee payroll: the existing 200-hour basis is retained for
+            // Hourly employees until an employee-attendance module is added.
+            FleetEmployee::query()
+                ->where('status', 'Active')
+                ->orderBy('id')
+                ->each(function (FleetEmployee $employee) use (
+                    $month,
+                    $payrollMonth,
+                    $today,
+                    $creatorUserId,
+                    $dueService,
+                    $calculator,
+                    &$created,
+                    &$existing,
+                    &$skipped
+                ): void {
+                    $payload = is_array($employee->payload) ? $employee->payload : [];
+                    $salary = (float) ($payload['salary'] ?? 0);
+                    $tenure = trim((string) ($payload['salaryTenure'] ?? 'Monthly')) ?: 'Monthly';
+                    $hourlyUnits = strcasecmp($tenure, 'Hourly') === 0 ? 200.0 : null;
+                    $calculation = $calculator->monthlyAmount($salary, $tenure, $payrollMonth, $hourlyUnits);
+
+                    if (! $calculation || $calculation['amount'] <= 0) {
+                        $skipped++;
+                        return;
                     }
-                } else {
-                    $existing++;
-                }
-            }
 
-            // 2. Employee Salaries
-            $employees = FleetEmployee::where('status', 'Active')->get();
-            foreach ($employees as $employee) {
-                $payload = $employee->payload ?? [];
-                $salary = (float) ($payload['salary'] ?? 0);
-                $tenure = $payload['salaryTenure'] ?? 'Monthly';
-
-                if ($salary <= 0) {
-                    continue;
-                }
-
-                // Without an Employee Attendance module, use the existing 200-hour monthly calculation.
-                $amount = $tenure === 'Hourly' ? ($salary * 200) : $salary;
-
-                $due = FleetDue::firstOrCreate(
-                    ['code' => "PAY-EMP-{$employee->code}-{$month}"],
-                    [
+                    $saved = $dueService->createOnce([
+                        'code' => "PAY-EMP-{$employee->code}-{$month}",
                         'type' => 'Employee Salary',
                         'party_type' => 'Employee',
                         'party_id' => $employee->code,
                         'source_type' => 'Payroll',
-                        'source_id' => $month,
-                        'amount' => $amount,
+                        'source_id' => "employee:{$employee->code}:{$month}",
+                        'amount' => $calculation['amount'],
                         'status' => 'Pending',
                         'due_date' => $month.'-05',
-                        'payload' => [
-                            'month' => $month,
-                            'tenure' => $tenure,
-                            'employeeName' => $payload['fullName'] ?? $employee->name,
-                            'generatedAt' => $today->toIso8601String(),
-                        ],
-                    ]
-                );
+                        'payload' => $this->payrollPayload(
+                            $month,
+                            $payrollMonth,
+                            $today,
+                            $salary,
+                            $calculation,
+                            [
+                                'employeeName' => $payload['fullName'] ?? $employee->name,
+                                'employeeId' => $employee->code,
+                                'assumedHours' => $hourlyUnits,
+                            ]
+                        ),
+                    ], $creatorUserId);
 
-                if ($due->wasRecentlyCreated) {
-                    $created++;
-                    if ($creatorUserId > 0) {
-                        $ownership->claimRecord('dues', (string) $due->code, $creatorUserId);
+                    $saved['created'] ? $created++ : $existing++;
+                });
+
+            // Vehicle owner rent and optional assigned-driver payment are kept
+            // as separate monthly dues because they may use different cycles.
+            FleetVehicle::query()
+                ->where('status', 'Active')
+                ->orderBy('id')
+                ->each(function (FleetVehicle $vehicle) use (
+                    $month,
+                    $payrollMonth,
+                    $today,
+                    $creatorUserId,
+                    $dueService,
+                    $calculator,
+                    &$created,
+                    &$existing,
+                    &$skipped
+                ): void {
+                    $payload = is_array($vehicle->payload) ? $vehicle->payload : [];
+                    $vendor = trim((string) ($payload['vendor'] ?? ''));
+                    $vehicleRate = (float) ($payload['vehicleRentalAmount'] ?? $payload['rent'] ?? 0);
+                    $vehicleCycle = trim((string) ($payload['vehiclePaymentCycle'] ?? 'Monthly')) ?: 'Monthly';
+                    $vehicleCalculation = $calculator->monthlyAmount($vehicleRate, $vehicleCycle, $payrollMonth);
+
+                    if ($vendor !== '' && $vehicleCalculation && $vehicleCalculation['amount'] > 0) {
+                        $saved = $dueService->createOnce([
+                            'code' => "RENT-VHL-{$vehicle->code}-{$month}",
+                            'type' => 'Vehicle Rent',
+                            'party_type' => 'Vendor',
+                            'party_id' => $vendor,
+                            'source_type' => 'VehicleRent',
+                            'source_id' => "vehicle:{$vehicle->code}:{$month}",
+                            'amount' => $vehicleCalculation['amount'],
+                            'status' => 'Pending',
+                            'due_date' => $month.'-01',
+                            'payload' => $this->payrollPayload(
+                                $month,
+                                $payrollMonth,
+                                $today,
+                                $vehicleRate,
+                                $vehicleCalculation,
+                                [
+                                    'vehicleId' => $vehicle->code,
+                                    'regNo' => $payload['regNo'] ?? '',
+                                    'vendor' => $vendor,
+                                ]
+                            ),
+                        ], $creatorUserId);
+
+                        $saved['created'] ? $created++ : $existing++;
+                    } elseif ($vehicleRate > 0) {
+                        $skipped++;
                     }
-                } else {
-                    $existing++;
-                }
-            }
 
-            // 3. Vehicle Monthly Rents (kept in the existing monthly generation flow)
-            $vehicles = \App\Models\Fleet\FleetVehicle::where('status', 'Active')->get();
-            foreach ($vehicles as $vehicle) {
-                $payload = $vehicle->payload ?? [];
-                $rent = (float) ($payload['rent'] ?? 0);
-                $vendor = $payload['vendor'] ?? null;
+                    $withDriver = strcasecmp((string) ($payload['rentalType'] ?? ''), 'With Driver') === 0;
+                    $driverParty = trim((string) ($payload['driver'] ?? ''));
+                    $driverRate = (float) ($payload['driverPaymentAmount'] ?? 0);
+                    $driverCycle = trim((string) ($payload['driverPaymentCycle'] ?? 'Monthly')) ?: 'Monthly';
+                    $driverCalculation = $calculator->monthlyAmount($driverRate, $driverCycle, $payrollMonth);
 
-                if ($rent <= 0 || ! $vendor) {
-                    continue;
-                }
+                    if ($withDriver && $driverParty !== '' && $driverCalculation && $driverCalculation['amount'] > 0) {
+                        $saved = $dueService->createOnce([
+                            'code' => "RENT-DRV-{$vehicle->code}-{$month}",
+                            'type' => 'Vehicle Driver Payment',
+                            'party_type' => 'Driver',
+                            'party_id' => $driverParty,
+                            'source_type' => 'VehicleDriverPayment',
+                            'source_id' => "vehicle-driver:{$vehicle->code}:{$month}",
+                            'amount' => $driverCalculation['amount'],
+                            'status' => 'Pending',
+                            'due_date' => $month.'-01',
+                            'payload' => $this->payrollPayload(
+                                $month,
+                                $payrollMonth,
+                                $today,
+                                $driverRate,
+                                $driverCalculation,
+                                [
+                                    'vehicleId' => $vehicle->code,
+                                    'regNo' => $payload['regNo'] ?? '',
+                                    'driver' => $driverParty,
+                                ]
+                            ),
+                        ], $creatorUserId);
 
-                $due = FleetDue::firstOrCreate(
-                    ['code' => "RENT-VHL-{$vehicle->code}-{$month}"],
-                    [
-                        'type' => 'Vehicle Rent',
-                        'party_type' => 'Vendor',
-                        'party_id' => $vendor,
-                        'source_type' => 'VehicleRent',
-                        'source_id' => $month,
-                        'amount' => $rent,
-                        'status' => 'Pending',
-                        'due_date' => $month.'-01',
-                        'payload' => [
-                            'month' => $month,
-                            'vehicleId' => $vehicle->code,
-                            'regNo' => $payload['regNo'] ?? '',
-                            'generatedAt' => $today->toIso8601String(),
-                        ],
-                    ]
-                );
-
-                if ($due->wasRecentlyCreated) {
-                    $created++;
-                    if ($creatorUserId > 0) {
-                        $ownership->claimRecord('dues', (string) $due->code, $creatorUserId);
+                        $saved['created'] ? $created++ : $existing++;
                     }
-                } else {
-                    $existing++;
-                }
-            }
+                });
 
-            return compact('created', 'existing');
-        });
+            return compact('created', 'existing', 'skipped');
+        }, 3);
 
         if (($result['created'] + $result['existing']) === 0) {
             $message = "No eligible active payroll or vehicle-rent records were found for {$month}.";
@@ -282,13 +372,39 @@ class DueController extends FleetBaseController
             $message = "Payroll for {$month} is already stored. No duplicate records were created.";
         }
 
+        if ($result['skipped'] > 0) {
+            $message .= " {$result['skipped']} ineligible or attendance-based record(s) were skipped.";
+        }
+
         return response()->json([
             'ok' => true,
             'message' => $message,
             'created' => $result['created'],
             'existing' => $result['existing'],
+            'skipped' => $result['skipped'],
             'rows' => $this->latestDues(),
         ]);
+    }
+
+    private function payrollPayload(
+        string $month,
+        CarbonImmutable $payrollMonth,
+        CarbonImmutable $generatedAt,
+        float $rate,
+        array $calculation,
+        array $extra = []
+    ): array {
+        return array_filter(array_merge([
+            'month' => $month,
+            'periodStart' => $payrollMonth->startOfMonth()->toDateString(),
+            'periodEnd' => $payrollMonth->endOfMonth()->toDateString(),
+            'tenure' => $calculation['tenure'],
+            'baseRate' => round($rate, 2),
+            'units' => $calculation['units'],
+            'unitLabel' => $calculation['unit_label'],
+            'formula' => $calculation['formula'],
+            'generatedAt' => $generatedAt->toIso8601String(),
+        ], $extra), fn ($value): bool => $value !== null && $value !== '');
     }
 
     public function records(): JsonResponse

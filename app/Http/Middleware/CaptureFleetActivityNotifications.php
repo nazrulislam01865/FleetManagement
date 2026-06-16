@@ -216,7 +216,7 @@ class CaptureFleetActivityNotifications
 
         if ($request->isMethod('PUT')
             || $request->isMethod('PATCH')
-            || Str::endsWith($routeName, ['.update', '.update-logo'])) {
+            || Str::endsWith($routeName, ['.update', '.update-logo', '.update-favicon'])) {
             return [[
                 'action' => 'updated',
                 'count' => 1,

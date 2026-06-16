@@ -698,7 +698,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
     function isImage(file = {}) {
         const mime = String(file.mimeType || '').toLowerCase();
         const name = String(file.originalName || file.fileName || '').toLowerCase();
-        return mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(name);
+        return mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg|ico)$/i.test(name);
     }
 
     function render({ info, progress, file = {}, message = '', error = false, showPreview = true }) {

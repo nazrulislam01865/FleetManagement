@@ -21,7 +21,7 @@ class EnsureFleetSuperAdmin
             && (bool) $role?->is_active;
 
         if (! $isActiveSuperAdmin) {
-            abort(403, 'Only Super Admin can access the Release Tracker.');
+            abort(403, 'Only Super Admin can access this section.');
         }
 
         return $next($request);

@@ -134,7 +134,7 @@ class FleetRbac
             self::permission('role_matrix.view', 'System', 'View', 'View Role Matrix', 'Open the user role and permission matrix page.', 'fleet.role-matrix', 140),
             self::permission('role_matrix.manage', 'System', 'Manage', 'Manage Role Matrix', 'Update role permissions and assign roles to users.', 'fleet.role-matrix.update', 141),
             self::permission(self::DELETE_PERMISSION_KEY, 'System', 'Delete', 'Delete Records', 'Delete business and master-data records. Super Admin has this access by default and may grant or revoke it for other roles from this matrix.', null, 145),
-            self::permission('settings.manage', 'System', 'Manage', 'Manage Settings', 'Update application settings including logo.', 'fleet.settings', 150),
+            self::permission('settings.manage', 'System', 'Manage', 'Manage Settings', 'Super Admin only: update the company logo and favicon.', 'fleet.settings', 150),
         ];
     }
 
@@ -287,7 +287,7 @@ class FleetRbac
                     ->where('permission_id', $permissionId)
                     ->exists();
 
-                if ($force || ! $exists || $roleSlug === 'super_admin') {
+                if ($force || ! $exists || $roleSlug === 'super_admin' || $permissionKey === 'settings.manage') {
                     DB::table('fleet_role_permissions')->updateOrInsert(
                         ['role_id' => $roleId, 'permission_id' => $permissionId],
                         ['allowed' => $allowed, 'created_at' => $now, 'updated_at' => $now]
@@ -396,7 +396,6 @@ class FleetRbac
             ['permission' => 'users.view', 'route' => 'fleet.users', 'parameters' => []],
             ['permission' => 'role_matrix.view', 'route' => 'fleet.role-matrix', 'parameters' => []],
             ['permission' => 'master_data.view', 'route' => 'fleet.master-data', 'parameters' => []],
-            ['permission' => 'settings.manage', 'route' => 'fleet.settings', 'parameters' => []],
         ];
 
         foreach ($candidates as $candidate) {

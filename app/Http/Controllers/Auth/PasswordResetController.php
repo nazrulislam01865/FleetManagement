@@ -102,6 +102,7 @@ class PasswordResetController extends Controller
     {
         return array_merge(config('fleetman.brand'), [
             'logo_url' => FleetBrand::logoUrl(),
+            'favicon_url' => FleetBrand::faviconUrl(),
         ]);
     }
 }

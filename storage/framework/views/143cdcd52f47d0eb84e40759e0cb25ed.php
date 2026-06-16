@@ -139,6 +139,7 @@
                     <option value="Driver Salary">Driver Salary</option>
                     <option value="Employee Salary">Employee Salary</option>
                     <option value="Vehicle Rent">Vehicle Rent</option>
+                    <option value="Vehicle Driver Payment">Vehicle Driver Payment</option>
                     <option value="Trip Payment Balance">Trip Payment Balance</option>
                 </select>
                 <select id="dueFilterStatus" class="form-control" style="width:200px">
@@ -149,12 +150,13 @@
                 </select>
                 <button type="button" class="btn light" id="clearDueFiltersBtn">Clear</button>
                 <div class="payroll-dropdown" id="payrollDropdown">
-                    <button type="button" class="btn secondary" id="generatePayrollBtn" aria-haspopup="true" aria-expanded="false" title="Payroll can be generated only from the 26th through the 30th of each month.">🗓 Generate Monthly Payroll</button>
+                    <button type="button" class="btn secondary" id="generatePayrollBtn" aria-haspopup="true" aria-expanded="false" title="Generate one due per eligible person or rental for the selected month. Salary/payment tenure is respected and duplicates are blocked.">🗓 Generate Monthly Payroll</button>
                     <div class="payroll-dropdown-menu" id="payrollDropdownMenu" hidden>
                         <label class="section-label" for="payrollMonthSelect">Select Payroll Month</label>
                         <select id="payrollMonthSelect" class="form-control">
                             <option value="">Select month</option>
                         </select>
+                        <small style="display:block;margin-top:8px;color:#667085;line-height:1.45;">One due is stored per eligible employee, driver, or rental for the selected month. Weekly and daily rates are converted for that month; hourly driver pay comes from completed logs. Re-running the month will not create duplicates.</small>
                         <div class="payroll-dropdown-actions">
                             <button type="button" class="btn light" id="cancelPayrollMonthBtn">Cancel</button>
                             <button type="button" class="btn secondary" id="confirmGeneratePayrollBtn">Generate Payroll</button>
@@ -236,8 +238,11 @@
 
             duesData.forEach(due => {
                 // Filters
-                const searchMatch = (due.code || '').toLowerCase().includes(searchTerm) || 
-                                    (due.party_id || '').toLowerCase().includes(searchTerm);
+                const searchMatch = [due.code, due.party_id, due.party_type, due.type, due.source_id]
+                                    .filter(Boolean)
+                                    .join(' ')
+                                    .toLowerCase()
+                                    .includes(searchTerm);
                 const typeMatch = !filterType || due.type === filterType;
                 const statusMatch = !filterStatus || due.status === filterStatus;
 

@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <title><?php echo $__env->yieldContent('title', $brand['name'] ?? 'FleetMan'); ?></title>
+    <?php if(!empty($brand['favicon_url'])): ?>
+        <link rel="icon" href="<?php echo e($brand['favicon_url']); ?>">
+        <link rel="shortcut icon" href="<?php echo e($brand['favicon_url']); ?>">
+        <link rel="apple-touch-icon" href="<?php echo e($brand['favicon_url']); ?>">
+    <?php endif; ?>
     <?php
         $fleetCssVersion = filemtime(public_path('css/fleetman.css'));
         $fleetPage = (string) ($fleetman['page'] ?? '');
@@ -26,6 +31,7 @@
         $fleetModuleJsVersion = $fleetUseSplitAssets && $fleetModuleAsset ? filemtime(public_path($fleetModuleAsset)) : $fleetCoreJsVersion;
         $fleetTransactionGuardJsVersion = filemtime(public_path('js/fleetman-transaction-guard.js'));
         $fleetActionLoaderJsVersion = filemtime(public_path('js/fleetman-action-loader.js'));
+        $fleetSearchableDropdownJsVersion = filemtime(public_path('js/fleetman-searchable-dropdown.js'));
         $fleetNavigationJsVersion = filemtime(public_path('js/fleetman-navigation.js'));
         $fleetRbacJsVersion = filemtime(public_path('js/fleetman-rbac.js'));
         $fleetSessionJsVersion = filemtime(public_path('js/fleetman-session-timeout.js'));
@@ -195,6 +201,7 @@
         window.FLEETMAN = <?php echo json_encode($fleetman ?? [], 15, 512) ?>;
     </script>
     <script src="<?php echo e(asset('js/fleetman-transaction-guard.js')); ?>?v=<?php echo e($fleetTransactionGuardJsVersion); ?>"></script>
+    <script src="<?php echo e(asset('js/fleetman-searchable-dropdown.js')); ?>?v=<?php echo e($fleetSearchableDropdownJsVersion); ?>"></script>
     <script src="<?php echo e(asset($fleetRecordApiAsset)); ?>?v=<?php echo e($fleetRecordApiJsVersion); ?>"></script>
     <?php if($fleetUseSplitAssets): ?>
         <script src="<?php echo e(asset($fleetCoreAsset)); ?>?v=<?php echo e($fleetCoreJsVersion); ?>"></script>

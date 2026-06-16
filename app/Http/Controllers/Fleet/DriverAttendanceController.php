@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetDriverAttendance;
-use App\Models\Fleet\FleetDue;
+use App\Services\FleetDueService;
 use App\Support\FleetDuration;
 use App\Services\FleetRecordOwnershipService;
 use Illuminate\Http\JsonResponse;
@@ -88,7 +88,7 @@ class DriverAttendanceController extends FleetBaseController
 
         DB::transaction(function () use ($record, $code): void {
             if (Schema::hasTable('fleet_dues')) {
-                FleetDue::query()->where('code', 'PAY-LOG-'.$code)->delete();
+                app(FleetDueService::class)->deleteByCode('PAY-LOG-'.$code);
             }
             $record->delete();
         });
@@ -161,7 +161,7 @@ class DriverAttendanceController extends FleetBaseController
         DB::transaction(function () use ($rows, $deletedCodes): void {
             if (Schema::hasTable('fleet_dues')) {
                 foreach ($deletedCodes as $code) {
-                    FleetDue::query()->where('code', 'PAY-LOG-'.$code)->delete();
+                    app(FleetDueService::class)->deleteByCode('PAY-LOG-'.$code);
                 }
             }
 
@@ -457,7 +457,7 @@ class DriverAttendanceController extends FleetBaseController
 
         $dueCode = 'PAY-LOG-'.$logId;
         if (trim((string) ($row[$this->statusKey] ?? '')) !== 'Completed') {
-            FleetDue::query()->where('code', $dueCode)->delete();
+            app(FleetDueService::class)->deleteByCode($dueCode);
             app(FleetRecordOwnershipService::class)->forgetRecord('dues', $dueCode);
             return;
         }
@@ -473,7 +473,7 @@ class DriverAttendanceController extends FleetBaseController
             : null;
 
         if (! $driver || strcasecmp((string) ($driver->payload['salaryTenure'] ?? ''), 'Hourly') !== 0) {
-            FleetDue::query()->where('code', $dueCode)->delete();
+            app(FleetDueService::class)->deleteByCode($dueCode);
             app(FleetRecordOwnershipService::class)->forgetRecord('dues', $dueCode);
             return;
         }
@@ -488,34 +488,29 @@ class DriverAttendanceController extends FleetBaseController
 
         $amount = round($salary * $driverHours, 2);
         if ($amount <= 0) {
-            FleetDue::query()->where('code', $dueCode)->delete();
+            app(FleetDueService::class)->deleteByCode($dueCode);
             app(FleetRecordOwnershipService::class)->forgetRecord('dues', $dueCode);
             return;
         }
 
-        $due = FleetDue::query()->updateOrCreate(
-            ['code' => $dueCode],
-            [
-                'type' => 'Driver Salary',
-                'party_type' => 'Driver',
-                'party_id' => $driverCode,
-                'source_type' => 'Attendance',
-                'source_id' => $logId,
-                'amount' => $amount,
-                'status' => 'Pending',
-                'due_date' => $row['date'] ?? null,
-                'payload' => [
-                    'logId' => $logId,
-                    'driverName' => $driverText,
-                    'hours' => $hoursText,
-                ],
-            ]
-        );
-
-        $userId = (int) (auth()->id() ?? 0);
-        if ($due->wasRecentlyCreated && $userId > 0) {
-            app(FleetRecordOwnershipService::class)->claimRecord('dues', (string) $due->code, $userId);
-        }
+        app(FleetDueService::class)->syncSourceDue([
+            'code' => $dueCode,
+            'type' => 'Driver Salary',
+            'party_type' => 'Driver',
+            'party_id' => $driverCode,
+            'source_type' => 'Attendance',
+            'source_id' => $logId,
+            'amount' => $amount,
+            'status' => 'Pending',
+            'due_date' => $row['date'] ?? null,
+            'payload' => [
+                'logId' => $logId,
+                'driverName' => $driverText,
+                'hours' => $hoursText,
+                'hourlyRate' => $salary,
+                'payableHours' => round($driverHours, 4),
+            ],
+        ], (int) (auth()->id() ?? 0));
     }
 
     private function cleanPersistenceMetadata(array $row): array

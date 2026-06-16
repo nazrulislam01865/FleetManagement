@@ -10,19 +10,30 @@ class BrandAssetController extends Controller
 {
     public function logo(): BinaryFileResponse
     {
-        $path = FleetBrand::logoPath();
+        return $this->assetResponse(FleetBrand::logoPath());
+    }
 
+    public function favicon(): BinaryFileResponse
+    {
+        return $this->assetResponse(FleetBrand::faviconPath());
+    }
+
+    private function assetResponse(?string $path): BinaryFileResponse
+    {
         abort_if($path === null, 404);
 
         $disk = Storage::disk('public');
 
         abort_unless($disk->exists($path), 404);
 
-        $mimeType = $disk->mimeType($path) ?: 'application/octet-stream';
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $mimeType = $extension === 'ico'
+            ? 'image/x-icon'
+            : ($disk->mimeType($path) ?: 'application/octet-stream');
 
         return response()->file($disk->path($path), [
             'Content-Type' => $mimeType,
-            'Cache-Control' => 'public, max-age=86400, immutable',
+            'Cache-Control' => 'public, max-age=31536000, immutable',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }

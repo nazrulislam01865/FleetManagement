@@ -41,7 +41,7 @@
                     <div class="grid3">
                         <div class="field">
                             <label for="employeeDesignation">Designation <span class="req">*</span></label>
-                            <input id="employeeDesignation" list="employeeDesignationList" placeholder="Example: Office Assistant" required aria-required="true">
+                            <input id="employeeDesignation" list="employeeDesignationList" data-searchable-allow-custom="true" placeholder="Example: Office Assistant" required aria-required="true">
                             <datalist id="employeeDesignationList">
                                 @foreach($fleetman['options']['employee_designations'] ?? [] as $designation)
                                     <option value="{{ $designation }}"></option>

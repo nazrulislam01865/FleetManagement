@@ -7,6 +7,8 @@ use App\Models\Fleet\FleetClient;
 use App\Models\Fleet\FleetDue;
 use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
+use App\Services\FleetDueService;
+use App\Services\FleetRecordOwnershipService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -158,7 +160,10 @@ class TripController extends FleetBaseController
         $request->merge(['rows' => $normalizedRows]);
         $response = parent::sync($request);
 
-        $this->syncTripBalances($normalizedRows);
+        $this->syncTripBalances(
+            $normalizedRows,
+            $request->boolean('_legacy_replace_all') && ! $request->boolean('_partial_sync')
+        );
 
         return $response;
     }
@@ -321,62 +326,86 @@ class TripController extends FleetBaseController
         return null;
     }
 
-    private function syncTripBalances(array $rows): void
+    public function destroyRecord(string $code): JsonResponse
+    {
+        $dueService = app(FleetDueService::class);
+        $record = FleetTrip::query()->where('code', $code)->firstOrFail();
+
+        DB::transaction(function () use ($record, $code, $dueService): void {
+            $dueService->deleteByCode('DUE-TRP-'.$code);
+            $record->delete();
+            app(FleetRecordOwnershipService::class)->forgetRecord($this->resource, $code);
+        }, 3);
+
+        return response()->json([
+            'ok' => true,
+            'code' => $code,
+        ]);
+    }
+
+    private function syncTripBalances(array $rows, bool $replaceAll = false): void
     {
         if (! Schema::hasTable('fleet_dues')) {
             return;
         }
 
-        DB::transaction(function () use ($rows): void {
-            $tripIds = collect($rows)->pluck('tripId')->filter()->values();
-            FleetDue::query()
-                ->where('source_type', 'Trip')
-                ->when($tripIds->isNotEmpty(), fn ($query) => $query->whereNotIn('source_id', $tripIds))
-                ->when($tripIds->isEmpty(), fn ($query) => $query)
-                ->delete();
+        $dueService = app(FleetDueService::class);
+        $creatorUserId = (int) (auth()->id() ?? 0);
+
+        DB::transaction(function () use ($rows, $replaceAll, $dueService, $creatorUserId): void {
+            $tripIds = collect($rows)->pluck('tripId')->map(fn ($id): string => trim((string) $id))->filter()->values();
+
+            // Only an explicit legacy replace-all request may remove dues for
+            // omitted trips. Single-record/paginated saves must never remove
+            // balances belonging to other trips.
+            if ($replaceAll) {
+                $obsolete = FleetDue::query()
+                    ->where('source_type', 'Trip')
+                    ->when($tripIds->isNotEmpty(), fn ($query) => $query->whereNotIn('source_id', $tripIds->all()))
+                    ->get(['code']);
+
+                foreach ($obsolete as $due) {
+                    $dueService->deleteByCode((string) $due->code);
+                }
+            }
 
             foreach ($rows as $row) {
-                $tripId = (string) ($row['tripId'] ?? '');
-                $balance = (float) ($row['balanceDue'] ?? 0);
+                $tripId = trim((string) ($row['tripId'] ?? ''));
+                $balance = round((float) ($row['balanceDue'] ?? 0), 2);
                 if ($tripId === '') {
                     continue;
                 }
 
-                if (strcasecmp((string) ($row['savedAs'] ?? ''), 'Draft') === 0) {
-                    FleetDue::query()->where('code', 'DUE-TRP-'.$tripId)->delete();
+                $dueCode = 'DUE-TRP-'.$tripId;
+                if (strcasecmp((string) ($row['savedAs'] ?? ''), 'Draft') === 0 || $balance <= 0.009) {
+                    $dueService->deleteByCode($dueCode);
                     continue;
                 }
 
-                if ($balance <= 0.009) {
-                    FleetDue::query()->where('code', 'DUE-TRP-'.$tripId)->delete();
-                    continue;
-                }
-
-                FleetDue::updateOrCreate(
-                    ['code' => 'DUE-TRP-'.$tripId],
-                    [
-                        'type' => 'Trip Payment Balance',
-                        'party_type' => 'Client',
-                        'party_id' => $row['clientId'] ?? null,
-                        'source_type' => 'Trip',
-                        'source_id' => $tripId,
-                        'amount' => $balance,
-                        'status' => 'Pending',
-                        'due_date' => $row['startDate'] ?? null,
-                        'payload' => [
-                            'totalCost' => $row['totalCost'] ?? 0,
-                            'paidAmount' => $row['paidAmount'] ?? 0,
-                            'balanceDue' => $balance,
-                            'payments' => $row['payments'] ?? [],
-                            'vehicleId' => $row['vehicleId'] ?? null,
-                            'driverId' => $row['driverId'] ?? null,
-                            'purpose' => $row['purpose'] ?? null,
-                            'clientId' => $row['clientId'] ?? null,
-                            'client' => $row['client'] ?? null,
-                        ],
-                    ]
-                );
+                $dueService->syncSourceDue([
+                    'code' => $dueCode,
+                    'type' => 'Trip Payment Balance',
+                    'party_type' => 'Client',
+                    'party_id' => $row['clientId'] ?? null,
+                    'source_type' => 'Trip',
+                    'source_id' => $tripId,
+                    'amount' => $balance,
+                    'status' => 'Pending',
+                    'due_date' => $row['startDate'] ?? null,
+                    'payload' => [
+                        'totalCost' => $row['totalCost'] ?? 0,
+                        'paidAmount' => $row['paidAmount'] ?? 0,
+                        'balanceDue' => $balance,
+                        'payments' => $row['payments'] ?? [],
+                        'vehicleId' => $row['vehicleId'] ?? null,
+                        'driverId' => $row['driverId'] ?? null,
+                        'purpose' => $row['purpose'] ?? null,
+                        'clientId' => $row['clientId'] ?? null,
+                        'client' => $row['client'] ?? null,
+                    ],
+                ], $creatorUserId);
             }
-        });
+        }, 3);
     }
+
 }

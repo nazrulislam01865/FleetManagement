@@ -3,8 +3,9 @@
 namespace App\Http\Controllers\Fleet;
 
 use App\Models\Fleet\FleetFuelRecharge;
+use App\Services\FleetDueService;
+use App\Services\FleetRecordOwnershipService;
 use App\Services\FleetTemporaryUploadService;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -141,6 +142,23 @@ class FuelRechargeController extends FleetBaseController
             'ok' => true,
             'rows' => $this->syncResponseRows(FleetFuelRecharge::class, $rows, $this->idKey),
             'can_view_list' => $this->currentUserCanViewPage(),
+        ]);
+    }
+
+    public function destroyRecord(string $code): JsonResponse
+    {
+        $dueService = app(FleetDueService::class);
+        $record = FleetFuelRecharge::query()->where('code', $code)->firstOrFail();
+
+        DB::transaction(function () use ($record, $code, $dueService): void {
+            $dueService->deleteByCode('DUE-FUEL-'.$code);
+            $record->delete();
+            app(FleetRecordOwnershipService::class)->forgetRecord($this->resource, $code);
+        }, 3);
+
+        return response()->json([
+            'ok' => true,
+            'code' => $code,
         ]);
     }
 
@@ -489,22 +507,37 @@ class FuelRechargeController extends FleetBaseController
 
     private function persistRows(array $rows): void
     {
-        DB::transaction(function () use ($rows) {
+        $dueService = app(FleetDueService::class);
+        $creatorUserId = (int) (auth()->id() ?? 0);
+
+        DB::transaction(function () use ($rows, $dueService, $creatorUserId): void {
             $incomingCodes = collect($rows)
-                ->map(fn (array $row) => (string) ($row[$this->idKey] ?? ''))
+                ->map(fn (array $row) => trim((string) ($row[$this->idKey] ?? '')))
                 ->filter()
                 ->values();
 
+            $deletedCodes = collect();
+            if (request()->boolean('_legacy_replace_all')) {
+                $deletedCodes = FleetFuelRecharge::query()
+                    ->pluck('code')
+                    ->map(fn ($code): string => (string) $code)
+                    ->diff($incomingCodes)
+                    ->values();
+            }
+
             $this->deleteMissingRecords(FleetFuelRecharge::query(), $incomingCodes);
 
+            foreach ($deletedCodes as $deletedCode) {
+                $dueService->deleteByCode('DUE-FUEL-'.$deletedCode);
+            }
+
             foreach ($rows as $row) {
-                $code = (string) ($row[$this->idKey] ?? '');
+                $code = trim((string) ($row[$this->idKey] ?? ''));
                 if ($code === '') {
                     continue;
                 }
 
-                /** @var Model $model */
-                FleetFuelRecharge::updateOrCreate(
+                FleetFuelRecharge::query()->updateOrCreate(
                     ['code' => $code],
                     [
                         'name' => $row[$this->nameKey] ?? $code,
@@ -513,47 +546,50 @@ class FuelRechargeController extends FleetBaseController
                     ]
                 );
 
-                // Accounting Hook: Generate Due for Fuel Recharge
-                if (($row[$this->statusKey] ?? '') === 'Submitted') {
-                    $amount = (float) ($row['totalAmount'] ?? 0);
-                    if ($amount > 0) {
-                        // Find vehicle to get owner/vendor
-                        $vehicleId = $row['vehicleId'] ?? null;
-                        $partyType = 'Driver';
-                        $partyId = $row['driverId'] ?? null;
-                        
-                        if ($vehicleId) {
-                            $vehicle = \App\Models\Fleet\FleetVehicle::where('code', $vehicleId)->first();
-                            if ($vehicle && !empty($vehicle->payload['vendor'])) {
-                                $partyType = 'Vendor';
-                                $partyId = $vehicle->payload['vendor'];
-                            }
-                        }
+                $dueCode = 'DUE-FUEL-'.$code;
+                $submitted = strcasecmp((string) ($row[$this->statusKey] ?? ''), 'Submitted') === 0;
+                $amount = round((float) ($row['totalAmount'] ?? 0), 2);
 
-                        \App\Models\Fleet\FleetDue::updateOrCreate(
-                            ['code' => 'DUE-FUEL-' . $code],
-                            [
-                                'type' => 'Fuel Recharge',
-                                'party_type' => $partyType,
-                                'party_id' => $partyId,
-                                'source_type' => 'FuelRecharge',
-                                'source_id' => $code,
-                                'amount' => $amount,
-                                'status' => 'Pending',
-                                'due_date' => $row['date'] ?? null,
-                                'payload' => [
-                                    'vehicleId' => $vehicleId,
-                                    'fuelType' => $row['fuelType'] ?? null,
-                                    'qty' => $row['primaryQty'] ?? 0,
-                                    'entryValue' => $row['primaryEnteredValue'] ?? $row['primaryQty'] ?? 0,
-                                    'entryUnit' => $row['primaryEntryUnit'] ?? $row['primaryFuelUnit'] ?? '',
-                                    'pricingMode' => $row['primaryPricingMode'] ?? '',
-                                ]
-                            ]
-                        );
+                if (! $submitted || $amount <= 0) {
+                    $dueService->deleteByCode($dueCode);
+                    continue;
+                }
+
+                $vehicleId = trim((string) ($row['vehicleId'] ?? ''));
+                $partyType = 'Driver';
+                $partyId = trim((string) ($row['driverId'] ?? '')) ?: null;
+
+                if ($vehicleId !== '') {
+                    $vehicle = \App\Models\Fleet\FleetVehicle::query()->where('code', $vehicleId)->first();
+                    $vendor = trim((string) ($vehicle?->payload['vendor'] ?? ''));
+                    if ($vendor !== '') {
+                        $partyType = 'Vendor';
+                        $partyId = $vendor;
                     }
                 }
+
+                $dueService->syncSourceDue([
+                    'code' => $dueCode,
+                    'type' => 'Fuel Recharge',
+                    'party_type' => $partyType,
+                    'party_id' => $partyId,
+                    'source_type' => 'FuelRecharge',
+                    'source_id' => $code,
+                    'amount' => $amount,
+                    'status' => 'Pending',
+                    'due_date' => $row['date'] ?? null,
+                    'payload' => [
+                        'vehicleId' => $vehicleId ?: null,
+                        'driverId' => $row['driverId'] ?? null,
+                        'fuelType' => $row['fuelType'] ?? null,
+                        'qty' => $row['primaryQty'] ?? 0,
+                        'entryValue' => $row['primaryEnteredValue'] ?? $row['primaryQty'] ?? 0,
+                        'entryUnit' => $row['primaryEntryUnit'] ?? $row['primaryFuelUnit'] ?? '',
+                        'pricingMode' => $row['primaryPricingMode'] ?? '',
+                    ],
+                ], $creatorUserId);
             }
-        });
+        }, 3);
     }
+
 }

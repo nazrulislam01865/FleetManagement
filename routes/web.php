@@ -35,6 +35,7 @@ use App\Support\FleetRbac;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/brand/logo', [BrandAssetController::class, 'logo'])->name('brand.logo');
+Route::get('/brand/favicon', [BrandAssetController::class, 'favicon'])->name('brand.favicon');
 
 // Display photos must not depend on browser cookies, active-login state,
 // account permissions, extensions, or cross-site tracking behavior.
@@ -488,10 +489,12 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
         ->middleware(EnsureFleetPermission::class.':reports.view')
         ->name('reports.monthly-driver-fuel');
 
-    Route::get('/settings', [SettingsController::class, 'index'])
-        ->middleware(EnsureFleetPermission::class.':settings.manage')
-        ->name('settings');
-    Route::post('/settings/logo', [SettingsController::class, 'updateLogo'])
-        ->middleware(EnsureFleetPermission::class.':settings.manage')
-        ->name('settings.update-logo');
+    Route::middleware(EnsureFleetSuperAdmin::class)->group(function () {
+        Route::get('/settings', [SettingsController::class, 'index'])
+            ->name('settings');
+        Route::post('/settings/logo', [SettingsController::class, 'updateLogo'])
+            ->name('settings.update-logo');
+        Route::post('/settings/favicon', [SettingsController::class, 'updateFavicon'])
+            ->name('settings.update-favicon');
+    });
 });

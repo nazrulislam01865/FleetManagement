@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Secure Access') · {{ $brand['name'] ?? 'FleetMan' }}</title>
+    @if(!empty($brand['favicon_url']))
+        <link rel="icon" href="{{ $brand['favicon_url'] }}">
+        <link rel="shortcut icon" href="{{ $brand['favicon_url'] }}">
+        <link rel="apple-touch-icon" href="{{ $brand['favicon_url'] }}">
+    @endif
     @php
         $fleetCssVersion = file_exists(public_path('css/fleetman.css'))
             ? filemtime(public_path('css/fleetman.css'))
