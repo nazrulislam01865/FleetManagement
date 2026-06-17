@@ -860,6 +860,18 @@
             window.FleetmanDetailViewer?.show('Vehicle Details', vehicle);
         }
 
+        function hasVehicleDocumentReview(vehicle) {
+            return window.FleetmanExpiringDocuments
+                .items(vehicle?.docs || [])
+                .some((document) => document.days >= 0 && document.days <= 180);
+        }
+
+        function matchesVehicleStatusFilter(vehicle, filterValue) {
+            if (!filterValue) return true;
+            if (filterValue === 'Needs document review') return hasVehicleDocumentReview(vehicle);
+            return vehicle.status === filterValue;
+        }
+
         function renderTable() {
             const query = value('#vehicleSearch').toLowerCase();
             const category = value('#vehicleFilterCategory');
@@ -870,11 +882,14 @@
                 return (!query || text.includes(query))
                     && (!category || vehicle.category === category)
                     && (!fuel || (vehicle.fuels || []).some((item) => item.type === fuel))
-                    && (!status || vehicle.status === status);
+                    && matchesVehicleStatusFilter(vehicle, status);
             });
 
             const body = $('#vehicleTbody');
             if (!body) return;
+            const emptyMessage = status === 'Needs document review'
+                ? 'No vehicles have documents expiring within the next 180 days.'
+                : 'No vehicles found.';
             body.innerHTML = rows.length ? rows.map((vehicle) => {
                 const docs = vehicle.docs || [];
                 const docsWithFiles = docs.filter((doc) => doc.file?.filePath || doc.file?.fileUrl).length;
@@ -899,12 +914,14 @@
                     <td><span class="badge ${vehicle.status === 'Active' ? 'ok' : 'warn'}">${escapeHtml(vehicle.status || '-')}</span></td>
                     <td><button type="button" class="mini-btn view-vehicle" data-id="${escapeHtml(vehicle.id)}">View</button><button type="button" class="mini-btn edit-vehicle" data-id="${escapeHtml(vehicle.id)}">Edit</button><button type="button" class="mini-btn danger delete-vehicle" data-id="${escapeHtml(vehicle.id)}">Delete</button></td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="11" class="empty">No vehicles found.</td></tr>';
+            }).join('') : `<tr><td colspan="11" class="empty">${emptyMessage}</td></tr>`;
 
-            $('#vehicleKpiTotal').textContent = vehicles.length;
-            $('#vehicleKpiActive').textContent = vehicles.filter((vehicle) => vehicle.status === 'Active').length;
-            $('#vehicleKpiDocs').textContent = vehicles.filter((vehicle) => (vehicle.docs || []).some((doc) => doc.expiry)).length;
-            $('#vehicleKpiFuel').textContent = vehicles.filter((vehicle) => (vehicle.fuels || []).length > 1).length;
+            // Dashboard deep links behave like normal list filters, so the KPI
+            // values reflect only the rows currently visible in the table.
+            $('#vehicleKpiTotal').textContent = rows.length;
+            $('#vehicleKpiActive').textContent = rows.filter((vehicle) => vehicle.status === 'Active').length;
+            $('#vehicleKpiDocs').textContent = rows.filter((vehicle) => (vehicle.docs || []).some((doc) => doc.expiry)).length;
+            $('#vehicleKpiFuel').textContent = rows.filter((vehicle) => (vehicle.fuels || []).length > 1).length;
         }
 
         function exportCsv() {
@@ -946,7 +963,16 @@
         $('#saveVehicleDraftBtn')?.addEventListener('click', () => saveVehicle('Draft'));
         $('#loadVehicleSampleBtn')?.addEventListener('click', loadSample);
         $('#exportVehiclesBtn')?.addEventListener('click', exportCsv);
-        $('#clearVehicleFiltersBtn')?.addEventListener('click', () => { ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus'].forEach((selector) => setValue(selector, '')); renderTable(); });
+        $('#clearVehicleFiltersBtn')?.addEventListener('click', () => {
+            ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus']
+                .forEach((selector) => setValue(selector, ''));
+
+            const url = new URL(window.location.href);
+            url.searchParams.delete('document_filter');
+            window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+
+            renderTable();
+        });
         ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus'].forEach((selector) => $(selector)?.addEventListener('input', renderTable));
 
         document.addEventListener('change', (event) => {
@@ -1018,9 +1044,15 @@
         });
 
         resetForm();
+
+        const vehicleUrlParams = new URLSearchParams(window.location.search);
+        if (vehicleUrlParams.get('document_filter') === 'within-180-days') {
+            setValue('#vehicleFilterStatus', 'Needs document review');
+        }
+
         renderTable();
         window.FleetmanRecordApi?.registerInfinite('vehicles', () => vehicles, (rows) => { vehicles = rows; }, renderTable);
-        if (window.location.search.includes('action=add')) {
+        if (vehicleUrlParams.get('action') === 'add') {
             setVisible('vehicleAddPage');
         } else {
             setVisible('vehicleListPage');

@@ -90,9 +90,14 @@ abstract class FleetBaseController extends Controller
             'recordTitle' => $recordTitle !== '' ? $recordTitle : $record->code,
             'recordCreatorName' => $this->creatorNameForRecord($this->resource, (string) $record->code),
             'detail' => $detail,
+            'detailResource' => $this->resource,
         ];
 
-        return view('fleetman.record-view', array_merge(
+        $view = in_array($this->resource, ['drivers', 'employees', 'contracts'], true)
+            ? 'fleetman.record-details.show'
+            : 'fleetman.record-view';
+
+        return view($view, array_merge(
             $this->shared($this->activeMenu, array_merge([
                 'page' => 'record-detail',
             ], $recordViewData)),
@@ -562,6 +567,7 @@ abstract class FleetBaseController extends Controller
         $roleName = $user?->fleetRole?->name ?? 'User';
         $currentPage = strtolower(trim((string) ($pageData['page'] ?? $this->page)));
         $records = $this->recordsFromDatabase($currentPage);
+        $records = $this->includeRequestedEditRecord($currentPage, $records);
         $recordPagination = $this->recordPaginationForPage($currentPage, $records);
         $isFuelRechargePage = $currentPage === 'fuel-recharge';
         $isVehiclePage = $currentPage === 'vehicles';
@@ -1510,6 +1516,57 @@ abstract class FleetBaseController extends Controller
         }
 
         return $empty;
+    }
+
+    protected function includeRequestedEditRecord(string $currentPage, array $records): array
+    {
+        if (request()->query('action') !== 'edit') {
+            return $records;
+        }
+
+        $code = trim((string) request()->query('code', ''));
+        if ($code === '') {
+            return $records;
+        }
+
+        $map = [
+            'drivers' => ['drivers', FleetDriver::class, 'drivers'],
+            'employees' => ['employees', FleetEmployee::class, 'employees'],
+            'contracts' => ['contracts', FleetContract::class, 'contracts'],
+        ];
+
+        if (! isset($map[$currentPage])) {
+            return $records;
+        }
+
+        [$recordKey, $modelClass, $ownershipResource] = $map[$currentPage];
+        $existing = collect($records[$recordKey] ?? [])->contains(
+            fn ($row): bool => is_array($row)
+                && trim((string) ($row['_recordCode'] ?? $row[$this->idKey] ?? '')) === $code
+        );
+
+        if ($existing) {
+            return $records;
+        }
+
+        $query = $modelClass::query()->where('code', $code);
+        if ($currentPage === 'contracts') {
+            $query->whereNotIn('status', ['fuel_recharge', 'attendance']);
+        }
+
+        $requestedRecord = $query->first();
+        if (! $requestedRecord) {
+            return $records;
+        }
+
+        $requestedPayload = $this->recordPayloadsWithCreator([$requestedRecord], $ownershipResource);
+        $records[$recordKey] = collect($requestedPayload)
+            ->concat($records[$recordKey] ?? [])
+            ->unique(fn (array $row): string => (string) ($row['_recordCode'] ?? $row[$this->idKey] ?? ''))
+            ->values()
+            ->all();
+
+        return $records;
     }
 
     protected function recordsFor(string $modelClass, ?int $limit = 50): array

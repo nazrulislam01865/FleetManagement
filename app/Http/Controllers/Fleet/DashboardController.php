@@ -11,10 +11,12 @@ use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
 use App\Models\Fleet\FleetVendorParty;
 use App\Support\FleetPhoto;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
+use Throwable;
 
 class DashboardController extends FleetBaseController
 {
@@ -65,6 +67,9 @@ class DashboardController extends FleetBaseController
                 ->whereNotNull('license_validity')
                 ->whereBetween('license_validity', [now()->toDateString(), now()->addDays(180)->toDateString()])
                 ->count()
+            : 0;
+        $vehicleDocumentReviews = $access['vehicles']
+            ? $this->countVehiclesWithDocumentsExpiringWithin(180)
             : 0;
 
         $tripCount = $access['trips'] ? FleetTrip::query()->count() : 0;
@@ -185,17 +190,64 @@ class DashboardController extends FleetBaseController
             'access' => $access,
             'warnings' => [
                 [
-                    'title' => 'Driver license review',
+                    'title' => 'Driver related document',
                     'value' => $expiringDrivers,
-                    'description' => 'Drivers with license validity within 180 days.',
+                    'description' => 'Drivers with related document validity within 180 days.',
                     'url' => $access['drivers']
                         ? route('fleet.drivers', ['license_filter' => 'within-180-days'])
                         : null,
                 ],
-                ['title' => 'Trip payment balance', 'value' => '৳'.number_format($totalTripBalance, 2), 'description' => 'Remaining client payments across saved trips.'],
+                [
+                    'title' => 'Vehicle related document review',
+                    'value' => $vehicleDocumentReviews,
+                    'description' => 'Vehicles with document expiry within 180 days.',
+                    'url' => $access['vehicles']
+                        ? route('fleet.vehicles', ['document_filter' => 'within-180-days'])
+                        : null,
+                ],
                 ['title' => 'Total attendance distance', 'value' => number_format($totalAttendanceKm, 2).' km', 'description' => 'Distance from driver attendance logs.'],
             ],
         ];
+    }
+
+    private function countVehiclesWithDocumentsExpiringWithin(int $days): int
+    {
+        $today = CarbonImmutable::now('Asia/Dhaka')->startOfDay();
+        $lastReviewDate = $today->addDays($days);
+        $count = 0;
+
+        FleetVehicle::query()
+            ->select(['id', 'payload'])
+            ->orderBy('id')
+            ->chunkById(250, function ($vehicles) use ($today, $lastReviewDate, &$count): void {
+                foreach ($vehicles as $vehicle) {
+                    $payload = is_array($vehicle->payload) ? $vehicle->payload : [];
+                    $documents = $payload['docs'] ?? [];
+
+                    if (! is_array($documents)) {
+                        continue;
+                    }
+
+                    foreach ($documents as $document) {
+                        if (! is_array($document) || blank($document['expiry'] ?? null)) {
+                            continue;
+                        }
+
+                        try {
+                            $expiry = CarbonImmutable::parse((string) $document['expiry'], 'Asia/Dhaka')->startOfDay();
+                        } catch (Throwable) {
+                            continue;
+                        }
+
+                        if ($expiry->betweenIncluded($today, $lastReviewDate)) {
+                            $count++;
+                            break;
+                        }
+                    }
+                }
+            });
+
+        return $count;
     }
 
     /**

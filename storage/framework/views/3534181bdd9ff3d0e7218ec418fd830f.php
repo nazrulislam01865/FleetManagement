@@ -47,7 +47,15 @@
     <div class="mobile-top">
         <button type="button" id="menuBtn">☰ Menu</button>
         <a href="<?php echo e(route('fleet.dashboard')); ?>" class="mobile-brand-link" aria-label="Go to Dashboard">
-            <b><?php echo e($brand['name'] ?? 'FleetMan'); ?></b>
+            <?php if(!empty($brand['logo_url'])): ?>
+                <img
+                    src="<?php echo e($brand['logo_url']); ?>"
+                    alt="<?php echo e($brand['name'] ?? 'FleetMan'); ?> logo"
+                    class="mobile-brand-logo"
+                >
+            <?php else: ?>
+                <b class="mobile-brand-name"><?php echo e($brand['name'] ?? 'FleetMan'); ?></b>
+            <?php endif; ?>
         </a>
         <span><?php echo $__env->yieldContent('mobile-title', 'Fleet'); ?></span>
     </div>

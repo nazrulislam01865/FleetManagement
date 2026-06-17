@@ -2050,7 +2050,7 @@
         }
 
         function editDriver(id){
-            const row=drivers.find((item)=>item.driverId===id);
+            const row=drivers.find((item)=>String(item.driverId || item._recordCode || '')===String(id));
             if(!row) return;
             populateDriverForm(row);
             setVisible('driverAddPage');
@@ -2160,8 +2160,15 @@
 
         renderList();
         window.FleetmanRecordApi?.registerInfinite('drivers', () => drivers, (rows) => { drivers = rows; }, renderList);
-        if (window.location.search.includes('action=add')) setVisible('driverAddPage');
-        else setVisible('driverListPage');
+        const requestedDriverAction = driverUrlParams.get('action');
+        const requestedDriverCode = driverUrlParams.get('code');
+        if (requestedDriverAction === 'edit' && requestedDriverCode && drivers.some((row) => String(row.driverId || row._recordCode || '') === requestedDriverCode)) {
+            editDriver(requestedDriverCode);
+        } else if (requestedDriverAction === 'add') {
+            setVisible('driverAddPage');
+        } else {
+            setVisible('driverListPage');
+        }
     }
 
     function initClients() {
@@ -2890,7 +2897,7 @@
         }
 
         function editEmployee(id) {
-            const row = employees.find((item) => item.employeeId === id);
+            const row = employees.find((item) => String(item.employeeId || item._recordCode || '') === String(id));
             if (!row) return;
             populateEmployeeForm(row);
             setVisible('employeeAddPage');
@@ -2994,8 +3001,16 @@
         resetForm();
         renderList();
         window.FleetmanRecordApi?.registerInfinite('employees', () => employees, (rows) => { employees = rows; }, renderList);
-        if (window.location.search.includes('action=add')) setVisible('employeeAddPage');
-        else setVisible('employeeListPage');
+        const employeeUrlParams = new URLSearchParams(window.location.search);
+        const requestedEmployeeAction = employeeUrlParams.get('action');
+        const requestedEmployeeCode = employeeUrlParams.get('code');
+        if (requestedEmployeeAction === 'edit' && requestedEmployeeCode && employees.some((row) => String(row.employeeId || row._recordCode || '') === requestedEmployeeCode)) {
+            editEmployee(requestedEmployeeCode);
+        } else if (requestedEmployeeAction === 'add') {
+            setVisible('employeeAddPage');
+        } else {
+            setVisible('employeeListPage');
+        }
     }
 
     function initDriverAttendance() {

@@ -632,7 +632,7 @@
         }
 
         function editContract(id) {
-            const row = contracts.find((item) => item.contractId === id);
+            const row = contracts.find((item) => String(item.contractId || item._recordCode || '') === String(id));
             if (!row) return;
             loadContract(row);
             setPage('contractCreatePage');
@@ -759,7 +759,12 @@
         resetForm();
         renderList();
         window.FleetmanRecordApi?.registerInfinite('contracts', () => contracts, (rows) => { contracts = rows; }, renderList);
-        if (window.location.search.includes('action=add')) {
+        const contractUrlParams = new URLSearchParams(window.location.search);
+        const requestedContractAction = contractUrlParams.get('action');
+        const requestedContractCode = contractUrlParams.get('code');
+        if (requestedContractAction === 'edit' && requestedContractCode && contracts.some((row) => String(row.contractId || row._recordCode || '') === requestedContractCode)) {
+            editContract(requestedContractCode);
+        } else if (requestedContractAction === 'add') {
             setPage('contractCreatePage');
         } else {
             setPage('contractListPage');

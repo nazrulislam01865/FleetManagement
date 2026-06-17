@@ -1949,6 +1949,18 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             window.FleetmanDetailViewer?.show('Vehicle Details', vehicle);
         }
 
+        function hasVehicleDocumentReview(vehicle) {
+            return window.FleetmanExpiringDocuments
+                .items(vehicle?.docs || [])
+                .some((document) => document.days >= 0 && document.days <= 180);
+        }
+
+        function matchesVehicleStatusFilter(vehicle, filterValue) {
+            if (!filterValue) return true;
+            if (filterValue === 'Needs document review') return hasVehicleDocumentReview(vehicle);
+            return vehicle.status === filterValue;
+        }
+
         function renderTable() {
             const query = value('#vehicleSearch').toLowerCase();
             const category = value('#vehicleFilterCategory');
@@ -1959,11 +1971,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 return (!query || text.includes(query))
                     && (!category || vehicle.category === category)
                     && (!fuel || (vehicle.fuels || []).some((item) => item.type === fuel))
-                    && (!status || vehicle.status === status);
+                    && matchesVehicleStatusFilter(vehicle, status);
             });
 
             const body = $('#vehicleTbody');
             if (!body) return;
+            const emptyMessage = status === 'Needs document review'
+                ? 'No vehicles have documents expiring within the next 180 days.'
+                : 'No vehicles found.';
             body.innerHTML = rows.length ? rows.map((vehicle) => {
                 const docs = vehicle.docs || [];
                 const docsWithFiles = docs.filter((doc) => doc.file?.filePath || doc.file?.fileUrl).length;
@@ -1988,12 +2003,14 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <td><span class="badge ${vehicle.status === 'Active' ? 'ok' : 'warn'}">${escapeHtml(vehicle.status || '-')}</span></td>
                     <td><button type="button" class="mini-btn view-vehicle" data-id="${escapeHtml(vehicle.id)}">View</button><button type="button" class="mini-btn edit-vehicle" data-id="${escapeHtml(vehicle.id)}">Edit</button><button type="button" class="mini-btn danger delete-vehicle" data-id="${escapeHtml(vehicle.id)}">Delete</button></td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="11" class="empty">No vehicles found.</td></tr>';
+            }).join('') : `<tr><td colspan="11" class="empty">${emptyMessage}</td></tr>`;
 
-            $('#vehicleKpiTotal').textContent = vehicles.length;
-            $('#vehicleKpiActive').textContent = vehicles.filter((vehicle) => vehicle.status === 'Active').length;
-            $('#vehicleKpiDocs').textContent = vehicles.filter((vehicle) => (vehicle.docs || []).some((doc) => doc.expiry)).length;
-            $('#vehicleKpiFuel').textContent = vehicles.filter((vehicle) => (vehicle.fuels || []).length > 1).length;
+            // Dashboard deep links behave like normal list filters, so the KPI
+            // values reflect only the rows currently visible in the table.
+            $('#vehicleKpiTotal').textContent = rows.length;
+            $('#vehicleKpiActive').textContent = rows.filter((vehicle) => vehicle.status === 'Active').length;
+            $('#vehicleKpiDocs').textContent = rows.filter((vehicle) => (vehicle.docs || []).some((doc) => doc.expiry)).length;
+            $('#vehicleKpiFuel').textContent = rows.filter((vehicle) => (vehicle.fuels || []).length > 1).length;
         }
 
         function exportCsv() {
@@ -2035,7 +2052,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         $('#saveVehicleDraftBtn')?.addEventListener('click', () => saveVehicle('Draft'));
         $('#loadVehicleSampleBtn')?.addEventListener('click', loadSample);
         $('#exportVehiclesBtn')?.addEventListener('click', exportCsv);
-        $('#clearVehicleFiltersBtn')?.addEventListener('click', () => { ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus'].forEach((selector) => setValue(selector, '')); renderTable(); });
+        $('#clearVehicleFiltersBtn')?.addEventListener('click', () => {
+            ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus']
+                .forEach((selector) => setValue(selector, ''));
+
+            const url = new URL(window.location.href);
+            url.searchParams.delete('document_filter');
+            window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+
+            renderTable();
+        });
         ['#vehicleSearch', '#vehicleFilterCategory', '#vehicleFilterFuel', '#vehicleFilterStatus'].forEach((selector) => $(selector)?.addEventListener('input', renderTable));
 
         document.addEventListener('change', (event) => {
@@ -2107,9 +2133,15 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         });
 
         resetForm();
+
+        const vehicleUrlParams = new URLSearchParams(window.location.search);
+        if (vehicleUrlParams.get('document_filter') === 'within-180-days') {
+            setValue('#vehicleFilterStatus', 'Needs document review');
+        }
+
         renderTable();
         window.FleetmanRecordApi?.registerInfinite('vehicles', () => vehicles, (rows) => { vehicles = rows; }, renderTable);
-        if (window.location.search.includes('action=add')) {
+        if (vehicleUrlParams.get('action') === 'add') {
             setVisible('vehicleAddPage');
         } else {
             setVisible('vehicleListPage');
@@ -5998,7 +6030,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function editDriver(id){
-            const row=drivers.find((item)=>item.driverId===id);
+            const row=drivers.find((item)=>String(item.driverId || item._recordCode || '')===String(id));
             if(!row) return;
             populateDriverForm(row);
             setVisible('driverAddPage');
@@ -6108,8 +6140,15 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         renderList();
         window.FleetmanRecordApi?.registerInfinite('drivers', () => drivers, (rows) => { drivers = rows; }, renderList);
-        if (window.location.search.includes('action=add')) setVisible('driverAddPage');
-        else setVisible('driverListPage');
+        const requestedDriverAction = driverUrlParams.get('action');
+        const requestedDriverCode = driverUrlParams.get('code');
+        if (requestedDriverAction === 'edit' && requestedDriverCode && drivers.some((row) => String(row.driverId || row._recordCode || '') === requestedDriverCode)) {
+            editDriver(requestedDriverCode);
+        } else if (requestedDriverAction === 'add') {
+            setVisible('driverAddPage');
+        } else {
+            setVisible('driverListPage');
+        }
     }
 
     function initClients() {
@@ -6838,7 +6877,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function editEmployee(id) {
-            const row = employees.find((item) => item.employeeId === id);
+            const row = employees.find((item) => String(item.employeeId || item._recordCode || '') === String(id));
             if (!row) return;
             populateEmployeeForm(row);
             setVisible('employeeAddPage');
@@ -6942,8 +6981,16 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         resetForm();
         renderList();
         window.FleetmanRecordApi?.registerInfinite('employees', () => employees, (rows) => { employees = rows; }, renderList);
-        if (window.location.search.includes('action=add')) setVisible('employeeAddPage');
-        else setVisible('employeeListPage');
+        const employeeUrlParams = new URLSearchParams(window.location.search);
+        const requestedEmployeeAction = employeeUrlParams.get('action');
+        const requestedEmployeeCode = employeeUrlParams.get('code');
+        if (requestedEmployeeAction === 'edit' && requestedEmployeeCode && employees.some((row) => String(row.employeeId || row._recordCode || '') === requestedEmployeeCode)) {
+            editEmployee(requestedEmployeeCode);
+        } else if (requestedEmployeeAction === 'add') {
+            setVisible('employeeAddPage');
+        } else {
+            setVisible('employeeListPage');
+        }
     }
 
     function initDriverAttendance() {
@@ -9868,7 +9915,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function editContract(id) {
-            const row = contracts.find((item) => item.contractId === id);
+            const row = contracts.find((item) => String(item.contractId || item._recordCode || '') === String(id));
             if (!row) return;
             loadContract(row);
             setPage('contractCreatePage');
@@ -9995,7 +10042,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         resetForm();
         renderList();
         window.FleetmanRecordApi?.registerInfinite('contracts', () => contracts, (rows) => { contracts = rows; }, renderList);
-        if (window.location.search.includes('action=add')) {
+        const contractUrlParams = new URLSearchParams(window.location.search);
+        const requestedContractAction = contractUrlParams.get('action');
+        const requestedContractCode = contractUrlParams.get('code');
+        if (requestedContractAction === 'edit' && requestedContractCode && contracts.some((row) => String(row.contractId || row._recordCode || '') === requestedContractCode)) {
+            editContract(requestedContractCode);
+        } else if (requestedContractAction === 'add') {
             setPage('contractCreatePage');
         } else {
             setPage('contractListPage');

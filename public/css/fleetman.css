@@ -36,7 +36,7 @@ a{color:inherit}
 .menu-nav{flex:1 0 auto;padding-bottom:18px}
 .main-content{flex:1;min-width:0;padding:20px 24px 0;min-height:100vh;display:flex;flex-direction:column}.fleet-main-body{flex:1 0 auto;min-width:0}
 .mobile-top{display:none;position:sticky;top:0;z-index:60;background:#0d1629;color:#fff;padding:12px 14px;align-items:center;justify-content:space-between;box-shadow:0 8px 24px rgba(0,0,0,.16)}
-.mobile-top button{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 10px;font-weight:800}.mobile-brand-link{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.mobile-top b{color:#2383ff;font-size:18px}.mobile-brand-link:focus-visible{outline:2px solid #84b6ff;outline-offset:3px;border-radius:6px}.mobile-top span{font-size:12px;color:#cbd7e8;font-weight:700}.drawer-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:45}.drawer-open .drawer-backdrop{display:block}
+.mobile-top button{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:10px;padding:8px 10px;font-weight:800}.mobile-brand-link{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;min-width:0;max-width:min(210px,42vw);overflow:hidden}.mobile-brand-logo{display:block;width:auto;height:auto;max-width:100%;max-height:46px;object-fit:contain}.mobile-brand-name{color:#2383ff;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mobile-brand-link:focus-visible{outline:2px solid #84b6ff;outline-offset:3px;border-radius:6px}.mobile-top span{font-size:12px;color:#cbd7e8;font-weight:700}.drawer-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:45}.drawer-open .drawer-backdrop{display:block}
 .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px}.breadcrumb{font-size:13px;color:#6b7890;text-transform:uppercase;font-weight:800}.breadcrumb a{color:var(--blue);font-weight:900;text-decoration:none}.breadcrumb span{margin:0 7px;color:#98a2b3}.top-actions{display:flex;gap:10px;flex-wrap:wrap}
 .title-card{background:var(--card);border-radius:var(--radius);padding:18px 22px;box-shadow:var(--shadow);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px}
 h1{font-size:24px;margin:0 0 5px}.subtitle{color:var(--muted);margin:0;line-height:1.45}.btn{border:0;border-radius:12px;padding:12px 16px;font-weight:850;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap;min-height:42px;font-size:14px}.btn.primary{background:var(--blue);color:#fff}.btn.secondary{background:var(--soft);color:#174ea6}.btn.light{background:#f2f4f7;color:#344054}.btn.danger{background:#fff1f0;color:#b42318}.btn.green{background:var(--green);color:#fff}.btn.dark{background:#111b2f;color:#fff}.btn:disabled{opacity:.45;cursor:not-allowed}
@@ -336,7 +336,8 @@ h1{font-size:24px;margin:0 0 5px}.subtitle{color:var(--muted);margin:0;line-heig
     .logo-mark{font-size:24px;}
     .account-card{align-items:flex-start;}
     .menu-title{margin-top:14px;}
-    .mobile-top b{font-size:16px;}
+    .mobile-brand-name{font-size:16px;}
+    .mobile-brand-logo{max-height:40px;}
     .mobile-top span{display:none;}
 }
 
@@ -1729,3 +1730,65 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
     }
     .fleet-searchable-status{max-width:100px;overflow:hidden;text-overflow:ellipsis;}
 }
+
+/* Template-matched full-width Driver, Employee and Contract detail pages. */
+.fleet-record-detail-page{width:100%;max-width:none;--record-surface:#fff;--record-surface-soft:#f8fafc;--record-label-bg:#eef4fb;--record-border:#e5edf6;--record-border-strong:#d6e2ef;--record-text:#102033;--record-muted:#66758a;--record-primary:#0066cc;--record-primary-soft:#eaf3ff;--record-success:#0f8a57;--record-success-soft:#e8f8ef;--record-warning:#b7791f;--record-warning-soft:#fff7e6;--record-shadow:0 14px 35px rgba(15,23,42,.07);--record-radius-lg:22px}
+.record-detail-page-header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px;width:100%}
+.record-detail-page-title h1{margin:0 0 5px;font-size:28px;line-height:1.2;letter-spacing:-.6px;color:var(--record-text)}
+.record-detail-page-title p{margin:0;color:var(--record-muted);font-size:14px;line-height:1.5}
+.record-detail-page-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.record-detail-primary-btn,.record-detail-secondary-btn,.record-open-btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border:0;min-height:42px;border-radius:12px;padding:0 16px;font-weight:800;cursor:pointer;white-space:nowrap}
+.record-detail-primary-btn{background:var(--record-primary);color:#fff}
+.record-detail-secondary-btn,.record-open-btn{background:var(--record-surface);color:var(--record-text);border:1px solid var(--record-border)}
+.record-detail-primary-btn:hover{background:#005bb8;color:#fff}
+.record-detail-secondary-btn:hover,.record-open-btn:hover{border-color:#b9cbe0;color:var(--record-primary)}
+.record-profile-summary,.record-contract-summary{background:var(--record-surface);border:1px solid var(--record-border);border-radius:var(--record-radius-lg);box-shadow:var(--record-shadow);padding:18px;margin-bottom:18px;display:grid;gap:16px;align-items:center;width:100%}
+.record-profile-summary{grid-template-columns:86px minmax(0,1fr) auto}
+.record-contract-summary{grid-template-columns:minmax(0,1fr) auto}
+.record-profile-photo{width:86px;height:86px;border-radius:18px;overflow:hidden;background:#edf2f7;border:1px solid var(--record-border);display:grid;place-items:center;position:relative}
+.record-profile-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.record-profile-photo span{font-size:38px;line-height:1}
+.record-summary-main{min-width:0}
+.record-summary-main h2{margin:0 0 4px;font-size:24px;line-height:1.25;letter-spacing:-.4px;color:var(--record-text);overflow-wrap:anywhere}
+.record-summary-main p{margin:0 0 10px;color:var(--record-muted);font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.record-tags{display:flex;flex-wrap:wrap;gap:8px}
+.record-tag{display:inline-flex;align-items:center;min-height:27px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:800;line-height:1.2}
+.record-tag.success{background:var(--record-success-soft);color:var(--record-success)}
+.record-tag.primary{background:var(--record-primary-soft);color:var(--record-primary)}
+.record-tag.warning{background:var(--record-warning-soft);color:var(--record-warning)}
+.record-summary-stats{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px;min-width:330px}
+.record-summary-stats.contract-stats{min-width:360px;grid-template-columns:repeat(2,minmax(145px,1fr))}
+.record-summary-stat{background:var(--record-surface-soft);border:1px solid var(--record-border);border-radius:13px;padding:10px 12px;min-width:0}
+.record-summary-stat label{display:block;color:var(--record-primary);font-size:11px;font-weight:850;text-transform:uppercase;margin-bottom:6px;letter-spacing:.02em}
+.record-summary-stat div{font-size:14px;font-weight:500;color:var(--record-text);overflow-wrap:anywhere}
+.record-detail-card{background:var(--record-surface);border:1px solid var(--record-border);border-radius:var(--record-radius-lg);box-shadow:0 10px 25px rgba(15,23,42,.04);margin-bottom:18px;overflow:hidden;width:100%}
+.record-card-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--record-border);background:linear-gradient(180deg,#fff 0%,#fbfdff 100%)}
+.record-card-header-left{display:flex;align-items:center;gap:12px;min-width:0}
+.record-card-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--record-primary-soft);color:var(--record-primary);font-size:18px;flex:0 0 auto}
+.record-card-header h3{margin:0;font-size:18px;line-height:1.25;letter-spacing:-.2px;color:var(--record-text)}
+.record-card-header p{margin:3px 0 0;color:var(--record-muted);font-size:13px;line-height:1.45}
+.record-table-section{padding:18px 20px 20px;min-width:0}
+.record-sub-title{margin:0 0 10px;color:#24364f;font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px}
+.record-sub-title::before{content:"";width:4px;height:15px;background:var(--record-primary);border-radius:999px;display:inline-block;flex:0 0 auto}
+.record-info-table{width:100%;min-width:0;max-width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--record-border-strong);border-radius:16px;overflow:hidden;background:#fff;margin-bottom:18px;table-layout:auto}
+.record-info-table:last-child{margin-bottom:0}
+.record-info-table tr:not(:last-child) th,.record-info-table tr:not(:last-child) td{border-bottom:1px solid var(--record-border)}
+.record-info-table th,.record-info-table td{padding:13px 16px;text-align:left;vertical-align:top;font-size:14px;line-height:1.45}
+.record-info-table th{width:260px;background:var(--record-label-bg);color:#41546f;font-size:12px;font-weight:850;text-transform:uppercase;letter-spacing:.35px;border-right:1px solid var(--record-border);white-space:nowrap}
+.record-info-table td{color:#15263a;font-weight:500;overflow-wrap:anywhere;word-break:normal;background:#fff}
+.record-status-pill,.record-license-pill{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:999px;font-size:12px;font-weight:800}
+.record-status-pill{background:var(--record-success-soft);color:var(--record-success)}
+.record-license-pill{background:var(--record-warning-soft);color:var(--record-warning)}
+.record-assignment-grid{display:grid;grid-template-columns:1fr;gap:14px}
+.record-assignment-card{border:1px solid var(--record-border-strong);border-radius:16px;overflow:hidden;background:#fff}
+.record-assignment-title{padding:13px 16px;background:var(--record-primary-soft);color:var(--record-primary);font-size:14px;font-weight:850;border-bottom:1px solid var(--record-border);display:flex;align-items:center;justify-content:space-between}
+.record-assignment-card .record-info-table{border:0;border-radius:0;margin-bottom:0}
+.record-file-table{width:100%;min-width:0;max-width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--record-border-strong);border-radius:16px;overflow:hidden;background:#fff}
+.record-file-table th{background:var(--record-label-bg);color:#41546f;font-size:12px;text-transform:uppercase;letter-spacing:.35px;font-weight:850;text-align:left;padding:12px 14px;border-bottom:1px solid var(--record-border);white-space:nowrap}
+.record-file-table td{padding:13px 14px;font-size:14px;font-weight:500;border-bottom:1px solid var(--record-border);vertical-align:middle;background:#fff;color:#15263a;overflow-wrap:anywhere}
+.record-file-table tr:last-child td{border-bottom:0}
+.record-open-btn{min-height:34px;padding:0 12px;border-radius:10px}
+.record-file-unavailable{display:inline-flex;align-items:center;min-height:30px;padding:0 10px;border-radius:9px;background:#f1f5f9;color:#64748b;font-size:12px;font-weight:800}
+.record-empty-cell,.record-empty-message{color:var(--record-muted);text-align:center;font-weight:700;padding:22px!important;margin:0}
+@media(max-width:1180px){.record-profile-summary{grid-template-columns:86px minmax(0,1fr)}.record-contract-summary{grid-template-columns:1fr}.record-summary-stats{grid-column:1/-1;width:100%;min-width:0}.record-summary-stats.contract-stats{min-width:0}}
+@media(max-width:700px){.fleet-record-detail-page,.record-detail-card,.record-table-section,.record-info-table,.record-info-table tbody,.record-info-table tr,.record-info-table th,.record-info-table td,.record-file-table,.record-file-table tbody,.record-file-table tr,.record-file-table td{min-width:0!important;max-width:100%;}.record-detail-page-header{align-items:flex-start;flex-direction:column}.record-detail-page-actions{width:100%;display:grid;grid-template-columns:1fr}.record-detail-primary-btn,.record-detail-secondary-btn{width:100%}.record-profile-summary{grid-template-columns:1fr}.record-profile-photo{width:86px;height:86px}.record-summary-stats,.record-summary-stats.contract-stats{grid-template-columns:1fr;min-width:0}.record-card-header{align-items:flex-start;flex-direction:column}.record-table-section{padding:14px}.record-info-table{border-radius:14px;border:0;background:transparent}.record-info-table,.record-info-table tbody,.record-info-table tr,.record-info-table th,.record-info-table td{display:block;width:100%}.record-info-table tr{margin-bottom:10px;border:1px solid var(--record-border-strong);border-radius:14px;overflow:hidden;background:#fff;box-shadow:0 6px 14px rgba(15,23,42,.035)}.record-info-table tr:not(:last-child) th,.record-info-table tr:not(:last-child) td{border-bottom:0}.record-info-table th{border-right:0;border-bottom:1px solid #d9e6f3!important;padding:10px 13px 8px;background:#eaf3ff;color:#0059b3;font-size:11px;font-weight:900;letter-spacing:.45px;white-space:normal}.record-info-table td{padding:12px 13px 13px;background:#fff;color:#102033;font-size:15px;font-weight:500;line-height:1.45}.record-assignment-card{border:0;background:transparent}.record-assignment-title{border:1px solid var(--record-border-strong);border-radius:14px;margin-bottom:10px}.record-file-table{border:0;background:transparent}.record-file-table thead{display:none}.record-file-table,.record-file-table tbody,.record-file-table tr,.record-file-table td{display:block;width:100%}.record-file-table tr{border:1px solid var(--record-border-strong);border-radius:16px;background:#fff;margin-bottom:12px;overflow:hidden;box-shadow:0 6px 14px rgba(15,23,42,.035)}.record-file-table td{border-bottom:1px solid var(--record-border);display:grid;grid-template-columns:1fr;gap:7px;padding:12px 13px;font-size:15px}.record-file-table td::before{content:attr(data-label);display:block;color:#0059b3;background:#eaf3ff;margin:-12px -13px 4px;padding:10px 13px 8px;font-size:11px;font-weight:900;letter-spacing:.45px;text-transform:uppercase;border-bottom:1px solid #d9e6f3}.record-file-table tr:last-child td{border-bottom:1px solid var(--record-border)}.record-file-table td:last-child{border-bottom:0}.record-file-table .record-empty-cell{display:block}.record-file-table .record-empty-cell::before{display:none}.record-open-btn{width:100%}}

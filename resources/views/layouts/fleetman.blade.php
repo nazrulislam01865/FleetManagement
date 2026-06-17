@@ -47,7 +47,15 @@
     <div class="mobile-top">
         <button type="button" id="menuBtn">☰ Menu</button>
         <a href="{{ route('fleet.dashboard') }}" class="mobile-brand-link" aria-label="Go to Dashboard">
-            <b>{{ $brand['name'] ?? 'FleetMan' }}</b>
+            @if(!empty($brand['logo_url']))
+                <img
+                    src="{{ $brand['logo_url'] }}"
+                    alt="{{ $brand['name'] ?? 'FleetMan' }} logo"
+                    class="mobile-brand-logo"
+                >
+            @else
+                <b class="mobile-brand-name">{{ $brand['name'] ?? 'FleetMan' }}</b>
+            @endif
         </a>
         <span>@yield('mobile-title', 'Fleet')</span>
     </div>
