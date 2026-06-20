@@ -431,6 +431,18 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
     Route::delete('/master-data/payment-types/{paymentType}', [MasterDataController::class, 'destroyPaymentType'])
         ->middleware(EnsureFleetPermission::class.':master_data.manage')
         ->name('master-data.payment-types.destroy');
+    Route::get('/master-data/shifts', [MasterDataController::class, 'shifts'])
+        ->middleware(EnsureFleetPermission::class.':master_data.view')
+        ->name('master-data.shifts');
+    Route::post('/master-data/shifts', [MasterDataController::class, 'storeShift'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.shifts.store');
+    Route::put('/master-data/shifts/{shift}', [MasterDataController::class, 'updateShift'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.shifts.update');
+    Route::delete('/master-data/shifts/{shift}', [MasterDataController::class, 'destroyShift'])
+        ->middleware(EnsureFleetPermission::class.':master_data.manage')
+        ->name('master-data.shifts.destroy');
     Route::post('/master-data/document-names/save', [MasterDataController::class, 'saveDocumentName'])
         ->middleware(EnsureFleetPermission::class.':master_data.manage')
         ->name('master-data.document-names.save');
@@ -465,9 +477,12 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
         ->middleware(EnsureFleetPermission::class.':role_matrix.manage')
         ->name('role-matrix.update');
 
+    Route::get('/release-tracker', [ReleaseTrackerController::class, 'index'])
+        ->name('release-tracker');
+
     Route::middleware(EnsureFleetSuperAdmin::class)->group(function () {
-        Route::get('/release-tracker', [ReleaseTrackerController::class, 'index'])
-            ->name('release-tracker');
+        Route::get('/release-tracker/form', [ReleaseTrackerController::class, 'create'])
+            ->name('release-tracker.form');
         Route::post('/release-tracker', [ReleaseTrackerController::class, 'store'])
             ->name('release-tracker.store');
         Route::put('/release-tracker/{release}', [ReleaseTrackerController::class, 'update'])

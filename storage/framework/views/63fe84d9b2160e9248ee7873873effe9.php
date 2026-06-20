@@ -352,6 +352,7 @@
                             <th>End Date</th>
                             <th>Vehicle Count</th>
                             <th>Driver Count</th>
+                            <th>Assigned Vehicle &amp; Driver</th>
                             <th>Documents</th>
                             <th>Expiring Documents</th>
                             <th>Saved As</th>

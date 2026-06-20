@@ -64,26 +64,80 @@
                     </div>
                     <div class="grid" style="margin-top:16px">
                         <x-fleetman.select id="rentalType" label="Rental Type" :options="['With Driver', 'Without Driver']" placeholder="Select rental type" required />
-                        <div class="field searchable">
-                            <div class="search-label">
-                                <label for="driver">Driver <small>(Optional)</small></label>
-                                <span class="search-tag">Searchable</span>
-                            </div>
-                            <input id="driver" list="vehicleDriverList" placeholder="Type to search and select a driver (optional)" autocomplete="off">
-                            <datalist id="vehicleDriverList">
-                                @foreach ($fleetman['options']['drivers'] as $driverOptionValue => $driverOptionLabel)
-                                    @php
-                                        $driverValue = is_int($driverOptionValue) ? $driverOptionLabel : $driverOptionValue;
-                                        $driverLabel = is_array($driverOptionLabel) ? ($driverOptionLabel['label'] ?? $driverValue) : $driverOptionLabel;
-                                    @endphp
-                                    <option value="{{ $driverValue }}">{{ $driverLabel }}</option>
-                                @endforeach
-                            </datalist>
-                        </div>
                     </div>
-                    <div id="driverPaymentFields" class="grid" style="margin-top:16px">
-                        <x-fleetman.input id="driverPaymentAmount" label="Driver Payment Amount" type="number" min="0" step="0.01" placeholder="0.00" required />
-                        <x-fleetman.select id="driverPaymentCycle" label="Driver Payment Cycle" :options="$fleetman['options']['rental_payment_cycles']" placeholder="Select payment cycle" required />
+
+                    <div id="vehicleDriverAssignmentPanel" class="vehicle-driver-assignment-panel">
+                        <div class="vehicle-driver-assignment-head">
+                            <div>
+                                <h3>Driver Assignment & Payment</h3>
+                                <p id="vehicleDriverRequirementText">Select Rental Type and Usage Type to see the driver requirement.</p>
+                            </div>
+                            <span id="vehicleDriverRequirementBadge" class="badge soft">Not selected</span>
+                        </div>
+
+                        <div class="vehicle-driver-assignment-grid">
+                            <div class="vehicle-driver-assignment-card" id="vehiclePrimaryDriverCard">
+                                <div class="vehicle-driver-card-head">
+                                    <strong>Driver 1</strong>
+                                    <span id="vehiclePrimaryDriverCardState" class="badge soft">Optional</span>
+                                </div>
+
+                                <div class="field searchable" id="vehiclePrimaryDriverField">
+                                    <div class="search-label">
+                                        <label for="driver">
+                                            Select Driver 1
+                                            <span id="vehiclePrimaryDriverRequired" class="req hidden">*</span>
+                                            <small id="vehiclePrimaryDriverOptional">(Optional)</small>
+                                        </label>
+                                        <span class="search-tag">Searchable</span>
+                                    </div>
+                                    <input id="driver" list="vehiclePrimaryDriverList" placeholder="Type to search and select Driver 1" autocomplete="off">
+                                    <datalist id="vehiclePrimaryDriverList">
+                                        @foreach ($fleetman['options']['drivers'] as $driverOptionValue => $driverOptionLabel)
+                                            @php
+                                                $driverValue = is_int($driverOptionValue) ? $driverOptionLabel : $driverOptionValue;
+                                                $driverLabel = is_array($driverOptionLabel) ? ($driverOptionLabel['label'] ?? $driverValue) : $driverOptionLabel;
+                                            @endphp
+                                            <option value="{{ $driverValue }}">{{ $driverLabel }}</option>
+                                        @endforeach
+                                    </datalist>
+                                </div>
+
+                                <div id="driverPaymentFields" class="grid vehicle-driver-payment-fields hidden">
+                                    <x-fleetman.input id="driverPaymentAmount" label="Driver 1 Payment Amount" type="number" min="0" step="0.01" placeholder="0.00" required />
+                                    <x-fleetman.select id="driverPaymentCycle" label="Driver 1 Payment Cycle" :options="$fleetman['options']['rental_payment_cycles']" placeholder="Select payment cycle" required />
+                                </div>
+                            </div>
+
+                            <div class="vehicle-driver-assignment-card hidden" id="vehicleSecondaryDriverField">
+                                <div class="vehicle-driver-card-head">
+                                    <strong>Driver 2</strong>
+                                    <span class="badge warn">Required</span>
+                                </div>
+
+                                <div class="field searchable">
+                                    <div class="search-label">
+                                        <label for="secondDriver">Select Driver 2 <span class="req">*</span></label>
+                                        <span class="search-tag">Searchable</span>
+                                    </div>
+                                    <input id="secondDriver" list="vehicleSecondaryDriverList" placeholder="Type to search and select Driver 2" autocomplete="off">
+                                    <datalist id="vehicleSecondaryDriverList">
+                                        @foreach ($fleetman['options']['drivers'] as $driverOptionValue => $driverOptionLabel)
+                                            @php
+                                                $driverValue = is_int($driverOptionValue) ? $driverOptionLabel : $driverOptionValue;
+                                                $driverLabel = is_array($driverOptionLabel) ? ($driverOptionLabel['label'] ?? $driverValue) : $driverOptionLabel;
+                                            @endphp
+                                            <option value="{{ $driverValue }}">{{ $driverLabel }}</option>
+                                        @endforeach
+                                    </datalist>
+                                </div>
+
+                                <div id="secondDriverPaymentFields" class="grid vehicle-driver-payment-fields">
+                                    <x-fleetman.input id="secondDriverPaymentAmount" label="Driver 2 Payment Amount" type="number" min="0" step="0.01" placeholder="0.00" required />
+                                    <x-fleetman.select id="secondDriverPaymentCycle" label="Driver 2 Payment Cycle" :options="$fleetman['options']['rental_payment_cycles']" placeholder="Select payment cycle" required />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="grid3" style="margin-top:16px">
                         <x-fleetman.input id="vehicleRentalAmount" label="Vehicle Rental Amount" type="number" min="0" step="0.01" placeholder="0.00" required />

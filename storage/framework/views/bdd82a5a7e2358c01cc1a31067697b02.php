@@ -171,34 +171,56 @@
 <?php $component = $__componentOriginal4b244ece64768724078120db372595a2; ?>
 <?php unset($__componentOriginal4b244ece64768724078120db372595a2); ?>
 <?php endif; ?>
-                        <div class="field searchable">
-                            <div class="search-label">
-                                <label for="driver">Driver <small>(Optional)</small></label>
-                                <span class="search-tag">Searchable</span>
-                            </div>
-                            <input id="driver" list="vehicleDriverList" placeholder="Type to search and select a driver (optional)" autocomplete="off">
-                            <datalist id="vehicleDriverList">
-                                <?php $__currentLoopData = $fleetman['options']['drivers']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $driverOptionValue => $driverOptionLabel): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
-                                    <?php
-                                        $driverValue = is_int($driverOptionValue) ? $driverOptionLabel : $driverOptionValue;
-                                        $driverLabel = is_array($driverOptionLabel) ? ($driverOptionLabel['label'] ?? $driverValue) : $driverOptionLabel;
-                                    ?>
-                                    <option value="<?php echo e($driverValue); ?>"><?php echo e($driverLabel); ?></option>
-                                <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
-                            </datalist>
-                        </div>
                     </div>
-                    <div id="driverPaymentFields" class="grid" style="margin-top:16px">
-                        <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
+
+                    <div id="vehicleDriverAssignmentPanel" class="vehicle-driver-assignment-panel">
+                        <div class="vehicle-driver-assignment-head">
+                            <div>
+                                <h3>Driver Assignment & Payment</h3>
+                                <p id="vehicleDriverRequirementText">Select Rental Type and Usage Type to see the driver requirement.</p>
+                            </div>
+                            <span id="vehicleDriverRequirementBadge" class="badge soft">Not selected</span>
+                        </div>
+
+                        <div class="vehicle-driver-assignment-grid">
+                            <div class="vehicle-driver-assignment-card" id="vehiclePrimaryDriverCard">
+                                <div class="vehicle-driver-card-head">
+                                    <strong>Driver 1</strong>
+                                    <span id="vehiclePrimaryDriverCardState" class="badge soft">Optional</span>
+                                </div>
+
+                                <div class="field searchable" id="vehiclePrimaryDriverField">
+                                    <div class="search-label">
+                                        <label for="driver">
+                                            Select Driver 1
+                                            <span id="vehiclePrimaryDriverRequired" class="req hidden">*</span>
+                                            <small id="vehiclePrimaryDriverOptional">(Optional)</small>
+                                        </label>
+                                        <span class="search-tag">Searchable</span>
+                                    </div>
+                                    <input id="driver" list="vehiclePrimaryDriverList" placeholder="Type to search and select Driver 1" autocomplete="off">
+                                    <datalist id="vehiclePrimaryDriverList">
+                                        <?php $__currentLoopData = $fleetman['options']['drivers']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $driverOptionValue => $driverOptionLabel): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                            <?php
+                                                $driverValue = is_int($driverOptionValue) ? $driverOptionLabel : $driverOptionValue;
+                                                $driverLabel = is_array($driverOptionLabel) ? ($driverOptionLabel['label'] ?? $driverValue) : $driverOptionLabel;
+                                            ?>
+                                            <option value="<?php echo e($driverValue); ?>"><?php echo e($driverLabel); ?></option>
+                                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                                    </datalist>
+                                </div>
+
+                                <div id="driverPaymentFields" class="grid vehicle-driver-payment-fields hidden">
+                                    <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'driverPaymentAmount','label' => 'Driver Payment Amount','type' => 'number','min' => '0','step' => '0.01','placeholder' => '0.00','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'driverPaymentAmount','label' => 'Driver 1 Payment Amount','type' => 'number','min' => '0','step' => '0.01','placeholder' => '0.00','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.input'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'driverPaymentAmount','label' => 'Driver Payment Amount','type' => 'number','min' => '0','step' => '0.01','placeholder' => '0.00','required' => true]); ?>
+<?php $component->withAttributes(['id' => 'driverPaymentAmount','label' => 'Driver 1 Payment Amount','type' => 'number','min' => '0','step' => '0.01','placeholder' => '0.00','required' => true]); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
@@ -209,16 +231,16 @@
 <?php $component = $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523; ?>
 <?php unset($__componentOriginal8e448d98e7f6e76a56b5afe0e1522523); ?>
 <?php endif; ?>
-                        <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
+                                    <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4b244ece64768724078120db372595a2 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'driverPaymentCycle','label' => 'Driver Payment Cycle','options' => $fleetman['options']['rental_payment_cycles'],'placeholder' => 'Select payment cycle','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'driverPaymentCycle','label' => 'Driver 1 Payment Cycle','options' => $fleetman['options']['rental_payment_cycles'],'placeholder' => 'Select payment cycle','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('fleetman.select'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['id' => 'driverPaymentCycle','label' => 'Driver Payment Cycle','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($fleetman['options']['rental_payment_cycles']),'placeholder' => 'Select payment cycle','required' => true]); ?>
+<?php $component->withAttributes(['id' => 'driverPaymentCycle','label' => 'Driver 1 Payment Cycle','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($fleetman['options']['rental_payment_cycles']),'placeholder' => 'Select payment cycle','required' => true]); ?>
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginal4b244ece64768724078120db372595a2)): ?>
@@ -229,6 +251,76 @@
 <?php $component = $__componentOriginal4b244ece64768724078120db372595a2; ?>
 <?php unset($__componentOriginal4b244ece64768724078120db372595a2); ?>
 <?php endif; ?>
+                                </div>
+                            </div>
+
+                            <div class="vehicle-driver-assignment-card hidden" id="vehicleSecondaryDriverField">
+                                <div class="vehicle-driver-card-head">
+                                    <strong>Driver 2</strong>
+                                    <span class="badge warn">Required</span>
+                                </div>
+
+                                <div class="field searchable">
+                                    <div class="search-label">
+                                        <label for="secondDriver">Select Driver 2 <span class="req">*</span></label>
+                                        <span class="search-tag">Searchable</span>
+                                    </div>
+                                    <input id="secondDriver" list="vehicleSecondaryDriverList" placeholder="Type to search and select Driver 2" autocomplete="off">
+                                    <datalist id="vehicleSecondaryDriverList">
+                                        <?php $__currentLoopData = $fleetman['options']['drivers']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $driverOptionValue => $driverOptionLabel): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
+                                            <?php
+                                                $driverValue = is_int($driverOptionValue) ? $driverOptionLabel : $driverOptionValue;
+                                                $driverLabel = is_array($driverOptionLabel) ? ($driverOptionLabel['label'] ?? $driverValue) : $driverOptionLabel;
+                                            ?>
+                                            <option value="<?php echo e($driverValue); ?>"><?php echo e($driverLabel); ?></option>
+                                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
+                                    </datalist>
+                                </div>
+
+                                <div id="secondDriverPaymentFields" class="grid vehicle-driver-payment-fields">
+                                    <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.input','data' => ['id' => 'secondDriverPaymentAmount','label' => 'Driver 2 Payment Amount','type' => 'number','min' => '0','step' => '0.01','placeholder' => '0.00','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.input'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['id' => 'secondDriverPaymentAmount','label' => 'Driver 2 Payment Amount','type' => 'number','min' => '0','step' => '0.01','placeholder' => '0.00','required' => true]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
+<?php $attributes = $__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523; ?>
+<?php unset($__attributesOriginal8e448d98e7f6e76a56b5afe0e1522523); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8e448d98e7f6e76a56b5afe0e1522523)): ?>
+<?php $component = $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523; ?>
+<?php unset($__componentOriginal8e448d98e7f6e76a56b5afe0e1522523); ?>
+<?php endif; ?>
+                                    <?php if (isset($component)) { $__componentOriginal4b244ece64768724078120db372595a2 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal4b244ece64768724078120db372595a2 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.fleetman.select','data' => ['id' => 'secondDriverPaymentCycle','label' => 'Driver 2 Payment Cycle','options' => $fleetman['options']['rental_payment_cycles'],'placeholder' => 'Select payment cycle','required' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('fleetman.select'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['id' => 'secondDriverPaymentCycle','label' => 'Driver 2 Payment Cycle','options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($fleetman['options']['rental_payment_cycles']),'placeholder' => 'Select payment cycle','required' => true]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal4b244ece64768724078120db372595a2)): ?>
+<?php $attributes = $__attributesOriginal4b244ece64768724078120db372595a2; ?>
+<?php unset($__attributesOriginal4b244ece64768724078120db372595a2); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal4b244ece64768724078120db372595a2)): ?>
+<?php $component = $__componentOriginal4b244ece64768724078120db372595a2; ?>
+<?php unset($__componentOriginal4b244ece64768724078120db372595a2); ?>
+<?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div class="grid3" style="margin-top:16px">
                         <?php if (isset($component)) { $__componentOriginal8e448d98e7f6e76a56b5afe0e1522523 = $component; } ?>

@@ -6,7 +6,7 @@
     const options = data.options || {};
     const records = data.records || data.samples || {};
     const resources = data.resources || {};
-    const masters = data.contractMasters || { parties: { Client: [], Vendor: [] }, vehicles: [], drivers: [] };
+    const masters = data.contractMasters || { parties: { Client: [], Vendor: [] }, vehicles: [], drivers: [], availableDrivers: [], driverReservations: [], shifts: [] };
 
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -125,7 +125,64 @@
         }
 
         function driverById(id) {
-            return (masters.drivers || []).find((driver) => driver.id === id) || null;
+            return (masters.drivers || []).find((driver) => String(driver.id) === String(id)) || null;
+        }
+
+        function shiftById(id) {
+            return (masters.shifts || []).find((shift) => String(shift.id) === String(id)) || null;
+        }
+
+        function normalizeShiftType(nextValue) {
+            return String(nextValue || '').trim().toLowerCase() === 'double' ? 'Double' : 'Single';
+        }
+
+        function isDoubleShiftVehicle(vehicle) {
+            if (!vehicle) return false;
+            if (typeof vehicle.isDoubleShift === 'boolean') return vehicle.isDoubleShift;
+            return String(vehicle.usage || '').trim().toLowerCase() === 'double shift';
+        }
+
+        function datesOverlap(startA, endA, startB, endB) {
+            if (!startA || !endA || !startB || !endB) return true;
+            return startA <= endB && endA >= startB;
+        }
+
+        function reservedDriverIds() {
+            const currentContractId = String(value('#contractId') || '').trim().toLowerCase();
+            const currentStart = String(value('#contractStart') || '').trim();
+            const currentEnd = String(value('#contractEnd') || '').trim();
+            const reservations = Array.isArray(masters.driverReservations) ? masters.driverReservations : [];
+
+            return new Set(reservations
+                .filter((reservation) => String(reservation?.contractId || '').trim().toLowerCase() !== currentContractId)
+                .filter((reservation) => datesOverlap(
+                    currentStart,
+                    currentEnd,
+                    String(reservation?.contractStart || '').trim(),
+                    String(reservation?.contractEnd || '').trim()
+                ))
+                .flatMap((reservation) => Array.isArray(reservation?.driverIds) ? reservation.driverIds : [])
+                .map((id) => String(id || '').trim().toLowerCase())
+                .filter(Boolean));
+        }
+
+        function availableDrivers(keepIds = []) {
+            const source = Array.isArray(masters.availableDrivers) && masters.availableDrivers.length
+                ? masters.availableDrivers
+                : (masters.drivers || []).filter((driver) => !driver.status || String(driver.status).toLowerCase() === 'active');
+            const reserved = reservedDriverIds();
+            const keep = new Set((keepIds || []).map((id) => String(id || '').trim().toLowerCase()).filter(Boolean));
+
+            return source.filter((driver) => {
+                const id = String(driver?.id || '').trim().toLowerCase();
+                return id && (keep.has(id) || !reserved.has(id));
+            });
+        }
+
+        function vehicleAssignedDriverIds(vehicle) {
+            return [vehicle?.assignedDriverId, vehicle?.assignedSecondDriverId]
+                .map((id) => String(id || '').trim())
+                .filter(Boolean);
         }
 
         function hiddenFileValue(fileData = {}) {
@@ -149,44 +206,280 @@
             });
         }
 
-        function refreshUniqueAssignmentSelects(selectSelector, items, placeholder) {
-            const wrapper = $('#contractAssignments');
-            if (!wrapper) return;
+        function shiftTypeForCard(card) {
+            const vehicle = vehicleById($('.contractAsgVehicle', card)?.value || '');
+            if (vehicle) return isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
+            return normalizeShiftType(card?.dataset.shiftType || 'Single');
+        }
 
-            const selects = $$(selectSelector, wrapper);
-            const selectedValues = selects
+        function selectedAssignmentVehicleIds(exceptCard = null) {
+            return $$('.contract-assignment-card')
+                .filter((card) => card !== exceptCard)
+                .map((card) => String($('.contractAsgVehicle', card)?.value || '').trim())
+                .filter(Boolean);
+        }
+
+        function selectedAssignmentDriverIds(exceptSelect = null) {
+            return $$('#contractAssignments .contractAsgDriver')
+                .filter((select) => {
+                    if (select === exceptSelect) return false;
+                    const modeSection = select.closest('.contract-single-shift-fields, .contract-double-shift-fields');
+                    return !modeSection?.classList.contains('hidden');
+                })
                 .map((select) => String(select.value || '').trim())
                 .filter(Boolean);
+        }
 
-            selects.forEach((select) => {
-                const current = String(select.value || '').trim();
-                const selectedElsewhere = new Set(
-                    selectedValues
-                        .filter((selected) => selected && selected !== current)
-                        .map((selected) => selected.toLowerCase())
-                );
-                const availableItems = (items || []).filter((item) => {
-                    const itemValue = String(item?.value || item?.id || item?.name || item?.label || item || '').trim();
-                    return itemValue === current || !selectedElsewhere.has(itemValue.toLowerCase());
-                });
+        function assignmentVehicleItems(card) {
+            const current = String($('.contractAsgVehicle', card)?.value || '').trim();
+            const selectedElsewhere = new Set(selectedAssignmentVehicleIds(card).map((id) => id.toLowerCase()));
 
-                select.innerHTML = optionHtml(availableItems, current, placeholder);
+            const reserved = reservedDriverIds();
+            return (masters.vehicles || []).filter((vehicle) => {
+                const id = String(vehicle.id || '').trim();
+                const assignedIds = vehicleAssignedDriverIds(vehicle);
+                const assignedDriverAlreadyUsed = assignedIds.some((driverId) => reserved.has(driverId.toLowerCase()));
+                return !assignedDriverAlreadyUsed
+                    && (id === current || !selectedElsewhere.has(id.toLowerCase()));
             });
         }
 
+        function replaceSelectOptions(select, items, placeholder, selected = null) {
+            if (!select) return;
+            const current = selected === null ? String(select.value || '').trim() : String(selected || '').trim();
+            select.innerHTML = optionHtml(items, current, placeholder);
+            select.value = current;
+        }
+
+        function driverItemsForSelect(select, sourceItems = masters.drivers || []) {
+            const current = String(select?.value || '').trim();
+            const selectedElsewhere = new Set(selectedAssignmentDriverIds(select).map((id) => id.toLowerCase()));
+            const reserved = reservedDriverIds();
+            return (sourceItems || []).filter((driver) => {
+                const id = String(driver.id || '').trim();
+                const key = id.toLowerCase();
+                return id === current || (!selectedElsewhere.has(key) && !reserved.has(key));
+            });
+        }
+
+        function refreshShiftSelects(card) {
+            const selects = $$('.contractAsgShift', card);
+            selects.forEach((select) => {
+                const current = String(select.value || '').trim();
+                const siblingValues = new Set(selects
+                    .filter((sibling) => sibling !== select)
+                    .map((sibling) => String(sibling.value || '').trim().toLowerCase())
+                    .filter(Boolean));
+                const items = (masters.shifts || []).filter((shift) => {
+                    const id = String(shift.id || '').trim();
+                    return id === current || !siblingValues.has(id.toLowerCase());
+                });
+                replaceSelectOptions(select, items, (masters.shifts || []).length ? 'Select shift' : 'No active shifts found');
+            });
+        }
+
+        function updateAssignedDriverSummary(card, vehicle) {
+            const summary = $('.contractAssignedDriverSummary', card);
+            if (!summary) return;
+
+            const shiftType = isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
+            const assignedIds = shiftType === 'Double'
+                ? vehicleAssignedDriverIds(vehicle)
+                : [String(vehicle?.assignedDriverId || '').trim()].filter(Boolean);
+            const names = assignedIds.map((id) => driverById(id)?.name || id).filter(Boolean);
+
+            summary.innerHTML = names.length
+                ? `<strong>Assigned ${names.length > 1 ? 'Drivers' : 'Driver'}:</strong> ${names.map(escapeHtml).join(' &nbsp;•&nbsp; ')}`
+                : '';
+            summary.hidden = names.length === 0;
+        }
+
+        function driverDisplayName(driverId) {
+            const id = String(driverId || '').trim();
+            if (!id) return '';
+            return driverById(id)?.name || driverById(id)?.label || id;
+        }
+
+        function shiftDisplayName(shiftId, fallbackLabel = '') {
+            const id = String(shiftId || '').trim();
+            if (!id) return fallbackLabel;
+            return shiftById(id)?.name || shiftById(id)?.label || id;
+        }
+
+        function updateDoubleDriverSummary(card) {
+            const button = $('.contractDoubleDriverOpen', card);
+            const text = $('.contractDoubleDriverSummaryText', card);
+            const hint = $('.contractDoubleDriverSummaryHint', card);
+            if (!button || !text) return;
+
+            const vehicle = vehicleById($('.contractAsgVehicle', card)?.value || '');
+            if (!vehicle || !isDoubleShiftVehicle(vehicle)) {
+                button.disabled = true;
+                text.textContent = vehicle ? 'Not required for single shift' : 'Select vehicle first';
+                if (hint) hint.textContent = '';
+                button.classList.remove('is-complete', 'is-incomplete');
+                return;
+            }
+
+            button.disabled = false;
+            const rows = [
+                {
+                    driverId: String($('.contractPrimaryDriver', card)?.value || '').trim(),
+                    shiftId: String($('.contractPrimaryShift', card)?.value || '').trim(),
+                    label: 'Shift 1',
+                },
+                {
+                    driverId: String($('.contractSecondaryDriver', card)?.value || '').trim(),
+                    shiftId: String($('.contractSecondaryShift', card)?.value || '').trim(),
+                    label: 'Shift 2',
+                },
+            ];
+            const complete = rows.every((row) => row.driverId && row.shiftId);
+            const hasAnyAssignment = rows.some((row) => row.driverId || row.shiftId);
+            const parts = rows.map((row) => {
+                const shift = shiftDisplayName(row.shiftId, row.label);
+                const driver = driverDisplayName(row.driverId) || 'Select driver';
+                return `${shift}: ${driver}`;
+            });
+
+            text.textContent = hasAnyAssignment ? parts.join(' | ') : 'Assign both shift drivers';
+            if (hint) hint.textContent = complete ? 'Both shift drivers are ready.' : parts.join(' • ');
+            button.classList.toggle('is-complete', complete);
+            button.classList.toggle('is-incomplete', !complete);
+            if (complete) clearContractFieldError(button);
+        }
+
+        function openDoubleDriverModal(card) {
+            const modal = $('.contract-double-shift-modal', card);
+            if (!modal) return;
+            refreshAssignmentCard(card);
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('contract-shift-modal-open');
+            const firstEditable = $('.contract-double-shift-modal select:not(:disabled)', card)
+                || $('[data-close-double-driver-modal]', modal);
+            firstEditable?.focus?.({ preventScroll: true });
+        }
+
+        function closeDoubleDriverModal(card) {
+            const modal = $('.contract-double-shift-modal', card);
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('contract-shift-modal-open');
+            updateDoubleDriverSummary(card);
+            $('.contractDoubleDriverOpen', card)?.focus?.({ preventScroll: true });
+        }
+
+        function configureDriverSelect(select, assignedId, placeholder) {
+            if (!select) return;
+            const current = String(select.value || '').trim();
+            const lockedId = String(assignedId || '').trim();
+            const keepIds = [current, lockedId].filter(Boolean);
+            const source = lockedId
+                ? (masters.drivers || []).filter((driver) => String(driver.id || '') === lockedId)
+                : availableDrivers(keepIds);
+
+            replaceSelectOptions(select, driverItemsForSelect(select, source), placeholder, lockedId || current);
+            if (lockedId) select.value = lockedId;
+            if (!lockedId && !Array.from(select.options).some((option) => option.value === current)) select.value = '';
+            select.disabled = Boolean(lockedId);
+            select.dataset.lockedAssignedDriver = lockedId;
+            select.closest('.field')?.classList.toggle('contract-driver-locked', Boolean(lockedId));
+        }
+
+        function refreshAssignmentCard(card) {
+            if (!card) return;
+
+            const vehicleSelect = $('.contractAsgVehicle', card);
+            replaceSelectOptions(vehicleSelect, assignmentVehicleItems(card), 'Select vehicle');
+
+            const vehicle = vehicleById(vehicleSelect?.value || '');
+            const shiftType = vehicle && isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
+            card.dataset.shiftType = shiftType;
+
+            const usageBadge = $('.contractVehicleUsageBadge', card);
+            if (usageBadge) {
+                usageBadge.textContent = vehicle ? `${shiftType} Shift` : '';
+                usageBadge.hidden = !vehicle;
+            }
+
+            const singleFields = $$('.contract-single-shift-fields', card);
+            const doubleFields = $$('.contract-double-shift-fields', card);
+            singleFields.forEach((field) => field.classList.toggle('hidden', Boolean(vehicle) && shiftType !== 'Single'));
+            doubleFields.forEach((field) => field.classList.toggle('hidden', !vehicle || shiftType !== 'Double'));
+
+            updateAssignedDriverSummary(card, vehicle);
+            if (!vehicle) {
+                const driverSelect = $('.contractSingleDriver', card);
+                replaceSelectOptions(driverSelect, [], 'Select vehicle first', '');
+                if (driverSelect) {
+                    driverSelect.value = '';
+                    driverSelect.disabled = true;
+                    driverSelect.dataset.lockedAssignedDriver = '';
+                }
+                $$('.contractDoubleDriver, .contractAsgShift', card).forEach((field) => {
+                    field.value = '';
+                    field.disabled = true;
+                    field.dataset.lockedAssignedDriver = '';
+                });
+                updateDoubleDriverSummary(card);
+                return;
+            }
+
+            if (shiftType === 'Single') {
+                configureDriverSelect(
+                    $('.contractSingleDriver', card),
+                    vehicle?.assignedDriverId,
+                    vehicle?.assignedDriverId ? 'Assigned vehicle driver' : 'Select available driver'
+                );
+                $$('.contractDoubleDriver, .contractAsgShift', card).forEach((field) => {
+                    field.disabled = true;
+                    field.dataset.lockedAssignedDriver = '';
+                });
+                updateDoubleDriverSummary(card);
+                return;
+            }
+
+            $$('.contractAsgShift', card).forEach((field) => { field.disabled = false; });
+            configureDriverSelect(
+                $('.contractPrimaryDriver', card),
+                vehicle?.assignedDriverId,
+                vehicle?.assignedDriverId ? 'Assigned vehicle driver' : 'Select available driver'
+            );
+            configureDriverSelect(
+                $('.contractSecondaryDriver', card),
+                vehicle?.assignedSecondDriverId,
+                vehicle?.assignedSecondDriverId ? 'Assigned vehicle driver' : 'Select available driver'
+            );
+            refreshShiftSelects(card);
+            updateDoubleDriverSummary(card);
+        }
+
         function refreshContractAssignmentOptions() {
-            refreshUniqueAssignmentSelects('.contractAsgDriver', masters.drivers || [], 'Select driver');
-            refreshUniqueAssignmentSelects('.contractAsgVehicle', masters.vehicles || [], 'Select vehicle');
+            $$('.contract-assignment-card').forEach((card) => refreshAssignmentCard(card));
         }
 
         function addAssignment(row = {}) {
             assignmentCounter += 1;
             const wrapper = $('#contractAssignments');
             if (!wrapper) return;
+
+            const nestedDrivers = Array.isArray(row.drivers) ? row.drivers : [];
+            const inferredDouble = nestedDrivers.length > 1 || row.secondDriverId || row.secondShiftId;
+            const vehicleId = row.vehicleId || row.vehicle || '';
+            const selectedVehicle = vehicleById(vehicleId);
+            const shiftType = selectedVehicle
+                ? (isDoubleShiftVehicle(selectedVehicle) ? 'Double' : 'Single')
+                : normalizeShiftType(row.shiftType || row.shiftMode || (inferredDouble ? 'Double' : 'Single'));
+            const primaryDriverId = nestedDrivers[0]?.driverId || row.driverId || row.driver || '';
+            const secondaryDriverId = nestedDrivers[1]?.driverId || row.secondDriverId || row.secondDriver || '';
+            const primaryShiftId = nestedDrivers[0]?.shiftId || row.shiftId || '';
+            const secondaryShiftId = nestedDrivers[1]?.shiftId || row.secondShiftId || '';
+
             const card = document.createElement('div');
             card.className = 'contract-assignment-card';
-            const driverId = row.driverId || row.driver || '';
-            const vehicleId = row.vehicleId || row.vehicle || '';
+            card.dataset.shiftType = shiftType;
             card.innerHTML = `
                 <div class="contract-card-head">
                     <div>
@@ -194,14 +487,23 @@
                     </div>
                     <button class="btn light small remove-contract-card" type="button">Remove</button>
                 </div>
-                <div class="contract-grid">
-                    <div class="field contract-col-3">
-                        <label>Driver <span class="req">*</span></label>
-                        <select class="contractAsgDriver" required aria-required="true">${optionHtml(masters.drivers || [], driverId, 'Select driver')}</select>
-                    </div>
+                <div class="contract-grid contract-assignment-main-grid">
                     <div class="field contract-col-3">
                         <label>Vehicle <span class="req">*</span></label>
                         <select class="contractAsgVehicle" required aria-required="true">${optionHtml(masters.vehicles || [], vehicleId, 'Select vehicle')}</select>
+                        <small class="badge soft contractVehicleUsageBadge" ${vehicleId ? '' : 'hidden'}>${vehicleId ? escapeHtml(shiftType + ' Shift') : ''}</small>
+                    </div>
+                    <div class="field contract-col-3 contract-single-shift-fields ${vehicleId && shiftType === 'Double' ? 'hidden' : ''}">
+                        <label>Driver <span class="req">*</span></label>
+                        <select class="contractAsgDriver contractSingleDriver" aria-required="true" ${vehicleId ? '' : 'disabled'}>${optionHtml(masters.drivers || [], primaryDriverId, vehicleId ? 'Select driver' : 'Select vehicle first')}</select>
+                    </div>
+                    <div class="field contract-col-3 contract-double-shift-fields ${vehicleId && shiftType === 'Double' ? '' : 'hidden'}">
+                        <label>Driver <span class="req">*</span></label>
+                        <button class="contract-double-driver-open contractDoubleDriverOpen" type="button" ${vehicleId && shiftType === 'Double' ? '' : 'disabled'}>
+                            <span class="contractDoubleDriverSummaryText">Assign both shift drivers</span>
+                            <small class="contractDoubleDriverSummaryHint"></small>
+                            <b>Assign</b>
+                        </button>
                     </div>
                     <div class="field contract-col-3">
                         <label>Vehicle Hourly Rate <span class="req">*</span></label>
@@ -210,6 +512,42 @@
                     <div class="field contract-col-3">
                         <label>Vehicle Duty Hour/Daily <span class="req">*</span></label>
                         <input class="contractAsgDuty" type="number" min="0.01" step="0.01" value="${escapeHtml(row.duty ?? '')}" placeholder="0" required aria-required="true">
+                    </div>
+                </div>
+                <div class="contract-assigned-driver-summary contractAssignedDriverSummary" hidden></div>
+                <div class="contract-double-shift-modal hidden" aria-hidden="true">
+                    <div class="contract-double-shift-modal-backdrop" data-close-double-driver-modal></div>
+                    <div class="contract-double-shift-modal-panel" role="dialog" aria-modal="true" aria-label="Assign double shift drivers">
+                        <div class="contract-double-shift-modal-head">
+                            <div>
+                                <b>Double Shift Driver Assignment</b>
+                                <small>Select one active driver and one master shift for each shift.</small>
+                            </div>
+                            <button class="btn light small" type="button" data-close-double-driver-modal>Close</button>
+                        </div>
+                        <div class="contract-double-shift-modal-body">
+                            <div class="contract-double-shift-modal-grid">
+                                <div class="field">
+                                    <label>Shift 1 <span class="req">*</span></label>
+                                    <select class="contractAsgShift contractPrimaryShift" aria-required="true">${optionHtml(masters.shifts || [], primaryShiftId, 'Select shift')}</select>
+                                </div>
+                                <div class="field">
+                                    <label>Driver 1 <span class="req">*</span></label>
+                                    <select class="contractAsgDriver contractDoubleDriver contractPrimaryDriver" aria-required="true">${optionHtml(masters.drivers || [], primaryDriverId, 'Select driver')}</select>
+                                </div>
+                                <div class="field">
+                                    <label>Shift 2 <span class="req">*</span></label>
+                                    <select class="contractAsgShift contractSecondaryShift" aria-required="true">${optionHtml(masters.shifts || [], secondaryShiftId, 'Select shift')}</select>
+                                </div>
+                                <div class="field">
+                                    <label>Driver 2 <span class="req">*</span></label>
+                                    <select class="contractAsgDriver contractDoubleDriver contractSecondaryDriver" aria-required="true">${optionHtml(availableDrivers(), secondaryDriverId, 'Select available driver')}</select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="contract-double-shift-modal-actions">
+                            <button class="btn primary small" type="button" data-close-double-driver-modal>Done</button>
+                        </div>
                     </div>
                 </div>`;
             wrapper.appendChild(card);
@@ -300,16 +638,46 @@
         function collectAssignments() {
             return $$('.contract-assignment-card').map((card) => {
                 const vehicleId = $('.contractAsgVehicle', card)?.value || '';
-                const driverId = $('.contractAsgDriver', card)?.value || '';
                 const vehicle = vehicleById(vehicleId);
-                const driver = driverById(driverId);
+                const shiftType = vehicle && isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
+                const driverRows = shiftType === 'Double'
+                    ? [
+                        { driverId: $('.contractPrimaryDriver', card)?.value || '', shiftId: $('.contractPrimaryShift', card)?.value || '' },
+                        { driverId: $('.contractSecondaryDriver', card)?.value || '', shiftId: $('.contractSecondaryShift', card)?.value || '' },
+                    ]
+                    : [{ driverId: $('.contractSingleDriver', card)?.value || '', shiftId: '' }];
+                const drivers = driverRows.map((driverRow) => {
+                    const driver = driverById(driverRow.driverId);
+                    const shift = shiftById(driverRow.shiftId);
+                    return {
+                        driverId: driverRow.driverId,
+                        driver: driver ? driver.label : driverRow.driverId,
+                        driverName: driver?.name || '',
+                        shiftId: driverRow.shiftId,
+                        shift: shift ? shift.label : driverRow.shiftId,
+                        shiftName: shift?.name || '',
+                    };
+                });
+                const primary = drivers[0] || {};
+                const secondary = drivers[1] || {};
+
                 return {
-                    driverId,
-                    driver: driver ? driver.label : driverId,
-                    driverName: driver?.name || '',
+                    shiftType,
+                    driverId: primary.driverId || '',
+                    driver: primary.driver || '',
+                    driverName: primary.driverName || '',
+                    shiftId: primary.shiftId || '',
+                    shift: primary.shift || '',
+                    secondDriverId: secondary.driverId || '',
+                    secondDriver: secondary.driver || '',
+                    secondDriverName: secondary.driverName || '',
+                    secondShiftId: secondary.shiftId || '',
+                    secondShift: secondary.shift || '',
+                    drivers,
                     vehicleId,
                     vehicle: vehicle ? vehicle.label : vehicleId,
                     vehicleName: vehicle?.name || '',
+                    vehicleUsage: vehicle?.usage || '',
                     rate: Number($('.contractAsgRate', card)?.value || 0),
                     duty: Number($('.contractAsgDuty', card)?.value || 0),
                 };
@@ -392,6 +760,12 @@
             const invalidate = (element, message) => {
                 valid = false;
                 invalidateContractField(element, message);
+                const modal = element?.closest?.('.contract-double-shift-modal');
+                const card = modal?.closest?.('.contract-assignment-card');
+                const summaryButton = card ? $('.contractDoubleDriverOpen', card) : null;
+                if (summaryButton) {
+                    invalidateContractField(summaryButton, 'Complete both double-shift drivers and shifts.');
+                }
             };
 
             if (!String(row.contractId || '').trim()) invalidate($('#contractId'), 'Contract ID is required.');
@@ -410,15 +784,70 @@
                 valid = false;
                 toast('Please add at least one vehicle and driver assignment.');
             }
+            const seenVehicleIds = new Map();
+            const seenDriverIds = new Map();
             assignmentCards.forEach((card) => {
-                const driver = $('.contractAsgDriver', card);
-                const vehicle = $('.contractAsgVehicle', card);
+                const vehicleSelect = $('.contractAsgVehicle', card);
+                const vehicleId = String(vehicleSelect?.value || '').trim();
+                const vehicle = vehicleById(vehicleId);
+                const shiftType = vehicle && isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
                 const rate = $('.contractAsgRate', card);
                 const duty = $('.contractAsgDuty', card);
-                if (!driver?.value) invalidate(driver, 'Driver is required.');
-                if (!vehicle?.value) invalidate(vehicle, 'Vehicle is required.');
+
+                if (!vehicleId) invalidate(vehicleSelect, 'Vehicle is required.');
+                if (vehicleId && seenVehicleIds.has(vehicleId.toLowerCase())) {
+                    invalidate(vehicleSelect, 'Each vehicle can be assigned only once in a contract.');
+                    invalidate(seenVehicleIds.get(vehicleId.toLowerCase()), 'Each vehicle can be assigned only once in a contract.');
+                } else if (vehicleId) {
+                    seenVehicleIds.set(vehicleId.toLowerCase(), vehicleSelect);
+                }
                 if (!Number.isFinite(Number(rate?.value)) || Number(rate?.value) <= 0) invalidate(rate, 'Vehicle Hourly Rate must be greater than zero.');
                 if (!Number.isFinite(Number(duty?.value)) || Number(duty?.value) <= 0) invalidate(duty, 'Vehicle Duty Hour/Daily must be greater than zero.');
+
+                const driverSelects = shiftType === 'Double'
+                    ? [$('.contractPrimaryDriver', card), $('.contractSecondaryDriver', card)]
+                    : [$('.contractSingleDriver', card)];
+                const shiftSelects = shiftType === 'Double'
+                    ? [$('.contractPrimaryShift', card), $('.contractSecondaryShift', card)]
+                    : [];
+
+                const reserved = reservedDriverIds();
+                driverSelects.forEach((driverSelect, index) => {
+                    const driverId = String(driverSelect?.value || '').trim();
+                    if (!driverId) invalidate(driverSelect, shiftType === 'Double' ? `Driver ${index + 1} is required.` : 'Driver is required.');
+                    if (driverId && reserved.has(driverId.toLowerCase())) {
+                        invalidate(driverSelect, 'This driver is already assigned to another active contract.');
+                    } else if (driverId && seenDriverIds.has(driverId.toLowerCase())) {
+                        invalidate(driverSelect, 'This driver is already assigned elsewhere in this contract.');
+                        invalidate(seenDriverIds.get(driverId.toLowerCase()), 'This driver is already assigned elsewhere in this contract.');
+                    } else if (driverId) {
+                        seenDriverIds.set(driverId.toLowerCase(), driverSelect);
+                    }
+                });
+
+                const assignedPrimaryId = String(vehicle?.assignedDriverId || '').trim();
+                if (assignedPrimaryId && String(driverSelects[0]?.value || '') !== assignedPrimaryId) {
+                    invalidate(driverSelects[0], 'Use the driver currently assigned to this vehicle.');
+                }
+
+                if (shiftType === 'Double') {
+                    if (!(masters.shifts || []).length) {
+                        shiftSelects.forEach((shiftSelect) => invalidate(shiftSelect, 'Add active shifts from Master Data → Shifts first.'));
+                    }
+                    shiftSelects.forEach((shiftSelect, index) => {
+                        if (!String(shiftSelect?.value || '').trim()) invalidate(shiftSelect, `Shift ${index + 1} is required.`);
+                    });
+                    if (driverSelects[0]?.value && driverSelects[0].value === driverSelects[1]?.value) {
+                        invalidate(driverSelects[1], 'The two shifts must use different drivers.');
+                    }
+                    if (shiftSelects[0]?.value && shiftSelects[0].value === shiftSelects[1]?.value) {
+                        invalidate(shiftSelects[1], 'Select a different shift for each driver.');
+                    }
+                    const assignedSecondDriverId = String(vehicle?.assignedSecondDriverId || '').trim();
+                    if (assignedSecondDriverId && String(driverSelects[1]?.value || '') !== assignedSecondDriverId) {
+                        invalidate(driverSelects[1], 'Use the second driver currently assigned to this vehicle.');
+                    }
+                }
             });
 
             const documentCards = $$('.contract-doc-card');
@@ -544,6 +973,47 @@
             return 'soft';
         }
 
+        function contractDriverCount(row) {
+            const driverIds = [];
+            (row.assignments || []).forEach((assignment) => {
+                if (Array.isArray(assignment.drivers) && assignment.drivers.length) {
+                    assignment.drivers.forEach((driver) => {
+                        const id = driver?.driverId || driver?.driver;
+                        if (id) driverIds.push(String(id));
+                    });
+                } else {
+                    const id = assignment.driverId || assignment.driver;
+                    if (id) driverIds.push(String(id));
+                    const secondId = assignment.secondDriverId || assignment.secondDriver;
+                    if (secondId) driverIds.push(String(secondId));
+                }
+            });
+            return new Set(driverIds.map((id) => id.toLowerCase())).size;
+        }
+
+        function contractAssignmentSummary(row) {
+            const assignments = Array.isArray(row?.assignments) ? row.assignments : [];
+            if (!assignments.length) return '<span class="hint">Not assigned</span>';
+
+            return `<div class="contract-list-assignment-summary">${assignments.map((assignment) => {
+                const vehicleName = assignment.vehicleName || vehicleById(assignment.vehicleId)?.name || assignment.vehicle || assignment.vehicleId || '-';
+                const vehicleCode = assignment.vehicleId || '';
+                const drivers = Array.isArray(assignment.drivers) && assignment.drivers.length
+                    ? assignment.drivers
+                    : [
+                        { driverId: assignment.driverId, driverName: assignment.driverName, driver: assignment.driver, shiftName: assignment.shiftName, shift: assignment.shift },
+                        { driverId: assignment.secondDriverId, driverName: assignment.secondDriverName, driver: assignment.secondDriver, shiftName: assignment.secondShiftName, shift: assignment.secondShift },
+                    ].filter((driver) => driver.driverId || driver.driverName || driver.driver);
+                const driverText = drivers.map((driver) => {
+                    const name = driver.driverName || driverById(driver.driverId)?.name || driver.driver || driver.driverId || '-';
+                    const shift = driver.shiftName || driver.shift || '';
+                    return `${escapeHtml(name)}${shift ? ` <small>(${escapeHtml(shift)})</small>` : ''}`;
+                }).join('<br>');
+
+                return `<div class="contract-list-assignment-item"><b>${escapeHtml(vehicleName)}</b>${vehicleCode ? `<small>${escapeHtml(vehicleCode)}</small>` : ''}<span>${driverText || 'No driver'}</span></div>`;
+            }).join('')}</div>`;
+        }
+
         function renderList() {
             const items = filteredContracts();
             const totalVehicles = items.reduce((sum, row) => sum + (row.assignments || []).length, 0);
@@ -571,12 +1041,13 @@
                         <td>${formatDate(row.contractStart)}</td>
                         <td>${formatDate(row.contractEnd)}</td>
                         <td>${(row.assignments || []).length}</td>
-                        <td>${new Set((row.assignments || []).map((item) => item.driverId || item.driver)).size}</td>
+                        <td>${contractDriverCount(row)}</td>
+                        <td>${contractAssignmentSummary(row)}</td>
                         <td>${(row.documents || []).length}</td>
                         <td>${window.FleetmanExpiringDocuments.html(row.documents || [])}</td>
                         <td><span class="badge ${badgeClass(row.savedAs)}">${escapeHtml(row.savedAs || '-')}</span></td>
                         <td><button class="mini-btn view-contract" type="button" data-id="${escapeHtml(row.contractId)}">View</button><button class="mini-btn edit-contract" type="button" data-id="${escapeHtml(row.contractId)}">Edit</button><button class="mini-btn danger delete-contract" type="button" data-id="${escapeHtml(row.contractId)}">Delete</button></td>
-                    </tr>`).join('') : '<tr><td colspan="14"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
+                    </tr>`).join('') : '<tr><td colspan="15"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
             }
 
             const cards = $('#contractMobileCards');
@@ -591,6 +1062,7 @@
                             <div><b>Start</b><br>${formatDate(row.contractStart)}</div>
                             <div><b>End</b><br>${formatDate(row.contractEnd)}</div>
                             <div><b>Assignments</b><br>${(row.assignments || []).length}</div>
+                            <div class="contract-mobile-assignment-summary"><b>Vehicle &amp; Driver</b>${contractAssignmentSummary(row)}</div>
                             <div><b>Documents</b><br>${(row.documents || []).length}</div>
                             <div class="contract-expiring-mobile"><b>Expiring Documents</b>${window.FleetmanExpiringDocuments.html(row.documents || [], { limit: 2 })}</div>
                         </div>
@@ -665,8 +1137,8 @@
 
         function exportContracts() {
             downloadCsv('fleetman-contract-list.csv', [
-                ['Contract ID', 'Contract With', 'Party Name', 'Amount', 'Status', 'Start Date', 'End Date', 'Assignments', 'Documents', 'Saved As', 'Details'],
-                ...contracts.map((row) => [row.contractId, row.contractWith, row.partyName, row.amount, row.status, row.contractStart, row.contractEnd, (row.assignments || []).length, (row.documents || []).length, row.savedAs, row.details]),
+                ['Contract ID', 'Contract With', 'Party Name', 'Amount', 'Status', 'Start Date', 'End Date', 'Assignments', 'Assigned Vehicles & Drivers', 'Documents', 'Saved As', 'Details'],
+                ...contracts.map((row) => [row.contractId, row.contractWith, row.partyName, row.amount, row.status, row.contractStart, row.contractEnd, (row.assignments || []).length, (row.assignments || []).map((assignment) => `${assignment.vehicleName || assignment.vehicle || assignment.vehicleId}: ${(assignment.drivers || []).map((driver) => driver.driverName || driver.driver || driver.driverId).join(' / ') || assignment.driverName || assignment.driver || assignment.driverId}`).join(' | '), (row.documents || []).length, row.savedAs, row.details]),
             ]);
         }
 
@@ -694,6 +1166,18 @@
                 if (documentCard) refreshContractDocumentOptions();
             }
 
+            const doubleDriverOpen = event.target.closest('.contractDoubleDriverOpen');
+            if (doubleDriverOpen) {
+                const card = doubleDriverOpen.closest('.contract-assignment-card');
+                if (card && !doubleDriverOpen.disabled) openDoubleDriverModal(card);
+            }
+
+            const doubleDriverClose = event.target.closest('[data-close-double-driver-modal]');
+            if (doubleDriverClose) {
+                const card = doubleDriverClose.closest('.contract-assignment-card');
+                if (card) closeDoubleDriverModal(card);
+            }
+
             const pageBtn = event.target.closest('[data-contract-page]');
             if (pageBtn) {
                 currentPage = Number(pageBtn.dataset.contractPage || 1);
@@ -708,6 +1192,13 @@
 
             const del = event.target.closest('.delete-contract');
             if (del) deleteContract(del.dataset.id, del);
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            const openModal = $('.contract-double-shift-modal:not(.hidden)');
+            const card = openModal?.closest('.contract-assignment-card');
+            if (card) closeDoubleDriverModal(card);
         });
 
         $('#contractParty')?.addEventListener('change', () => {
@@ -731,14 +1222,22 @@
         $('#contractCreatePage')?.addEventListener('input', (event) => {
             const changedField = event.target.closest('input, select, textarea');
             if (changedField) clearContractFieldError(changedField);
+            if (changedField?.matches('#contractStart, #contractEnd')) refreshContractAssignmentOptions();
         });
 
         document.addEventListener('change', (event) => {
             const changedField = event.target.closest('#contractCreatePage input, #contractCreatePage select, #contractCreatePage textarea');
             if (changedField) clearContractFieldError(changedField);
 
-            const assignmentSelect = event.target.closest('#contractAssignments .contractAsgDriver, #contractAssignments .contractAsgVehicle');
-            if (assignmentSelect) refreshContractAssignmentOptions();
+            const assignmentSelect = event.target.closest('#contractAssignments .contractAsgDriver, #contractAssignments .contractAsgVehicle, #contractAssignments .contractAsgShift');
+            if (assignmentSelect) {
+                const isVehicle = assignmentSelect.classList.contains('contractAsgVehicle');
+                if (isVehicle) {
+                    const card = assignmentSelect.closest('.contract-assignment-card');
+                    $$('.contractAsgDriver, .contractAsgShift', card).forEach((field) => { field.value = ''; field.disabled = false; });
+                }
+                refreshContractAssignmentOptions();
+            }
 
             const documentName = event.target.closest('#contractDocuments .contractDocName');
             if (documentName) refreshContractDocumentOptions();

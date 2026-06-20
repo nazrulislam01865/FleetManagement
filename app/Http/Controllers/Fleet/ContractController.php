@@ -47,6 +47,7 @@ class ContractController extends FleetBaseController
         $validateContractId = trim((string) $request->input('validateContractId', ''));
         $this->validateContractRows($rows, $request, $validateContractId);
         $this->validateContractDocumentNames($rows, $validateContractId);
+        $rows = $this->normalizeContractRows($rows);
 
         $storedPaths = [];
         $userId = (int) $request->user()->id;
@@ -148,6 +149,14 @@ class ContractController extends FleetBaseController
     {
         $errors = [];
         $documentReminders = $this->values('document_reminder');
+        $vehicles = collect($this->contractVehicleOptions())->keyBy(fn (array $vehicle): string => (string) ($vehicle['id'] ?? ''));
+        $drivers = collect($this->contractDriverOptions())->keyBy(fn (array $driver): string => (string) ($driver['id'] ?? ''));
+        $availableDriverIds = $drivers
+            ->filter(fn (array $driver): bool => strcasecmp((string) ($driver['status'] ?? ''), 'Active') === 0)
+            ->keys()
+            ->map(fn ($id): string => strtolower((string) $id))
+            ->all();
+        $shifts = collect($this->contractShiftOptions())->keyBy(fn (array $shift): string => (string) ($shift['id'] ?? ''));
 
         $matchedValidationTarget = $validateContractId === '';
 
@@ -162,6 +171,11 @@ class ContractController extends FleetBaseController
             }
 
             $matchedValidationTarget = true;
+            $reservedDriverIds = $this->reservedDriverIdsForContract(
+                (string) ($row['contractId'] ?? ''),
+                (string) ($row['contractStart'] ?? ''),
+                (string) ($row['contractEnd'] ?? '')
+            );
 
             if (strcasecmp((string) ($row['savedAs'] ?? ''), 'Draft') === 0) {
                 continue;
@@ -178,10 +192,14 @@ class ContractController extends FleetBaseController
                 'contractEnd' => ['required', 'date', 'after_or_equal:contractStart'],
                 'details' => ['required', 'string', 'max:5000'],
                 'assignments' => ['required', 'array', 'min:1'],
-                'assignments.*.driverId' => ['required', 'string', 'max:100'],
+                'assignments.*.shiftType' => ['nullable', Rule::in(['Single', 'Double'])],
+                'assignments.*.driverId' => ['nullable', 'string', 'max:100'],
                 'assignments.*.vehicleId' => ['required', 'string', 'max:100'],
                 'assignments.*.rate' => ['required', 'numeric', 'gt:0'],
                 'assignments.*.duty' => ['required', 'numeric', 'gt:0'],
+                'assignments.*.drivers' => ['nullable', 'array', 'max:2'],
+                'assignments.*.drivers.*.driverId' => ['nullable', 'string', 'max:100'],
+                'assignments.*.drivers.*.shiftId' => ['nullable', 'string', 'max:120'],
                 'documents' => ['required', 'array', 'min:1'],
                 'documents.*.name' => ['required', 'string', 'max:255'],
                 'documents.*.expiry' => ['nullable', 'date'],
@@ -197,6 +215,115 @@ class ContractController extends FleetBaseController
 
             foreach ($validator->errors()->messages() as $key => $messages) {
                 $errors["rows.{$contractIndex}.{$key}"] = $messages;
+            }
+
+            $usedVehicleIds = [];
+            $usedDriverIds = [];
+            foreach ((array) ($row['assignments'] ?? []) as $assignmentIndex => $assignment) {
+                if (! is_array($assignment)) {
+                    continue;
+                }
+
+                $vehicleId = trim((string) ($assignment['vehicleId'] ?? ''));
+                $vehicle = $vehicles->get($vehicleId);
+                $vehicleIsDouble = (bool) ($vehicle['isDoubleShift'] ?? false);
+                $shiftType = $vehicleIsDouble ? 'Double' : 'Single';
+
+                if ($vehicleId !== '' && ! $vehicle) {
+                    $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.vehicleId"] = 'Select a valid saved vehicle.';
+                }
+
+                if ($vehicleId !== '' && in_array(strtolower($vehicleId), $usedVehicleIds, true)) {
+                    $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.vehicleId"] = 'Each vehicle can be assigned only once in a contract.';
+                }
+                if ($vehicleId !== '') {
+                    $usedVehicleIds[] = strtolower($vehicleId);
+                }
+
+                if ($shiftType === 'Single') {
+                    $driverId = trim((string) ($assignment['driverId'] ?? data_get($assignment, 'drivers.0.driverId', '')));
+                    if ($driverId === '') {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.driverId"] = 'Driver is required.';
+                    } elseif (! $drivers->has($driverId)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.driverId"] = 'Select a valid saved driver.';
+                    }
+
+                    $assignedDriverId = trim((string) ($vehicle['assignedDriverId'] ?? ''));
+                    if ($assignedDriverId !== '' && strtolower($driverId) !== strtolower($assignedDriverId)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.driverId"] = 'Use the driver currently assigned to this vehicle.';
+                    } elseif ($assignedDriverId === '' && $driverId !== '' && ! in_array(strtolower($driverId), $availableDriverIds, true)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.driverId"] = 'Select an active available driver.';
+                    }
+
+                    if ($driverId !== '' && in_array(strtolower($driverId), $reservedDriverIds, true)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.driverId"] = 'This driver is already assigned to another active contract.';
+                    } elseif ($driverId !== '' && in_array(strtolower($driverId), $usedDriverIds, true)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.driverId"] = 'This driver is already assigned elsewhere in this contract.';
+                    }
+                    if ($driverId !== '') {
+                        $usedDriverIds[] = strtolower($driverId);
+                    }
+
+                    continue;
+                }
+
+                $driverAssignments = array_values(array_filter((array) ($assignment['drivers'] ?? []), 'is_array'));
+                if (count($driverAssignments) !== 2) {
+                    $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers"] = 'Double Shift requires exactly two drivers.';
+                    continue;
+                }
+
+                if ($shifts->isEmpty()) {
+                    $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers"] = 'Add active shifts from Master Data → Shifts before creating a double-shift assignment.';
+                }
+
+                $assignmentDriverIds = [];
+                $assignmentShiftIds = [];
+                foreach ($driverAssignments as $driverIndex => $driverAssignment) {
+                    $driverId = trim((string) ($driverAssignment['driverId'] ?? ''));
+                    $shiftId = trim((string) ($driverAssignment['shiftId'] ?? ''));
+
+                    $vehicleAssignedDriverId = $driverIndex === 0
+                        ? trim((string) ($vehicle['assignedDriverId'] ?? ''))
+                        : trim((string) ($vehicle['assignedSecondDriverId'] ?? ''));
+
+                    if ($driverId === '') {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.driverId"] = 'Driver is required for both shifts.';
+                    } elseif (! $drivers->has($driverId)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.driverId"] = 'Select a valid saved driver.';
+                    } elseif ($vehicleAssignedDriverId !== '' && strtolower($driverId) !== strtolower($vehicleAssignedDriverId)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.driverId"] = 'Use the driver currently assigned to this vehicle.';
+                    } elseif ($vehicleAssignedDriverId === '' && ! in_array(strtolower($driverId), $availableDriverIds, true)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.driverId"] = 'Select an active available driver.';
+                    } elseif (in_array(strtolower($driverId), $reservedDriverIds, true)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.driverId"] = 'This driver is already assigned to another active contract.';
+                    }
+
+                    if ($shiftId === '') {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.shiftId"] = 'Shift is required for both drivers.';
+                    } elseif (! $shifts->has($shiftId)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.shiftId"] = 'Select a valid active shift.';
+                    }
+
+                    if ($driverId !== '' && in_array(strtolower($driverId), $assignmentDriverIds, true)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.driverId"] = 'The two shifts must use different drivers.';
+                    }
+                    if ($shiftId !== '' && in_array(strtolower($shiftId), $assignmentShiftIds, true)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.shiftId"] = 'Select a different shift for each driver.';
+                    }
+                    if ($driverId !== '' && in_array(strtolower($driverId), $usedDriverIds, true)) {
+                        $errors["rows.{$contractIndex}.assignments.{$assignmentIndex}.drivers.{$driverIndex}.driverId"] = 'This driver is already assigned elsewhere in this contract.';
+                    }
+
+                    if ($driverId !== '') {
+                        $assignmentDriverIds[] = strtolower($driverId);
+                    }
+                    if ($shiftId !== '') {
+                        $assignmentShiftIds[] = strtolower($shiftId);
+                    }
+                }
+
+                $usedDriverIds = array_values(array_unique(array_merge($usedDriverIds, $assignmentDriverIds)));
             }
 
             foreach ((array) ($row['documents'] ?? []) as $documentIndex => $document) {
@@ -228,6 +355,109 @@ class ContractController extends FleetBaseController
         if ($errors !== []) {
             throw ValidationException::withMessages($errors);
         }
+    }
+
+    private function normalizeContractRows(array $rows): array
+    {
+        $vehicles = collect($this->contractVehicleOptions())->keyBy(fn (array $vehicle): string => (string) ($vehicle['id'] ?? ''));
+        $drivers = collect($this->contractDriverOptions())->keyBy(fn (array $driver): string => (string) ($driver['id'] ?? ''));
+        $shifts = collect($this->contractShiftOptions())->keyBy(fn (array $shift): string => (string) ($shift['id'] ?? ''));
+
+        foreach ($rows as &$row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $normalizedAssignments = [];
+            foreach ((array) ($row['assignments'] ?? []) as $assignment) {
+                if (! is_array($assignment)) {
+                    continue;
+                }
+
+                $vehicleId = trim((string) ($assignment['vehicleId'] ?? ''));
+                $vehicle = $vehicles->get($vehicleId);
+                $shiftType = (bool) ($vehicle['isDoubleShift'] ?? false) ? 'Double' : 'Single';
+
+                $driverRows = $shiftType === 'Double'
+                    ? array_values(array_filter((array) ($assignment['drivers'] ?? []), 'is_array'))
+                    : [[
+                        'driverId' => $assignment['driverId'] ?? data_get($assignment, 'drivers.0.driverId'),
+                        'shiftId' => null,
+                    ]];
+
+                $normalizedDrivers = collect($driverRows)
+                    ->take($shiftType === 'Double' ? 2 : 1)
+                    ->map(function (array $driverRow) use ($drivers, $shifts): array {
+                        $driverId = trim((string) ($driverRow['driverId'] ?? ''));
+                        $driver = $drivers->get($driverId);
+                        $shiftId = trim((string) ($driverRow['shiftId'] ?? ''));
+                        $shift = $shifts->get($shiftId);
+
+                        return [
+                            'driverId' => $driverId,
+                            'driver' => (string) ($driver['label'] ?? $driverRow['driver'] ?? $driverId),
+                            'driverName' => (string) ($driver['name'] ?? $driverRow['driverName'] ?? $driverId),
+                            'shiftId' => $shiftId !== '' ? $shiftId : null,
+                            'shift' => $shiftId !== '' ? (string) ($shift['label'] ?? $driverRow['shift'] ?? $shiftId) : null,
+                            'shiftName' => $shiftId !== '' ? (string) ($shift['name'] ?? $driverRow['shiftName'] ?? $shiftId) : null,
+                            'shiftStartTime' => $shiftId !== '' ? (string) ($shift['startTime'] ?? '') : null,
+                            'shiftEndTime' => $shiftId !== '' ? (string) ($shift['endTime'] ?? '') : null,
+                        ];
+                    })
+                    ->values()
+                    ->all();
+
+                $primaryDriver = $normalizedDrivers[0] ?? [];
+                $secondaryDriver = $normalizedDrivers[1] ?? [];
+                $normalizedAssignments[] = array_merge($assignment, [
+                    'shiftType' => $shiftType,
+                    'vehicleId' => $vehicleId,
+                    'vehicle' => (string) ($vehicle['label'] ?? $assignment['vehicle'] ?? $vehicleId),
+                    'vehicleName' => (string) ($vehicle['name'] ?? $assignment['vehicleName'] ?? $vehicleId),
+                    'vehicleUsage' => (string) ($vehicle['usage'] ?? $assignment['vehicleUsage'] ?? ''),
+                    'drivers' => $normalizedDrivers,
+                    // Keep the original single-driver fields for all existing
+                    // reports, fuel and attendance integrations.
+                    'driverId' => (string) ($primaryDriver['driverId'] ?? ''),
+                    'driver' => (string) ($primaryDriver['driver'] ?? ''),
+                    'driverName' => (string) ($primaryDriver['driverName'] ?? ''),
+                    'shiftId' => $primaryDriver['shiftId'] ?? null,
+                    'shift' => $primaryDriver['shift'] ?? null,
+                    'secondDriverId' => (string) ($secondaryDriver['driverId'] ?? ''),
+                    'secondDriver' => (string) ($secondaryDriver['driver'] ?? ''),
+                    'secondDriverName' => (string) ($secondaryDriver['driverName'] ?? ''),
+                    'secondShiftId' => $secondaryDriver['shiftId'] ?? null,
+                    'secondShift' => $secondaryDriver['shift'] ?? null,
+                ]);
+            }
+
+            $row['assignments'] = $normalizedAssignments;
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    private function reservedDriverIdsForContract(string $contractId, string $startDate, string $endDate): array
+    {
+        return collect($this->contractDriverReservations())
+            ->reject(fn (array $reservation): bool => strcasecmp((string) ($reservation['contractId'] ?? ''), $contractId) === 0)
+            ->filter(function (array $reservation) use ($startDate, $endDate): bool {
+                $reservedStart = trim((string) ($reservation['contractStart'] ?? ''));
+                $reservedEnd = trim((string) ($reservation['contractEnd'] ?? ''));
+
+                if ($startDate === '' || $endDate === '' || $reservedStart === '' || $reservedEnd === '') {
+                    return true;
+                }
+
+                return $reservedStart <= $endDate && $reservedEnd >= $startDate;
+            })
+            ->flatMap(fn (array $reservation): array => (array) ($reservation['driverIds'] ?? []))
+            ->map(fn ($id): string => strtolower(trim((string) $id)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function validateContractDocumentNames(array $rows, string $validateContractId): void

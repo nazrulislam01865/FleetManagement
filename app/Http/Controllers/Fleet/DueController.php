@@ -323,19 +323,54 @@ class DueController extends FleetBaseController
                     }
 
                     $withDriver = strcasecmp((string) ($payload['rentalType'] ?? ''), 'With Driver') === 0;
-                    $driverParty = trim((string) ($payload['driver'] ?? ''));
-                    $driverRate = (float) ($payload['driverPaymentAmount'] ?? 0);
-                    $driverCycle = trim((string) ($payload['driverPaymentCycle'] ?? 'Monthly')) ?: 'Monthly';
-                    $driverCalculation = $calculator->monthlyAmount($driverRate, $driverCycle, $payrollMonth);
-
-                    if ($withDriver && $driverParty !== '' && $driverCalculation && $driverCalculation['amount'] > 0) {
-                        $saved = $dueService->createOnce([
+                    $isDoubleShift = strcasecmp((string) ($payload['usage'] ?? ''), 'Double shift') === 0;
+                    $driverPayments = [
+                        [
+                            'position' => 1,
+                            'party' => trim((string) ($payload['driver'] ?? '')),
+                            'rate' => (float) ($payload['driverPaymentAmount'] ?? 0),
+                            'cycle' => trim((string) ($payload['driverPaymentCycle'] ?? 'Monthly')) ?: 'Monthly',
                             'code' => "RENT-DRV-{$vehicle->code}-{$month}",
+                            'source_id' => "vehicle-driver:{$vehicle->code}:{$month}",
+                        ],
+                    ];
+
+                    if ($isDoubleShift) {
+                        $driverPayments[] = [
+                            'position' => 2,
+                            'party' => trim((string) ($payload['secondDriver'] ?? '')),
+                            'rate' => (float) ($payload['secondDriverPaymentAmount'] ?? 0),
+                            'cycle' => trim((string) ($payload['secondDriverPaymentCycle'] ?? 'Monthly')) ?: 'Monthly',
+                            'code' => "RENT-DRV2-{$vehicle->code}-{$month}",
+                            'source_id' => "vehicle-driver-2:{$vehicle->code}:{$month}",
+                        ];
+                    }
+
+                    $processedDrivers = [];
+                    foreach ($driverPayments as $driverPayment) {
+                        $driverParty = $driverPayment['party'];
+                        $driverKey = mb_strtolower($driverParty);
+                        if (! $withDriver || $driverParty === '' || isset($processedDrivers[$driverKey])) {
+                            continue;
+                        }
+
+                        $driverCalculation = $calculator->monthlyAmount(
+                            $driverPayment['rate'],
+                            $driverPayment['cycle'],
+                            $payrollMonth
+                        );
+                        if (! $driverCalculation || $driverCalculation['amount'] <= 0) {
+                            continue;
+                        }
+
+                        $processedDrivers[$driverKey] = true;
+                        $saved = $dueService->createOnce([
+                            'code' => $driverPayment['code'],
                             'type' => 'Vehicle Driver Payment',
                             'party_type' => 'Driver',
                             'party_id' => $driverParty,
                             'source_type' => 'VehicleDriverPayment',
-                            'source_id' => "vehicle-driver:{$vehicle->code}:{$month}",
+                            'source_id' => $driverPayment['source_id'],
                             'amount' => $driverCalculation['amount'],
                             'status' => 'Pending',
                             'due_date' => $month.'-01',
@@ -343,12 +378,13 @@ class DueController extends FleetBaseController
                                 $month,
                                 $payrollMonth,
                                 $today,
-                                $driverRate,
+                                $driverPayment['rate'],
                                 $driverCalculation,
                                 [
                                     'vehicleId' => $vehicle->code,
                                     'regNo' => $payload['regNo'] ?? '',
                                     'driver' => $driverParty,
+                                    'driverPosition' => $driverPayment['position'],
                                 ]
                             ),
                         ], $creatorUserId);

@@ -1,0 +1,282 @@
+@extends('layouts.fleetman')
+
+@section('title', 'Release List | FleetMan')
+@section('mobile-title', 'Release List')
+
+@section('content')
+@php
+    $releasePayload = $releases->mapWithKeys(function ($release) {
+        return [(string) $release->id => [
+            'id' => $release->id,
+            'version' => $release->version,
+            'title' => $release->title,
+            'issue_type' => $release->issue_type ?: 'Not specified',
+            'initiated_by' => $release->initiatedBy?->name ?? 'Not specified',
+            'release_date_label' => optional($release->release_date)->format('d M Y'),
+            'environment_label' => $release->environmentLabel(),
+            'status_label' => $release->statusLabel(),
+            'summary' => $release->summary ?? '',
+            'changes' => $release->changes ?? '',
+            'known_issues' => $release->known_issues ?? '',
+            'created_by' => $release->createdBy?->name ?? 'System / Legacy',
+            'updated_by' => $release->updatedBy?->name ?? $release->createdBy?->name ?? 'Unknown',
+            'created_at' => optional($release->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A'),
+            'updated_at' => optional($release->updated_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A'),
+        ]];
+    });
+
+    $statusBadge = static fn (string $status): string => match ($status) {
+        'released' => 'ok',
+        'scheduled' => 'soft',
+        'rolled_back' => 'danger',
+        default => 'warn',
+    };
+@endphp
+
+<div class="page-section release-tracker-page">
+    <x-fleetman.topbar :items="[['label' => 'System'], ['label' => 'Release Tracker / Notes'], ['label' => 'Release List']]">
+        <x-slot:actions>
+            <span class="badge soft">Read Only</span>
+            @if(auth()->user()?->isFleetSuperAdmin())
+                <a href="{{ route('fleet.release-tracker.form') }}" class="btn primary">Add Release</a>
+            @endif
+        </x-slot:actions>
+    </x-fleetman.topbar>
+
+    <x-fleetman.title-card
+        title="Release List"
+        subtitle="View application versions, issue types, initiators, release dates, deployment environments, and release notes."
+    />
+
+    @if (session('status'))
+        <div class="role-alert role-alert-success">{{ session('status') }}</div>
+    @endif
+
+    <div class="kpi release-kpis">
+        <div class="card"><strong>{{ $counts['total'] }}</strong><span>Total Releases</span></div>
+        <div class="card"><strong>{{ $counts['released'] }}</strong><span>Released</span></div>
+        <div class="card"><strong>{{ $counts['scheduled'] }}</strong><span>Scheduled</span></div>
+        <div class="card"><strong>{{ $counts['draft'] }}</strong><span>Draft</span></div>
+    </div>
+
+    <section class="card release-list-card">
+        <div class="section-head">
+            <div>
+                <h2>Release History</h2>
+                <p>Newest release date appears first. This page is view-only for every user.</p>
+            </div>
+            <span class="badge soft">{{ $releases->count() }} result{{ $releases->count() === 1 ? '' : 's' }}</span>
+        </div>
+
+        <form method="GET" action="{{ route('fleet.release-tracker') }}" class="release-filter-grid">
+            <div class="field release-search-field">
+                <label for="releaseSearch">Search</label>
+                <input id="releaseSearch" name="q" value="{{ $filters['search'] }}" placeholder="Version, title, initiator, notes, or issue">
+            </div>
+            <div class="field">
+                <label for="releaseIssueTypeFilter">Issue Type</label>
+                <select id="releaseIssueTypeFilter" name="issue_type">
+                    <option value="">All issue types</option>
+                    @foreach($issueTypeOptions as $value => $label)
+                        <option value="{{ $value }}" @selected($filters['issueType'] === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="field">
+                <label for="releaseStatusFilter">Status</label>
+                <select id="releaseStatusFilter" name="status">
+                    <option value="">All statuses</option>
+                    @foreach($statusOptions as $value => $label)
+                        <option value="{{ $value }}" @selected($filters['status'] === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="field">
+                <label for="releaseEnvironmentFilter">Environment</label>
+                <select id="releaseEnvironmentFilter" name="environment">
+                    <option value="">All environments</option>
+                    @foreach($environmentOptions as $value => $label)
+                        <option value="{{ $value }}" @selected($filters['environment'] === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="release-filter-actions">
+                <a href="{{ route('fleet.release-tracker') }}" class="btn light">Reset</a>
+                <button type="submit" class="btn secondary">Filter</button>
+            </div>
+        </form>
+
+        <div class="table-wrap release-table-wrap">
+            <table class="release-table">
+                <thead>
+                    <tr>
+                        <th>Created At</th>
+                        <th>Version</th>
+                        <th>Release</th>
+                        <th>Issue Type</th>
+                        <th>Initiated By</th>
+                        <th>Release Date</th>
+                        <th>Environment</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($releases as $release)
+                        <tr>
+                            <td>
+                                <div class="created-at-cell">
+                                    <span class="created-at-date">{{ optional($release->created_at)->timezone('Asia/Dhaka')->format('d M Y, h:i A') }}</span>
+                                    <small class="created-at-creator">Created by: {{ $release->createdBy?->name ?? 'System / Legacy' }}</small>
+                                </div>
+                            </td>
+                            <td><span class="release-version">{{ $release->version }}</span></td>
+                            <td class="release-title-cell">
+                                <b>{{ $release->title }}</b>
+                                <small>{{ \Illuminate\Support\Str::limit($release->summary ?: 'No summary added.', 85) }}</small>
+                            </td>
+                            <td><span class="badge soft">{{ $release->issue_type ?: 'Not specified' }}</span></td>
+                            <td>{{ $release->initiatedBy?->name ?? 'Not specified' }}</td>
+                            <td>{{ optional($release->release_date)->format('d M Y') }}</td>
+                            <td><span class="badge soft">{{ $release->environmentLabel() }}</span></td>
+                            <td><span class="badge {{ $statusBadge($release->status) }}">{{ $release->statusLabel() }}</span></td>
+                            <td><button type="button" class="mini-btn" data-release-view="{{ $release->id }}">View</button></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="9" class="empty">No release entries found.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        <div class="release-mobile-list">
+            @forelse($releases as $release)
+                <article class="release-mobile-card">
+                    <div class="release-mobile-head">
+                        <div>
+                            <span class="release-version">{{ $release->version }}</span>
+                            <h3>{{ $release->title }}</h3>
+                        </div>
+                        <span class="badge {{ $statusBadge($release->status) }}">{{ $release->statusLabel() }}</span>
+                    </div>
+                    <p>{{ \Illuminate\Support\Str::limit($release->summary ?: 'No summary added.', 130) }}</p>
+                    <div class="release-mobile-meta">
+                        <span><small>Issue Type</small><b>{{ $release->issue_type ?: 'Not specified' }}</b></span>
+                        <span><small>Initiated By</small><b>{{ $release->initiatedBy?->name ?? 'Not specified' }}</b></span>
+                        <span><small>Release Date</small><b>{{ optional($release->release_date)->format('d M Y') }}</b></span>
+                        <span><small>Environment</small><b>{{ $release->environmentLabel() }}</b></span>
+                    </div>
+                    <div class="release-mobile-actions">
+                        <button type="button" class="mini-btn" data-release-view="{{ $release->id }}">View</button>
+                    </div>
+                </article>
+            @empty
+                <div class="empty">No release entries found.</div>
+            @endforelse
+        </div>
+    </section>
+</div>
+
+<div id="releaseViewModal" class="release-modal hidden" aria-hidden="true">
+    <section class="release-modal-panel release-view-panel" role="dialog" aria-modal="true" aria-labelledby="releaseViewTitle">
+        <div class="release-modal-head">
+            <div>
+                <span class="release-modal-kicker">Release Details</span>
+                <h2 id="releaseViewTitle">Release</h2>
+                <p id="releaseViewSubtitle"></p>
+            </div>
+            <button type="button" class="release-modal-close" data-release-modal-close aria-label="Close release details">×</button>
+        </div>
+        <div class="release-modal-body">
+            <div class="release-detail-meta" id="releaseViewMeta"></div>
+            <div class="release-detail-block">
+                <h3>Summary</h3>
+                <p id="releaseViewSummary"></p>
+            </div>
+            <div class="release-detail-block">
+                <h3>Changes / Release Notes</h3>
+                <pre id="releaseViewChanges"></pre>
+            </div>
+            <div class="release-detail-block">
+                <h3>Known Issues</h3>
+                <pre id="releaseViewIssues"></pre>
+            </div>
+        </div>
+    </section>
+</div>
+
+@push('scripts')
+<script>
+(() => {
+    const releases = @json($releasePayload);
+    const modal = document.getElementById('releaseViewModal');
+
+    const openModal = () => {
+        modal?.classList.remove('hidden');
+        modal?.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('release-modal-open');
+    };
+
+    const closeModal = () => {
+        modal?.classList.add('hidden');
+        modal?.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('release-modal-open');
+    };
+
+    const valueOrFallback = (value, fallback = 'Not provided.') => {
+        const text = String(value ?? '').trim();
+        return text || fallback;
+    };
+
+    const openView = (release) => {
+        if (!release) return;
+        document.getElementById('releaseViewTitle').textContent = `${release.version} — ${release.title}`;
+        document.getElementById('releaseViewSubtitle').textContent = `${release.issue_type} • ${release.environment_label} • ${release.status_label}`;
+        document.getElementById('releaseViewSummary').textContent = valueOrFallback(release.summary);
+        document.getElementById('releaseViewChanges').textContent = valueOrFallback(release.changes);
+        document.getElementById('releaseViewIssues').textContent = valueOrFallback(release.known_issues, 'No known issues recorded.');
+
+        const meta = document.getElementById('releaseViewMeta');
+        meta.replaceChildren();
+        [
+            ['Issue Type', release.issue_type],
+            ['Initiated By', release.initiated_by],
+            ['Release Date', release.release_date_label],
+            ['Environment', release.environment_label],
+            ['Status', release.status_label],
+            ['Created By', release.created_by],
+            ['Updated By', release.updated_by],
+            ['Created At', release.created_at],
+            ['Updated At', release.updated_at],
+        ].forEach(([label, value]) => {
+            const item = document.createElement('div');
+            const small = document.createElement('small');
+            const strong = document.createElement('strong');
+            small.textContent = label;
+            strong.textContent = valueOrFallback(value, '—');
+            item.append(small, strong);
+            meta.append(item);
+        });
+
+        openModal();
+    };
+
+    document.querySelectorAll('[data-release-view]').forEach((button) => {
+        button.addEventListener('click', () => openView(releases[String(button.dataset.releaseView)]));
+    });
+
+    document.querySelectorAll('[data-release-modal-close]').forEach((button) => {
+        button.addEventListener('click', closeModal);
+    });
+
+    modal?.addEventListener('click', (event) => {
+        if (event.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeModal();
+    });
+})();
+</script>
+@endpush
+@endsection

@@ -17,6 +17,7 @@ use App\Models\Fleet\FleetFuelRecharge;
 use App\Models\Fleet\FleetLookup;
 use App\Models\Fleet\FleetPartyType;
 use App\Models\Fleet\FleetPaymentType;
+use App\Models\Fleet\FleetShift;
 use App\Models\Fleet\FleetTrip;
 use App\Models\Fleet\FleetVehicle;
 use App\Models\Fleet\FleetVehicleCategory;
@@ -608,6 +609,7 @@ abstract class FleetBaseController extends Controller
                 'contractMasters' => $currentPage === 'contracts' ? $this->contractMastersFromDatabase() : [],
                 'attendanceMasters' => $currentPage === 'driver-attendance' ? $this->attendanceMastersFromDatabase() : [],
                 'latestFuelRates' => ($isFuelRechargePage || $isVehiclePage) ? $this->latestActiveFuelRates() : [],
+                'timeZone' => 'Asia/Dhaka',
                 'resources' => $this->resourceUrls(),
                 'auth' => $this->fleetAuthPayload($currentPage),
             ], $pageData),
@@ -674,12 +676,19 @@ abstract class FleetBaseController extends Controller
 
     protected function menuItemVisible(array $item): bool
     {
+        $user = auth()->user();
+        $role = $user?->fleetRole;
+
+        if ($item['admin_only'] ?? false) {
+            return (bool) ($user
+                && $user->isAccountActive()
+                && in_array((string) $role?->slug, ['super_admin', 'admin_user'], true)
+                && $role?->is_active);
+        }
+
         if (! ($item['super_admin_only'] ?? false)) {
             return true;
         }
-
-        $user = auth()->user();
-        $role = $user?->fleetRole;
 
         return (bool) ($user
             && $user->isAccountActive()
@@ -1778,14 +1787,87 @@ abstract class FleetBaseController extends Controller
 
     protected function contractMastersFromDatabase(): array
     {
+        $drivers = $this->contractDriverOptions();
+
         return [
             'parties' => [
                 'Client' => $this->contractClientOptions(),
                 'Vendor' => $this->contractVendorOptions(),
             ],
             'vehicles' => $this->contractVehicleOptions(),
-            'drivers' => $this->contractDriverOptions(),
+            'drivers' => $drivers,
+            'availableDrivers' => collect($drivers)
+                ->filter(fn (array $driver): bool => strcasecmp((string) ($driver['status'] ?? ''), 'Active') === 0)
+                ->values()
+                ->all(),
+            'driverReservations' => $this->contractDriverReservations(),
+            'shifts' => $this->contractShiftOptions(),
         ];
+    }
+
+    protected function contractDriverReservations(): array
+    {
+        if (! Schema::hasTable('fleet_contracts')) {
+            return [];
+        }
+
+        $today = now()->toDateString();
+
+        return FleetContract::query()
+            ->whereNotIn('status', ['fuel_recharge', 'attendance'])
+            ->orderBy('id')
+            ->get()
+            ->map(function (FleetContract $contract) use ($today): ?array {
+                $payload = is_array($contract->payload) ? $contract->payload : [];
+                $savedAs = trim((string) ($payload['savedAs'] ?? ''));
+                $status = trim((string) ($payload['status'] ?? $contract->status ?? ''));
+                $endDate = trim((string) ($payload['contractEnd'] ?? ''));
+
+                if (strcasecmp($savedAs, 'Draft') === 0
+                    || strcasecmp($status, 'Completed') === 0
+                    || ($endDate !== '' && $endDate < $today)) {
+                    return null;
+                }
+
+                $driverIds = collect((array) ($payload['assignments'] ?? []))
+                    ->filter(fn ($assignment): bool => is_array($assignment))
+                    ->flatMap(function (array $assignment): array {
+                        $ids = collect((array) ($assignment['drivers'] ?? []))
+                            ->filter(fn ($driver): bool => is_array($driver))
+                            ->map(fn (array $driver): string => trim((string) ($driver['driverId'] ?? $driver['driver'] ?? '')))
+                            ->filter()
+                            ->values()
+                            ->all();
+
+                        if ($ids === []) {
+                            $ids = collect([
+                                $assignment['driverId'] ?? $assignment['driver'] ?? null,
+                                $assignment['secondDriverId'] ?? $assignment['secondDriver'] ?? null,
+                            ])->map(fn ($id): string => trim((string) $id))->filter()->values()->all();
+                        }
+
+                        return $ids;
+                    })
+                    ->map(fn ($id): string => (string) $id)
+                    ->filter()
+                    ->unique(fn (string $id): string => strtolower($id))
+                    ->values()
+                    ->all();
+
+                if ($driverIds === []) {
+                    return null;
+                }
+
+                return [
+                    'contractId' => (string) ($payload['contractId'] ?? $contract->code),
+                    'contractStart' => (string) ($payload['contractStart'] ?? ''),
+                    'contractEnd' => $endDate,
+                    'driverIds' => $driverIds,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
     }
 
     protected function contractClientOptions(): array
@@ -1856,19 +1938,36 @@ abstract class FleetBaseController extends Controller
             return [];
         }
 
-        $latestOdoByVehicle = $this->latestFuelRechargeOdoByVehicle();
+        $drivers = collect($this->contractDriverOptions());
+        $resolveDriver = function (?string $candidate) use ($drivers): ?array {
+            $needle = strtolower(trim((string) $candidate));
+            if ($needle === '') {
+                return null;
+            }
+
+            return $drivers->first(function (array $driver) use ($needle): bool {
+                return collect([
+                    $driver['id'] ?? null,
+                    $driver['name'] ?? null,
+                    $driver['label'] ?? null,
+                ])->filter()->contains(fn ($value): bool => strtolower(trim((string) $value)) === $needle);
+            });
+        };
 
         return FleetVehicle::query()
             ->orderBy('name')
             ->orderBy('code')
             ->get()
-            ->map(function (FleetVehicle $vehicle): array {
+            ->map(function (FleetVehicle $vehicle) use ($resolveDriver): array {
                 $payload = $vehicle->payload ?? [];
                 $id = (string) ($payload['id'] ?? $vehicle->code);
                 $name = (string) ($payload['name'] ?? $vehicle->name ?? $vehicle->code);
                 $type = (string) ($payload['subCategory'] ?? $payload['category'] ?? $payload['model'] ?? 'Vehicle');
                 $regNo = (string) ($payload['regNo'] ?? '');
                 $status = (string) ($payload['status'] ?? $vehicle->status ?? '');
+                $usage = (string) ($payload['usage'] ?? '');
+                $assignedDriver = $resolveDriver((string) ($payload['driver'] ?? $payload['mainDriver'] ?? ''));
+                $assignedSecondDriver = $resolveDriver((string) ($payload['secondDriver'] ?? $payload['driver2'] ?? $payload['secondaryDriver'] ?? ''));
 
                 return [
                     'id' => $id,
@@ -1877,6 +1976,17 @@ abstract class FleetBaseController extends Controller
                     'type' => $type,
                     'regNo' => $regNo,
                     'status' => $status,
+                    'usage' => $usage,
+                    'isDoubleShift' => strcasecmp($usage, 'Double shift') === 0,
+                    'assignedDriver' => $assignedDriver,
+                    'assignedDriverId' => (string) ($assignedDriver['id'] ?? ''),
+                    'assignedDriverName' => (string) ($assignedDriver['name'] ?? ''),
+                    'assignedDriverLabel' => (string) ($assignedDriver['label'] ?? ''),
+                    'assignedSecondDriver' => $assignedSecondDriver,
+                    'assignedSecondDriverId' => (string) ($assignedSecondDriver['id'] ?? ''),
+                    'assignedSecondDriverName' => (string) ($assignedSecondDriver['name'] ?? ''),
+                    'assignedSecondDriverLabel' => (string) ($assignedSecondDriver['label'] ?? ''),
+                    'assignedDriverIds' => collect([$assignedDriver['id'] ?? null, $assignedSecondDriver['id'] ?? null])->filter()->values()->all(),
                     'note' => collect([$regNo, $status ? 'Status: '.$status : null])->filter()->join(' • '),
                 ];
             })
@@ -1911,6 +2021,35 @@ abstract class FleetBaseController extends Controller
                     'status' => $status,
                     'area' => $area,
                     'note' => collect([$phone, $status ? 'Status: '.$status : null])->filter()->join(' • '),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    protected function contractShiftOptions(): array
+    {
+        if (! Schema::hasTable('fleet_shifts')) {
+            return [];
+        }
+
+        return FleetShift::query()
+            ->active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(function (FleetShift $shift): array {
+                $start = $shift->start_time ? substr((string) $shift->start_time, 0, 5) : '';
+                $end = $shift->end_time ? substr((string) $shift->end_time, 0, 5) : '';
+                $timeLabel = $start !== '' || $end !== '' ? trim($start.' - '.$end, ' -') : '';
+
+                return [
+                    'id' => (string) $shift->code,
+                    'code' => (string) $shift->code,
+                    'name' => (string) $shift->name,
+                    'label' => $timeLabel !== '' ? $shift->name.' ('.$timeLabel.')' : (string) $shift->name,
+                    'startTime' => $start,
+                    'endTime' => $end,
                 ];
             })
             ->values()
@@ -2074,8 +2213,69 @@ abstract class FleetBaseController extends Controller
         $secondaryName = (string) ($secondaryFuel['type'] ?? $vehicle['secondaryFuel'] ?? '');
         $primaryRate = $this->fuelRateFromLatestPrices($primaryName, $latestRates);
         $secondaryRate = $this->fuelRateFromLatestPrices($secondaryName, $latestRates);
-        $driverId = (string) ($assignment['driverId'] ?? '');
-        $driver = (string) ($assignment['driverName'] ?? $assignment['driver'] ?? $vehicle['driver'] ?? '');
+        $shiftType = strcasecmp((string) ($assignment['shiftType'] ?? ''), 'Double') === 0
+            || strcasecmp((string) ($assignment['vehicleUsage'] ?? $vehicle['usage'] ?? ''), 'Double shift') === 0
+                ? 'Double'
+                : 'Single';
+
+        $driverAssignments = collect($assignment['drivers'] ?? [])
+            ->filter(fn ($driverAssignment): bool => is_array($driverAssignment))
+            ->map(function (array $driverAssignment): array {
+                $driverId = trim((string) ($driverAssignment['driverId'] ?? ''));
+                $driverName = trim((string) ($driverAssignment['driverName'] ?? $driverAssignment['driver'] ?? ''));
+                $driverLabel = trim((string) ($driverAssignment['driver'] ?? $driverName));
+
+                return [
+                    'driverId' => $driverId,
+                    'driver' => $driverLabel !== '' ? $driverLabel : $driverName,
+                    'driverName' => $driverName !== '' ? $driverName : $driverLabel,
+                    'shiftId' => trim((string) ($driverAssignment['shiftId'] ?? '')),
+                    'shift' => trim((string) ($driverAssignment['shift'] ?? $driverAssignment['shiftName'] ?? '')),
+                    'shiftName' => trim((string) ($driverAssignment['shiftName'] ?? $driverAssignment['shift'] ?? '')),
+                    'shiftStartTime' => substr(trim((string) ($driverAssignment['shiftStartTime'] ?? '')), 0, 5),
+                    'shiftEndTime' => substr(trim((string) ($driverAssignment['shiftEndTime'] ?? '')), 0, 5),
+                ];
+            })
+            ->filter(fn (array $driverAssignment): bool => filled($driverAssignment['driverId']) || filled($driverAssignment['driverName']))
+            ->values();
+
+        if ($driverAssignments->isEmpty()) {
+            $primaryDriverName = trim((string) ($assignment['driverName'] ?? $assignment['driver'] ?? $vehicle['driver'] ?? ''));
+            $primaryId = trim((string) ($assignment['driverId'] ?? ''));
+            if ($primaryId !== '' || $primaryDriverName !== '') {
+                $driverAssignments->push([
+                    'driverId' => $primaryId,
+                    'driver' => $primaryDriverName,
+                    'driverName' => $primaryDriverName,
+                    'shiftId' => trim((string) ($assignment['shiftId'] ?? '')),
+                    'shift' => trim((string) ($assignment['shift'] ?? '')),
+                    'shiftName' => trim((string) ($assignment['shiftName'] ?? $assignment['shift'] ?? '')),
+                    'shiftStartTime' => substr(trim((string) ($assignment['shiftStartTime'] ?? '')), 0, 5),
+                    'shiftEndTime' => substr(trim((string) ($assignment['shiftEndTime'] ?? '')), 0, 5),
+                ]);
+            }
+
+            $secondaryDriverName = trim((string) ($assignment['secondDriverName'] ?? $assignment['secondDriver'] ?? ''));
+            $secondaryId = trim((string) ($assignment['secondDriverId'] ?? ''));
+            if ($shiftType === 'Double' && ($secondaryId !== '' || $secondaryDriverName !== '')) {
+                $driverAssignments->push([
+                    'driverId' => $secondaryId,
+                    'driver' => $secondaryDriverName,
+                    'driverName' => $secondaryDriverName,
+                    'shiftId' => trim((string) ($assignment['secondShiftId'] ?? '')),
+                    'shift' => trim((string) ($assignment['secondShift'] ?? '')),
+                    'shiftName' => trim((string) ($assignment['secondShiftName'] ?? $assignment['secondShift'] ?? '')),
+                    'shiftStartTime' => substr(trim((string) ($assignment['secondShiftStartTime'] ?? '')), 0, 5),
+                    'shiftEndTime' => substr(trim((string) ($assignment['secondShiftEndTime'] ?? '')), 0, 5),
+                ]);
+            }
+        }
+
+        $driverAssignments = $driverAssignments->take($shiftType === 'Double' ? 2 : 1)->values();
+        $primaryDriver = $driverAssignments->first() ?? [];
+        $secondaryDriver = $driverAssignments->get(1, []);
+        $driverId = (string) ($primaryDriver['driverId'] ?? '');
+        $driver = (string) ($primaryDriver['driverName'] ?? $primaryDriver['driver'] ?? '');
 
         return [
             'id' => (string) ($vehicle['id'] ?? $vehicleKey),
@@ -2086,8 +2286,14 @@ abstract class FleetBaseController extends Controller
             'odo' => $vehicle['odo'] ?? $vehicle['startKm'] ?? $vehicle['lastOdo'] ?? '',
             'startKm' => $vehicle['startKm'] ?? $vehicle['odo'] ?? $vehicle['lastOdo'] ?? '',
             'lastOdo' => $vehicle['lastOdo'] ?? $vehicle['odo'] ?? $vehicle['startKm'] ?? '',
+            'shiftType' => $shiftType,
+            'drivers' => $driverAssignments->all(),
             'driverId' => $driverId,
             'driver' => $driver,
+            'driverName' => $driver,
+            'secondDriverId' => (string) ($secondaryDriver['driverId'] ?? ''),
+            'secondDriver' => (string) ($secondaryDriver['driverName'] ?? $secondaryDriver['driver'] ?? ''),
+            'secondDriverName' => (string) ($secondaryDriver['driverName'] ?? $secondaryDriver['driver'] ?? ''),
             'primary' => $primaryName,
             'primaryRate' => $primaryRate['price'] ?? 0,
             'primaryUnit' => $primaryRate['unit'] ?? '',

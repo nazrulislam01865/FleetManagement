@@ -281,7 +281,16 @@ return [
             'items' => [
                 ['key' => 'users', 'label' => 'Users', 'icon' => '👤', 'route' => 'fleet.users', 'permission' => 'users.view'],
                 ['key' => 'role-matrix', 'label' => 'Role Matrix', 'icon' => '🛡️', 'route' => 'fleet.role-matrix', 'permission' => 'role_matrix.view'],
-                ['key' => 'release-tracker', 'label' => 'Release Tracker', 'icon' => '🚀', 'route' => 'fleet.release-tracker', 'super_admin_only' => true],
+                [
+                    'key' => 'release-tracker',
+                    'label' => 'Release Tracker / Notes',
+                    'icon' => '🚀',
+                    'route' => 'fleet.release-tracker',
+                    'children' => [
+                        ['key' => 'release-tracker-form', 'label' => 'Add Release', 'icon' => '↳', 'route' => 'fleet.release-tracker.form', 'super_admin_only' => true],
+                        ['key' => 'release-tracker-list', 'label' => 'Release List', 'icon' => '↳', 'route' => 'fleet.release-tracker'],
+                    ],
+                ],
                 [
                     'key' => 'master-data',
                     'label' => 'Master Data',
@@ -300,6 +309,7 @@ return [
                         ['key' => 'master-data-fuel-types', 'label' => 'Fuel Type', 'icon' => '↳', 'route' => 'fleet.master-data.fuel-types', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-fuel-units', 'label' => 'Fuel Unit', 'icon' => '↳', 'route' => 'fleet.master-data.fuel-units', 'permission' => 'master_data.view'],
                         ['key' => 'master-data-payment-types', 'label' => 'Payment Types', 'icon' => '↳', 'route' => 'fleet.master-data.payment-types', 'permission' => 'master_data.view'],
+                        ['key' => 'master-data-shifts', 'label' => 'Shifts', 'icon' => '↳', 'route' => 'fleet.master-data.shifts', 'permission' => 'master_data.view'],
                     ],
                 ],
                 ['key' => 'settings', 'label' => 'Settings', 'icon' => '⚙️', 'route' => 'fleet.settings', 'super_admin_only' => true],

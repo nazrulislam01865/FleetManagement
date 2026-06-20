@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Fleet\FleetDriver;
 use App\Models\Fleet\FleetDue;
 use App\Models\Fleet\FleetEmployee;
+use App\Models\Fleet\FleetVehicle;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -18,6 +19,57 @@ class PayrollDeduplicationTest extends TestCase
         CarbonImmutable::setTestNow();
 
         parent::tearDown();
+    }
+
+
+    public function test_double_shift_vehicle_generates_one_independent_due_for_each_driver(): void
+    {
+        CarbonImmutable::setTestNow(CarbonImmutable::parse('2026-06-28 12:00:00', 'Asia/Dhaka'));
+
+        FleetVehicle::query()->create([
+            'code' => 'VEH-DOUBLE-001',
+            'name' => 'Double Shift Vehicle',
+            'status' => 'Active',
+            'payload' => [
+                'id' => 'VEH-DOUBLE-001',
+                'regNo' => 'DHAKA-DOUBLE-001',
+                'status' => 'Active',
+                'rentalType' => 'With Driver',
+                'usage' => 'Double shift',
+                'driver' => 'Driver One',
+                'driverPaymentAmount' => 700,
+                'driverPaymentCycle' => 'Weekly',
+                'secondDriver' => 'Driver Two',
+                'secondDriverPaymentAmount' => 100,
+                'secondDriverPaymentCycle' => 'Daily',
+                'vehicleRentalAmount' => 0,
+                'vehiclePaymentCycle' => 'Monthly',
+            ],
+        ]);
+
+        $this->withoutMiddleware()
+            ->postJson(route('fleet.dues.generate-payroll'), ['month' => '2026-06'])
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $this->withoutMiddleware()
+            ->postJson(route('fleet.dues.generate-payroll'), ['month' => '2026-06'])
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $this->assertSame(1, FleetDue::query()->where('code', 'RENT-DRV-VEH-DOUBLE-001-2026-06')->count());
+        $this->assertSame(1, FleetDue::query()->where('code', 'RENT-DRV2-VEH-DOUBLE-001-2026-06')->count());
+
+        $this->assertDatabaseHas('fleet_dues', [
+            'code' => 'RENT-DRV-VEH-DOUBLE-001-2026-06',
+            'party_id' => 'Driver One',
+            'amount' => 3000.00,
+        ]);
+        $this->assertDatabaseHas('fleet_dues', [
+            'code' => 'RENT-DRV2-VEH-DOUBLE-001-2026-06',
+            'party_id' => 'Driver Two',
+            'amount' => 3000.00,
+        ]);
     }
 
     public function test_each_entity_receives_only_one_due_for_the_selected_month(): void

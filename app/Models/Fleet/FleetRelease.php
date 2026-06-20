@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'version',
     'title',
+    'issue_type',
+    'initiated_by_user_id',
     'release_date',
     'environment',
     'status',
@@ -34,6 +36,19 @@ class FleetRelease extends Model
     public const ENVIRONMENT_DEVELOPMENT = 'development';
     public const ENVIRONMENT_TESTING = 'testing';
 
+    public static function issueTypeOptions(): array
+    {
+        return [
+            'Feature' => 'Feature',
+            'Change Request' => 'Change Request',
+            'Enhancement' => 'Enhancement',
+            'Bug Fix' => 'Bug Fix',
+            'UI/UX' => 'UI/UX',
+            'Performance & Security' => 'Performance & Security',
+            'Report & Configuration' => 'Report & Configuration',
+        ];
+    }
+
     public static function statusOptions(): array
     {
         return [
@@ -52,6 +67,11 @@ class FleetRelease extends Model
             self::ENVIRONMENT_DEVELOPMENT => 'Development',
             self::ENVIRONMENT_TESTING => 'Testing',
         ];
+    }
+
+    public function initiatedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'initiated_by_user_id');
     }
 
     public function createdBy(): BelongsTo
@@ -78,6 +98,7 @@ class FleetRelease extends Model
     {
         return [
             'release_date' => 'date',
+            'initiated_by_user_id' => 'integer',
             'created_by_user_id' => 'integer',
             'updated_by_user_id' => 'integer',
         ];

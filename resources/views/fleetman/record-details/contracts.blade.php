@@ -64,17 +64,43 @@
     <div class="record-table-section">
         <div class="record-assignment-grid">
             @forelse($assignments as $index => $assignment)
+                @php
+                    $assignmentDrivers = array_values(array_filter((array) ($assignment['drivers'] ?? []), 'is_array'));
+                    if ($assignmentDrivers === []) {
+                        $assignmentDrivers[] = [
+                            'driver' => $assignment['driver'] ?? null,
+                            'driverId' => $assignment['driverId'] ?? null,
+                            'driverName' => $assignment['driverName'] ?? null,
+                            'shift' => $assignment['shift'] ?? null,
+                            'shiftId' => $assignment['shiftId'] ?? null,
+                        ];
+                    }
+                    if (!empty($assignment['secondDriverId']) || !empty($assignment['secondDriver'])) {
+                        $assignmentDrivers[] = [
+                            'driver' => $assignment['secondDriver'] ?? null,
+                            'driverId' => $assignment['secondDriverId'] ?? null,
+                            'driverName' => $assignment['secondDriverName'] ?? null,
+                            'shift' => $assignment['secondShift'] ?? null,
+                            'shiftId' => $assignment['secondShiftId'] ?? null,
+                        ];
+                    }
+                @endphp
                 <div class="record-assignment-card">
                     <div class="record-assignment-title">Assignment {{ $index + 1 }}</div>
                     <table class="record-info-table"><tbody>
+                        <tr><th>Shift Type</th><td>{{ $display($assignment['shiftType'] ?? 'Single') }}</td></tr>
                         <tr><th>Duty</th><td>{{ $display($assignment['duty'] ?? null) }}</td></tr>
                         <tr><th>Rate</th><td>{{ $display($assignment['rate'] ?? null) }}</td></tr>
-                        <tr><th>Driver</th><td>{{ $display($assignment['driver'] ?? null) }}</td></tr>
-                        <tr><th>Driver ID</th><td>{{ $display($assignment['driverId'] ?? null) }}</td></tr>
-                        <tr><th>Driver Name</th><td>{{ $display($assignment['driverName'] ?? null) }}</td></tr>
                         <tr><th>Vehicle</th><td>{{ $display($assignment['vehicle'] ?? null) }}</td></tr>
                         <tr><th>Vehicle ID</th><td>{{ $display($assignment['vehicleId'] ?? null) }}</td></tr>
                         <tr><th>Vehicle Name</th><td>{{ $display($assignment['vehicleName'] ?? null) }}</td></tr>
+                        @foreach($assignmentDrivers as $driverIndex => $driverAssignment)
+                            <tr><th>Driver {{ $driverIndex + 1 }}</th><td>{{ $display($driverAssignment['driver'] ?? $driverAssignment['driverName'] ?? null) }}</td></tr>
+                            <tr><th>Driver {{ $driverIndex + 1 }} ID</th><td>{{ $display($driverAssignment['driverId'] ?? null) }}</td></tr>
+                            @if(!empty($driverAssignment['shift']) || !empty($driverAssignment['shiftName']) || !empty($driverAssignment['shiftId']))
+                                <tr><th>Driver {{ $driverIndex + 1 }} Shift</th><td>{{ $display($driverAssignment['shift'] ?? $driverAssignment['shiftName'] ?? $driverAssignment['shiftId'] ?? null) }}</td></tr>
+                            @endif
+                        @endforeach
                     </tbody></table>
                 </div>
             @empty

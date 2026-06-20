@@ -415,14 +415,29 @@ class ReportController extends FleetBaseController
 
                 return collect($payload['assignments'] ?? [])
                     ->filter(fn ($assignment) => is_array($assignment))
-                    ->map(fn (array $assignment): array => [
-                        'contractId' => $contractId,
-                        'contract' => $contractLabel,
-                        'vehicleId' => (string) ($assignment['vehicleId'] ?? ''),
-                        'vehicle' => (string) ($assignment['vehicle'] ?? $assignment['vehicleLabel'] ?? $assignment['vehicleName'] ?? ''),
-                        'driverId' => (string) ($assignment['driverId'] ?? ''),
-                        'driver' => (string) ($assignment['driver'] ?? $assignment['driverLabel'] ?? $assignment['driverName'] ?? ''),
-                    ])
+                    ->flatMap(function (array $assignment) use ($contractId, $contractLabel): array {
+                        $driverAssignments = collect($assignment['drivers'] ?? [])
+                            ->filter(fn ($driver) => is_array($driver))
+                            ->values();
+
+                        if ($driverAssignments->isEmpty()) {
+                            $driverAssignments = collect([[
+                                'driverId' => $assignment['driverId'] ?? '',
+                                'driver' => $assignment['driver'] ?? $assignment['driverLabel'] ?? $assignment['driverName'] ?? '',
+                            ]]);
+                        }
+
+                        return $driverAssignments->map(fn (array $driver): array => [
+                            'contractId' => $contractId,
+                            'contract' => $contractLabel,
+                            'vehicleId' => (string) ($assignment['vehicleId'] ?? ''),
+                            'vehicle' => (string) ($assignment['vehicle'] ?? $assignment['vehicleLabel'] ?? $assignment['vehicleName'] ?? ''),
+                            'driverId' => (string) ($driver['driverId'] ?? ''),
+                            'driver' => (string) ($driver['driver'] ?? $driver['driverLabel'] ?? $driver['driverName'] ?? ''),
+                            'shiftId' => (string) ($driver['shiftId'] ?? ''),
+                            'shift' => (string) ($driver['shift'] ?? $driver['shiftName'] ?? ''),
+                        ])->all();
+                    })
                     ->all();
             })
             ->values();

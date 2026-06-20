@@ -1250,36 +1250,124 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function recalculateRentalTotal() {
             const rentalType = value('#rentalType');
+            const withDriver = rentalType === 'With Driver';
             const vehicleAmount = Math.max(0, Number(value('#vehicleRentalAmount') || 0));
-            const driverAmount = rentalType === 'With Driver' ? Math.max(0, Number(value('#driverPaymentAmount') || 0)) : 0;
-            setValue('#totalRentalAmount', (vehicleAmount + driverAmount).toFixed(2));
+            const driverOneAmount = withDriver ? Math.max(0, Number(value('#driverPaymentAmount') || 0)) : 0;
+            const driverTwoAmount = withDriver && isDoubleShiftUsage()
+                ? Math.max(0, Number(value('#secondDriverPaymentAmount') || 0))
+                : 0;
+            setValue('#totalRentalAmount', (vehicleAmount + driverOneAmount + driverTwoAmount).toFixed(2));
+        }
+
+        const vehicleDriverOptions = $$('#vehiclePrimaryDriverList option').map((option) => ({
+            value: String(option.value || '').trim(),
+            label: String(option.textContent || option.value || '').trim(),
+        })).filter((option) => option.value);
+
+        function isDoubleShiftUsage() {
+            return getUsage().trim().toLowerCase() === 'double shift';
+        }
+
+        function renderVehicleDriverDatalist(selector, excludedValue = '') {
+            const list = $(selector);
+            if (!list) return;
+            const excluded = String(excludedValue || '').trim().toLowerCase();
+            list.innerHTML = vehicleDriverOptions
+                .filter((option) => option.value.toLowerCase() !== excluded)
+                .map((option) => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`)
+                .join('');
+        }
+
+        function refreshVehicleDriverOptions() {
+            renderVehicleDriverDatalist('#vehiclePrimaryDriverList', value('#secondDriver'));
+            renderVehicleDriverDatalist('#vehicleSecondaryDriverList', value('#driver'));
         }
 
         function toggleRentalFields() {
-            const withDriver = value('#rentalType') === 'With Driver';
+            const rentalType = value('#rentalType');
+            const withDriver = rentalType === 'With Driver';
+            const doubleShift = isDoubleShiftUsage();
+            const secondDriverRequired = withDriver && doubleShift;
             const driver = $('#driver');
-            const wrapper = $('#driverPaymentFields');
+            const secondDriver = $('#secondDriver');
+            const secondDriverField = $('#vehicleSecondaryDriverField');
+            const primaryPaymentFields = $('#driverPaymentFields');
+            const secondaryPaymentFields = $('#secondDriverPaymentFields');
+            const primaryCardState = $('#vehiclePrimaryDriverCardState');
+            const panel = $('#vehicleDriverAssignmentPanel');
+            const badge = $('#vehicleDriverRequirementBadge');
+            const requirementText = $('#vehicleDriverRequirementText');
+            const requiredMark = $('#vehiclePrimaryDriverRequired');
+            const optionalMark = $('#vehiclePrimaryDriverOptional');
 
-            // Driver assignment is optional. Keep the searchable field visible
-            // for users who want to assign a driver while creating the vehicle.
-            driver?.closest('.field')?.classList.remove('hidden');
             if (driver) {
-                driver.required = false;
-                driver.removeAttribute('aria-required');
+                driver.required = withDriver;
+                driver.setAttribute('aria-required', withDriver ? 'true' : 'false');
+                driver.placeholder = withDriver
+                    ? 'Type to search and select Driver 1'
+                    : 'Type to search and select a driver (optional)';
             }
 
-            // Only the driver's payment information depends on rental type.
-            wrapper?.classList.toggle('hidden', !withDriver);
+            requiredMark?.classList.toggle('hidden', !withDriver);
+            optionalMark?.classList.toggle('hidden', withDriver);
+            if (primaryCardState) {
+                primaryCardState.textContent = withDriver ? 'Required' : 'Optional';
+                primaryCardState.className = `badge ${withDriver ? 'warn' : 'soft'}`;
+            }
+            secondDriverField?.classList.toggle('hidden', !secondDriverRequired);
+            if (secondDriver) {
+                secondDriver.required = secondDriverRequired;
+                secondDriver.setAttribute('aria-required', secondDriverRequired ? 'true' : 'false');
+                if (!secondDriverRequired) {
+                    secondDriver.value = '';
+                    clearVehicleFieldError(secondDriver);
+                }
+            }
+
+            panel?.classList.toggle('is-required', withDriver);
+            panel?.classList.toggle('is-double', secondDriverRequired);
+
+            if (!rentalType) {
+                if (badge) badge.textContent = 'Not selected';
+                if (requirementText) requirementText.textContent = 'Select Rental Type and Usage Type to see the driver requirement.';
+            } else if (!withDriver) {
+                if (badge) badge.textContent = '1 optional driver';
+                if (requirementText) requirementText.textContent = 'Without Driver keeps one driver selection available, but it is optional.';
+            } else if (secondDriverRequired) {
+                if (badge) badge.textContent = '2 drivers required';
+                if (requirementText) requirementText.textContent = 'Double shift with driver requires two different drivers.';
+            } else {
+                if (badge) badge.textContent = '1 driver required';
+                if (requirementText) requirementText.textContent = 'With Driver requires Driver 1. Select Double shift to assign Driver 2 as well.';
+            }
+
+            primaryPaymentFields?.classList.toggle('hidden', !withDriver);
+            secondaryPaymentFields?.classList.toggle('hidden', !secondDriverRequired);
+
             ['#driverPaymentAmount', '#driverPaymentCycle'].forEach((selector) => {
                 const field = $(selector);
                 if (!field) return;
                 field.required = withDriver;
+                field.disabled = !withDriver;
                 field.setAttribute('aria-required', withDriver ? 'true' : 'false');
                 if (!withDriver) {
                     field.value = '';
                     clearVehicleFieldError(field);
                 }
             });
+
+            ['#secondDriverPaymentAmount', '#secondDriverPaymentCycle'].forEach((selector) => {
+                const field = $(selector);
+                if (!field) return;
+                field.required = secondDriverRequired;
+                field.disabled = !secondDriverRequired;
+                field.setAttribute('aria-required', secondDriverRequired ? 'true' : 'false');
+                if (!secondDriverRequired) {
+                    field.value = '';
+                    clearVehicleFieldError(field);
+                }
+            });
+            refreshVehicleDriverOptions();
             recalculateRentalTotal();
         }
 
@@ -1628,8 +1716,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     usage: getUsage(),
                     rentalType: value('#rentalType'),
                     driver: value('#driver'),
+                    secondDriver: value('#secondDriver'),
                     driverPaymentAmount: value('#driverPaymentAmount'),
                     driverPaymentCycle: value('#driverPaymentCycle'),
+                    secondDriverPaymentAmount: value('#secondDriverPaymentAmount'),
+                    secondDriverPaymentCycle: value('#secondDriverPaymentCycle'),
                     vehicleRentalAmount: value('#vehicleRentalAmount'),
                     vehiclePaymentCycle: value('#vehiclePaymentCycle'),
                     totalRentalAmount: value('#totalRentalAmount'),
@@ -1643,7 +1734,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     })).filter((fuel) => fuel.type || fuel.rate),
                     docs,
                     status: statusOverride === 'Draft' ? 'Draft' : 'Active',
-                    vehicleValidationVersion: 1,
+                    vehicleValidationVersion: 3,
                 },
                 imageFile: selectedVehicleImageFile(),
                 documentFiles,
@@ -1690,19 +1781,43 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
 
             const driver = $('#driver');
-            const validDriverValues = new Set(
-                $$('#vehicleDriverList option').map((option) => String(option.value || '').trim())
-            );
+            const secondDriver = $('#secondDriver');
+            const validDriverValues = new Set(vehicleDriverOptions.map((option) => option.value));
+            const withDriver = vehicle.rentalType === 'With Driver';
+            const doubleShiftWithDriver = withDriver && String(vehicle.usage || '').trim().toLowerCase() === 'double shift';
+
             if (driver?.value && !validDriverValues.has(String(driver.value).trim())) {
-                invalidate(driver, 'Select a valid driver from the searchable list.');
+                invalidate(driver, 'Select a valid Driver 1 from the searchable list.');
+            }
+            if (secondDriver?.value && !validDriverValues.has(String(secondDriver.value).trim())) {
+                invalidate(secondDriver, 'Select a valid Driver 2 from the searchable list.');
+            }
+            if (withDriver && !String(driver?.value || '').trim()) {
+                invalidate(driver, 'Driver 1 is required when Rental Type is With Driver.');
+            }
+            if (doubleShiftWithDriver && !String(secondDriver?.value || '').trim()) {
+                invalidate(secondDriver, 'Driver 2 is required for a double-shift vehicle rented With Driver.');
+            }
+            if (String(driver?.value || '').trim() && String(secondDriver?.value || '').trim()
+                && String(driver.value).trim().toLowerCase() === String(secondDriver.value).trim().toLowerCase()) {
+                invalidate(driver, 'Driver 1 and Driver 2 must be different drivers.');
+                invalidate(secondDriver, 'Driver 1 and Driver 2 must be different drivers.');
             }
 
-            if (vehicle.rentalType === 'With Driver') {
+            if (withDriver) {
                 const amount = $('#driverPaymentAmount');
                 const cycle = $('#driverPaymentCycle');
-                if (!String(amount?.value || '').trim()) invalidate(amount, 'Driver Payment Amount is required.');
-                else if (Number(amount.value) < 0) invalidate(amount, 'Driver Payment Amount cannot be negative.');
-                if (!cycle?.value) invalidate(cycle, 'Driver Payment Cycle is required.');
+                if (!String(amount?.value || '').trim()) invalidate(amount, 'Driver 1 Payment Amount is required.');
+                else if (Number(amount.value) < 0) invalidate(amount, 'Driver 1 Payment Amount cannot be negative.');
+                if (!cycle?.value) invalidate(cycle, 'Driver 1 Payment Cycle is required.');
+            }
+
+            if (doubleShiftWithDriver) {
+                const amount = $('#secondDriverPaymentAmount');
+                const cycle = $('#secondDriverPaymentCycle');
+                if (!String(amount?.value || '').trim()) invalidate(amount, 'Driver 2 Payment Amount is required.');
+                else if (Number(amount.value) < 0) invalidate(amount, 'Driver 2 Payment Amount cannot be negative.');
+                if (!cycle?.value) invalidate(cycle, 'Driver 2 Payment Cycle is required.');
             }
 
             const vehicleAmount = $('#vehicleRentalAmount');
@@ -1855,9 +1970,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#category', sample.category);
             updateSubCategory(sample.subCategory);
             setValue('#rentalType', sample.rentalType || (sample.driverPaymentAmount ? 'With Driver' : 'Without Driver'));
+            setUsage(sample.usage);
             setValue('#driver', sample.driver);
+            setValue('#secondDriver', sample.secondDriver || sample.driver2 || sample.secondaryDriver || '');
             setValue('#driverPaymentAmount', sample.driverPaymentAmount ?? '');
             setValue('#driverPaymentCycle', sample.driverPaymentCycle || 'Monthly');
+            setValue('#secondDriverPaymentAmount', sample.secondDriverPaymentAmount ?? '');
+            setValue('#secondDriverPaymentCycle', sample.secondDriverPaymentCycle || 'Monthly');
             setValue('#vehicleRentalAmount', sample.vehicleRentalAmount ?? sample.rent ?? 0);
             setValue('#vehiclePaymentCycle', sample.vehiclePaymentCycle || 'Monthly');
             toggleRentalFields();
@@ -1867,7 +1986,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 setValue('#vehicleImageData', JSON.stringify(sample.image));
                 renderVehicleImageInfo(sample.image);
             }
-            setUsage(sample.usage);
             $('#vehicleFuelRows').innerHTML = '';
             $('#vehicleDocRows').innerHTML = '';
             (sample.fuels || []).forEach(addFuelRow);
@@ -1891,9 +2009,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             setValue('#category', vehicle.category);
             updateSubCategory(vehicle.subCategory);
             setValue('#rentalType', vehicle.rentalType || (vehicle.driverPaymentAmount ? 'With Driver' : 'Without Driver'));
+            setUsage(vehicle.usage);
             setValue('#driver', vehicle.driver);
+            setValue('#secondDriver', vehicle.secondDriver || vehicle.driver2 || vehicle.secondaryDriver || '');
             setValue('#driverPaymentAmount', vehicle.driverPaymentAmount ?? '');
             setValue('#driverPaymentCycle', vehicle.driverPaymentCycle || 'Monthly');
+            setValue('#secondDriverPaymentAmount', vehicle.secondDriverPaymentAmount ?? '');
+            setValue('#secondDriverPaymentCycle', vehicle.secondDriverPaymentCycle || 'Monthly');
             setValue('#vehicleRentalAmount', vehicle.vehicleRentalAmount ?? vehicle.rent ?? 0);
             setValue('#vehiclePaymentCycle', vehicle.vehiclePaymentCycle || 'Monthly');
             toggleRentalFields();
@@ -1906,7 +2028,6 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 setValue('#vehicleImageData', '');
                 renderVehicleImageInfo({});
             }
-            setUsage(vehicle.usage);
             $('#vehicleFuelRows').innerHTML = '';
             $('#vehicleDocRows').innerHTML = '';
             (vehicle.fuels || []).forEach(addFuelRow);
@@ -1967,7 +2088,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const fuel = value('#vehicleFilterFuel');
             const status = value('#vehicleFilterStatus');
             const rows = vehicles.filter((vehicle) => {
-                const text = [vehicle.name, vehicle.regNo, vehicle.driver, vehicle.id, vehicle.model].join(' ').toLowerCase();
+                const text = [vehicle.name, vehicle.regNo, vehicle.driver, vehicle.secondDriver, vehicle.id, vehicle.model].join(' ').toLowerCase();
                 return (!query || text.includes(query))
                     && (!category || vehicle.category === category)
                     && (!fuel || (vehicle.fuels || []).some((item) => item.type === fuel))
@@ -1996,7 +2117,11 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <td>${escapeHtml(vehicle.regNo)}</td>
                     <td>${escapeHtml(vehicle.category)}<br><small>${escapeHtml(vehicle.subCategory || '')}</small></td>
                     <td>${(vehicle.fuels || []).map((item) => `<span class="badge soft">${escapeHtml(item.priority)}: ${escapeHtml(item.type)} · ${escapeHtml(item.rate || '0')}</span>`).join('')}</td>
-                    <td>${escapeHtml(vehicle.driver || 'Not assigned')}</td>
+                    <td>
+                        ${escapeHtml(vehicle.driver || 'Not assigned')}
+                        ${vehicle.driver && vehicle.rentalType === 'With Driver' ? `<br><small>${Number(vehicle.driverPaymentAmount || 0).toLocaleString()} BDT · ${escapeHtml(vehicle.driverPaymentCycle || '-')}</small>` : ''}
+                        ${vehicle.secondDriver ? `<br><b>Driver 2:</b> ${escapeHtml(vehicle.secondDriver)}<br><small>${Number(vehicle.secondDriverPaymentAmount || 0).toLocaleString()} BDT · ${escapeHtml(vehicle.secondDriverPaymentCycle || '-')}</small>` : ''}
+                    </td>
                     <td>${docs.length} document(s)<br><small>${docsWithFiles} uploaded file(s)${docsWithFiles ? ` · ${documentLinks(vehicle)}` : ''}</small></td>
                     <td>${window.FleetmanExpiringDocuments.html(docs)}</td>
                     <td>${Number(vehicle.totalRentalAmount ?? vehicle.rent ?? 0).toLocaleString()} BDT<br><small>${escapeHtml(vehicle.rentalType || '-')}</small></td>
@@ -2015,7 +2140,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function exportCsv() {
             downloadCsv('fleetman-vehicle-list.csv', [
-                ['Vehicle ID', 'Vehicle Name', 'Registration', 'Category', 'Fuels', 'Rental Type', 'Driver', 'Driver Payment', 'Driver Cycle', 'Vehicle Rental', 'Vehicle Cycle', 'Total Rental', 'Documents', 'Image', 'Status'],
+                ['Vehicle ID', 'Vehicle Name', 'Registration', 'Category', 'Fuels', 'Rental Type', 'Driver 1', 'Driver 1 Payment', 'Driver 1 Cycle', 'Driver 2', 'Driver 2 Payment', 'Driver 2 Cycle', 'Vehicle Rental', 'Vehicle Cycle', 'Total Rental', 'Documents', 'Image', 'Status'],
                 ...vehicles.map((vehicle) => [
                     vehicle.id,
                     vehicle.name,
@@ -2026,6 +2151,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     vehicle.driver,
                     vehicle.driverPaymentAmount,
                     vehicle.driverPaymentCycle,
+                    vehicle.secondDriver,
+                    vehicle.secondDriverPaymentAmount,
+                    vehicle.secondDriverPaymentCycle,
                     vehicle.vehicleRentalAmount,
                     vehicle.vehiclePaymentCycle,
                     vehicle.totalRentalAmount ?? vehicle.rent,
@@ -2038,7 +2166,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         $('#category')?.addEventListener('change', () => updateSubCategory(''));
         $('#rentalType')?.addEventListener('change', toggleRentalFields);
-        ['#driverPaymentAmount', '#vehicleRentalAmount'].forEach((selector) => $(selector)?.addEventListener('input', recalculateRentalTotal));
+        $$('input[name="usage"]').forEach((radio) => radio.addEventListener('change', toggleRentalFields));
+        ['#driver', '#secondDriver'].forEach((selector) => {
+            $(selector)?.addEventListener('input', refreshVehicleDriverOptions);
+            $(selector)?.addEventListener('change', refreshVehicleDriverOptions);
+        });
+        ['#driverPaymentAmount', '#secondDriverPaymentAmount', '#vehicleRentalAmount'].forEach((selector) => $(selector)?.addEventListener('input', recalculateRentalTotal));
         $('#addFuelRowBtn')?.addEventListener('click', () => {
             if ($$('#vehicleFuelRows .fuel-row').length >= fuelPriorities.length) {
                 toast('Primary, Secondary, and Tertiary priorities are already used.');
@@ -2452,6 +2585,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         let activeStream = null;
         let editingRechargeId = '';
         let editingRechargeDate = '';
+        let activeFuelDriver = null;
 
         function endpoint() {
             return resources?.fuel_recharges?.sync || null;
@@ -2650,6 +2784,137 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }) || null;
         }
 
+        function timeToMinutes(time) {
+            const match = String(time || '').trim().match(/^(\d{1,2}):(\d{2})/);
+            if (!match) return null;
+            const hour = Number(match[1]);
+            const minute = Number(match[2]);
+            if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+            return (hour * 60) + minute;
+        }
+
+        function currentMinutesInFleetTimeZone() {
+            const timeZone = String(data.timeZone || 'Asia/Dhaka');
+            try {
+                const parts = new Intl.DateTimeFormat('en-GB', {
+                    timeZone,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hourCycle: 'h23',
+                }).formatToParts(new Date());
+                const hour = Number(parts.find((part) => part.type === 'hour')?.value || 0) % 24;
+                const minute = Number(parts.find((part) => part.type === 'minute')?.value || 0);
+                return (hour * 60) + minute;
+            } catch (_) {
+                const now = new Date();
+                return (now.getHours() * 60) + now.getMinutes();
+            }
+        }
+
+        function currentFleetTimeLabel() {
+            const timeZone = String(data.timeZone || 'Asia/Dhaka');
+            try {
+                return new Intl.DateTimeFormat('en-BD', {
+                    timeZone,
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true,
+                }).format(new Date());
+            } catch (_) {
+                return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            }
+        }
+
+        function shiftContainsMinutes(startTime, endTime, currentMinutes) {
+            const start = timeToMinutes(startTime);
+            const end = timeToMinutes(endTime);
+            if (start === null || end === null) return false;
+            if (start === end) return true;
+            if (start < end) return currentMinutes >= start && currentMinutes < end;
+            return currentMinutes >= start || currentMinutes < end;
+        }
+
+        function normalizedVehicleDrivers(vehicle = {}) {
+            const drivers = Array.isArray(vehicle.drivers) ? vehicle.drivers.filter(Boolean) : [];
+            if (drivers.length) return drivers;
+
+            const fallback = [];
+            if (vehicle.driverId || vehicle.driver || vehicle.driverName) {
+                fallback.push({
+                    driverId: vehicle.driverId || '',
+                    driver: vehicle.driver || vehicle.driverName || '',
+                    driverName: vehicle.driverName || vehicle.driver || '',
+                    shiftId: vehicle.shiftId || '',
+                    shift: vehicle.shift || '',
+                    shiftName: vehicle.shiftName || vehicle.shift || '',
+                    shiftStartTime: vehicle.shiftStartTime || '',
+                    shiftEndTime: vehicle.shiftEndTime || '',
+                });
+            }
+            if (vehicle.secondDriverId || vehicle.secondDriver || vehicle.secondDriverName) {
+                fallback.push({
+                    driverId: vehicle.secondDriverId || '',
+                    driver: vehicle.secondDriver || vehicle.secondDriverName || '',
+                    driverName: vehicle.secondDriverName || vehicle.secondDriver || '',
+                    shiftId: vehicle.secondShiftId || '',
+                    shift: vehicle.secondShift || '',
+                    shiftName: vehicle.secondShiftName || vehicle.secondShift || '',
+                    shiftStartTime: vehicle.secondShiftStartTime || '',
+                    shiftEndTime: vehicle.secondShiftEndTime || '',
+                });
+            }
+            return fallback;
+        }
+
+        function resolveActiveFuelDriver(vehicle = {}) {
+            const drivers = normalizedVehicleDrivers(vehicle);
+            if (!drivers.length) return null;
+
+            const doubleShift = String(vehicle.shiftType || '').toLowerCase() === 'double' || drivers.length > 1;
+            if (!doubleShift) return drivers[0];
+
+            const currentMinutes = currentMinutesInFleetTimeZone();
+            return drivers.find((driver) => shiftContainsMinutes(driver.shiftStartTime, driver.shiftEndTime, currentMinutes)) || null;
+        }
+
+        function refreshAssignedFuelDriver() {
+            const vehicle = selectedVehicle();
+            const input = $('#assignedFuelDriver');
+            const hint = $('#assignedFuelDriverShift');
+            activeFuelDriver = vehicle ? resolveActiveFuelDriver(vehicle) : null;
+
+            if (!input || !hint) return activeFuelDriver;
+            if (!vehicle) {
+                input.value = '';
+                input.placeholder = 'Select contract and vehicle';
+                hint.textContent = 'The assigned driver will appear automatically.';
+                return activeFuelDriver;
+            }
+
+            const drivers = normalizedVehicleDrivers(vehicle);
+            if (!drivers.length) {
+                input.value = 'No driver assigned';
+                hint.textContent = 'Assign a driver from the Contract page before adding fuel.';
+                return activeFuelDriver;
+            }
+
+            if (!activeFuelDriver) {
+                input.value = 'No active shift driver';
+                hint.textContent = `No assigned driver shift matches the current system time (${currentFleetTimeLabel()}).`;
+                return activeFuelDriver;
+            }
+
+            input.value = String(activeFuelDriver.driverName || activeFuelDriver.driver || '').trim();
+            const shiftName = String(activeFuelDriver.shiftName || activeFuelDriver.shift || '').trim();
+            const start = String(activeFuelDriver.shiftStartTime || '').trim();
+            const end = String(activeFuelDriver.shiftEndTime || '').trim();
+            const shiftTime = start || end ? `${start || '--:--'} - ${end || '--:--'}` : '';
+            hint.textContent = shiftName || shiftTime
+                ? `Current shift: ${[shiftName, shiftTime].filter(Boolean).join(' • ')} • System time: ${currentFleetTimeLabel()}`
+                : 'Assigned driver loaded from the selected contract and vehicle.';
+            return activeFuelDriver;
+        }
+
         function setFuelEntryMode(prefix, fuelName, rateInfo = null) {
             const directAmount = isDirectAmountFuel(fuelName);
             const qtyLabel = $(`#${prefix}QtyLabel`);
@@ -2756,6 +3021,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const secondaryBlock = $('#secondaryFuelBlock');
             if (secondaryBlock) secondaryBlock.style.display = 'none';
             setSecondaryRequiredState(false);
+            activeFuelDriver = null;
+            setValue('#assignedFuelDriver', '');
+            const assignedDriverHint = $('#assignedFuelDriverShift');
+            if (assignedDriverHint) assignedDriverHint.textContent = 'The assigned driver will appear automatically.';
             const vehicleSetupNote = $('#vehicleSetupNote');
             if (vehicleSetupNote) {
                 vehicleSetupNote.textContent = note || '';
@@ -2800,6 +3069,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const secondaryBlock = $('#secondaryFuelBlock');
             if (secondaryBlock) secondaryBlock.style.display = 'none';
             setSecondaryRequiredState(false);
+            refreshAssignedFuelDriver();
 
             ['#vehicleSelect', '#primaryFuelName', '#primaryRate', '#startKm'].forEach((selector) => {
                 const element = $(selector);
@@ -3435,6 +3705,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const octane = (normalizeFuelName(primaryName) === 'octane' ? primary.qty : 0)
                 + (normalizeFuelName(secondaryName) === 'octane' ? secondary.qty : 0);
             const gas = (primary.directAmount ? primary.amount : 0) + (secondary.directAmount ? secondary.amount : 0);
+            const currentDriver = resolveActiveFuelDriver(vehicle || {}) || activeFuelDriver;
 
             return {
                 rechargeId,
@@ -3448,9 +3719,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 vehicle: vehicle?.label || vehicle?.name || value('#vehicleSelect') || '',
                 vehicleLabel: vehicle?.label || vehicle?.name || value('#vehicleSelect') || '',
                 car: vehicle?.label || vehicle?.name || value('#vehicleSelect') || '',
-                driverId: vehicle?.driverId || '',
-                driver: vehicle?.driver || 'Assigned Driver',
-                driverName: vehicle?.driver || '',
+                driverId: currentDriver?.driverId || '',
+                driver: currentDriver?.driverName || currentDriver?.driver || '',
+                driverName: currentDriver?.driverName || currentDriver?.driver || '',
+                driverShiftId: currentDriver?.shiftId || '',
+                driverShift: currentDriver?.shiftName || currentDriver?.shift || '',
+                driverShiftStartTime: currentDriver?.shiftStartTime || '',
+                driverShiftEndTime: currentDriver?.shiftEndTime || '',
                 driverStart: '',
                 driverEnd: '',
                 totalTime: 0,
@@ -3608,6 +3883,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 invalidate(vehicleSelect, 'Vehicle is required.');
             } else if (!vehicle) {
                 invalidate(vehicleSelect, 'Please select a vehicle assigned to the selected contract.');
+            } else {
+                const assignedDrivers = normalizedVehicleDrivers(vehicle);
+                if (!assignedDrivers.length) {
+                    invalidate($('#assignedFuelDriver'), 'No driver is assigned to this contract vehicle.');
+                } else if (!resolveActiveFuelDriver(vehicle)) {
+                    invalidate($('#assignedFuelDriver'), 'No assigned driver shift matches the current system time.');
+                }
             }
 
             const primaryFuel = value('#primaryFuelName');
@@ -3924,6 +4206,9 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
         });
         $('#vehicleSelect')?.addEventListener('change', updateVehicleSetup);
+        window.setInterval(() => {
+            if (selectedVehicle()) refreshAssignedFuelDriver();
+        }, 60000);
         $('#primaryQty')?.addEventListener('input', recalculate);
         $('#secondaryQty')?.addEventListener('input', recalculate);
         $('#startKm')?.addEventListener('input', recalculate);
@@ -9289,7 +9574,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
     const options = data.options || {};
     const records = data.records || data.samples || {};
     const resources = data.resources || {};
-    const masters = data.contractMasters || { parties: { Client: [], Vendor: [] }, vehicles: [], drivers: [] };
+    const masters = data.contractMasters || { parties: { Client: [], Vendor: [] }, vehicles: [], drivers: [], availableDrivers: [], driverReservations: [], shifts: [] };
 
     const $ = (selector, root = document) => root.querySelector(selector);
     const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -9408,7 +9693,64 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function driverById(id) {
-            return (masters.drivers || []).find((driver) => driver.id === id) || null;
+            return (masters.drivers || []).find((driver) => String(driver.id) === String(id)) || null;
+        }
+
+        function shiftById(id) {
+            return (masters.shifts || []).find((shift) => String(shift.id) === String(id)) || null;
+        }
+
+        function normalizeShiftType(nextValue) {
+            return String(nextValue || '').trim().toLowerCase() === 'double' ? 'Double' : 'Single';
+        }
+
+        function isDoubleShiftVehicle(vehicle) {
+            if (!vehicle) return false;
+            if (typeof vehicle.isDoubleShift === 'boolean') return vehicle.isDoubleShift;
+            return String(vehicle.usage || '').trim().toLowerCase() === 'double shift';
+        }
+
+        function datesOverlap(startA, endA, startB, endB) {
+            if (!startA || !endA || !startB || !endB) return true;
+            return startA <= endB && endA >= startB;
+        }
+
+        function reservedDriverIds() {
+            const currentContractId = String(value('#contractId') || '').trim().toLowerCase();
+            const currentStart = String(value('#contractStart') || '').trim();
+            const currentEnd = String(value('#contractEnd') || '').trim();
+            const reservations = Array.isArray(masters.driverReservations) ? masters.driverReservations : [];
+
+            return new Set(reservations
+                .filter((reservation) => String(reservation?.contractId || '').trim().toLowerCase() !== currentContractId)
+                .filter((reservation) => datesOverlap(
+                    currentStart,
+                    currentEnd,
+                    String(reservation?.contractStart || '').trim(),
+                    String(reservation?.contractEnd || '').trim()
+                ))
+                .flatMap((reservation) => Array.isArray(reservation?.driverIds) ? reservation.driverIds : [])
+                .map((id) => String(id || '').trim().toLowerCase())
+                .filter(Boolean));
+        }
+
+        function availableDrivers(keepIds = []) {
+            const source = Array.isArray(masters.availableDrivers) && masters.availableDrivers.length
+                ? masters.availableDrivers
+                : (masters.drivers || []).filter((driver) => !driver.status || String(driver.status).toLowerCase() === 'active');
+            const reserved = reservedDriverIds();
+            const keep = new Set((keepIds || []).map((id) => String(id || '').trim().toLowerCase()).filter(Boolean));
+
+            return source.filter((driver) => {
+                const id = String(driver?.id || '').trim().toLowerCase();
+                return id && (keep.has(id) || !reserved.has(id));
+            });
+        }
+
+        function vehicleAssignedDriverIds(vehicle) {
+            return [vehicle?.assignedDriverId, vehicle?.assignedSecondDriverId]
+                .map((id) => String(id || '').trim())
+                .filter(Boolean);
         }
 
         function hiddenFileValue(fileData = {}) {
@@ -9432,44 +9774,280 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             });
         }
 
-        function refreshUniqueAssignmentSelects(selectSelector, items, placeholder) {
-            const wrapper = $('#contractAssignments');
-            if (!wrapper) return;
+        function shiftTypeForCard(card) {
+            const vehicle = vehicleById($('.contractAsgVehicle', card)?.value || '');
+            if (vehicle) return isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
+            return normalizeShiftType(card?.dataset.shiftType || 'Single');
+        }
 
-            const selects = $$(selectSelector, wrapper);
-            const selectedValues = selects
+        function selectedAssignmentVehicleIds(exceptCard = null) {
+            return $$('.contract-assignment-card')
+                .filter((card) => card !== exceptCard)
+                .map((card) => String($('.contractAsgVehicle', card)?.value || '').trim())
+                .filter(Boolean);
+        }
+
+        function selectedAssignmentDriverIds(exceptSelect = null) {
+            return $$('#contractAssignments .contractAsgDriver')
+                .filter((select) => {
+                    if (select === exceptSelect) return false;
+                    const modeSection = select.closest('.contract-single-shift-fields, .contract-double-shift-fields');
+                    return !modeSection?.classList.contains('hidden');
+                })
                 .map((select) => String(select.value || '').trim())
                 .filter(Boolean);
+        }
 
-            selects.forEach((select) => {
-                const current = String(select.value || '').trim();
-                const selectedElsewhere = new Set(
-                    selectedValues
-                        .filter((selected) => selected && selected !== current)
-                        .map((selected) => selected.toLowerCase())
-                );
-                const availableItems = (items || []).filter((item) => {
-                    const itemValue = String(item?.value || item?.id || item?.name || item?.label || item || '').trim();
-                    return itemValue === current || !selectedElsewhere.has(itemValue.toLowerCase());
-                });
+        function assignmentVehicleItems(card) {
+            const current = String($('.contractAsgVehicle', card)?.value || '').trim();
+            const selectedElsewhere = new Set(selectedAssignmentVehicleIds(card).map((id) => id.toLowerCase()));
 
-                select.innerHTML = optionHtml(availableItems, current, placeholder);
+            const reserved = reservedDriverIds();
+            return (masters.vehicles || []).filter((vehicle) => {
+                const id = String(vehicle.id || '').trim();
+                const assignedIds = vehicleAssignedDriverIds(vehicle);
+                const assignedDriverAlreadyUsed = assignedIds.some((driverId) => reserved.has(driverId.toLowerCase()));
+                return !assignedDriverAlreadyUsed
+                    && (id === current || !selectedElsewhere.has(id.toLowerCase()));
             });
         }
 
+        function replaceSelectOptions(select, items, placeholder, selected = null) {
+            if (!select) return;
+            const current = selected === null ? String(select.value || '').trim() : String(selected || '').trim();
+            select.innerHTML = optionHtml(items, current, placeholder);
+            select.value = current;
+        }
+
+        function driverItemsForSelect(select, sourceItems = masters.drivers || []) {
+            const current = String(select?.value || '').trim();
+            const selectedElsewhere = new Set(selectedAssignmentDriverIds(select).map((id) => id.toLowerCase()));
+            const reserved = reservedDriverIds();
+            return (sourceItems || []).filter((driver) => {
+                const id = String(driver.id || '').trim();
+                const key = id.toLowerCase();
+                return id === current || (!selectedElsewhere.has(key) && !reserved.has(key));
+            });
+        }
+
+        function refreshShiftSelects(card) {
+            const selects = $$('.contractAsgShift', card);
+            selects.forEach((select) => {
+                const current = String(select.value || '').trim();
+                const siblingValues = new Set(selects
+                    .filter((sibling) => sibling !== select)
+                    .map((sibling) => String(sibling.value || '').trim().toLowerCase())
+                    .filter(Boolean));
+                const items = (masters.shifts || []).filter((shift) => {
+                    const id = String(shift.id || '').trim();
+                    return id === current || !siblingValues.has(id.toLowerCase());
+                });
+                replaceSelectOptions(select, items, (masters.shifts || []).length ? 'Select shift' : 'No active shifts found');
+            });
+        }
+
+        function updateAssignedDriverSummary(card, vehicle) {
+            const summary = $('.contractAssignedDriverSummary', card);
+            if (!summary) return;
+
+            const shiftType = isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
+            const assignedIds = shiftType === 'Double'
+                ? vehicleAssignedDriverIds(vehicle)
+                : [String(vehicle?.assignedDriverId || '').trim()].filter(Boolean);
+            const names = assignedIds.map((id) => driverById(id)?.name || id).filter(Boolean);
+
+            summary.innerHTML = names.length
+                ? `<strong>Assigned ${names.length > 1 ? 'Drivers' : 'Driver'}:</strong> ${names.map(escapeHtml).join(' &nbsp;•&nbsp; ')}`
+                : '';
+            summary.hidden = names.length === 0;
+        }
+
+        function driverDisplayName(driverId) {
+            const id = String(driverId || '').trim();
+            if (!id) return '';
+            return driverById(id)?.name || driverById(id)?.label || id;
+        }
+
+        function shiftDisplayName(shiftId, fallbackLabel = '') {
+            const id = String(shiftId || '').trim();
+            if (!id) return fallbackLabel;
+            return shiftById(id)?.name || shiftById(id)?.label || id;
+        }
+
+        function updateDoubleDriverSummary(card) {
+            const button = $('.contractDoubleDriverOpen', card);
+            const text = $('.contractDoubleDriverSummaryText', card);
+            const hint = $('.contractDoubleDriverSummaryHint', card);
+            if (!button || !text) return;
+
+            const vehicle = vehicleById($('.contractAsgVehicle', card)?.value || '');
+            if (!vehicle || !isDoubleShiftVehicle(vehicle)) {
+                button.disabled = true;
+                text.textContent = vehicle ? 'Not required for single shift' : 'Select vehicle first';
+                if (hint) hint.textContent = '';
+                button.classList.remove('is-complete', 'is-incomplete');
+                return;
+            }
+
+            button.disabled = false;
+            const rows = [
+                {
+                    driverId: String($('.contractPrimaryDriver', card)?.value || '').trim(),
+                    shiftId: String($('.contractPrimaryShift', card)?.value || '').trim(),
+                    label: 'Shift 1',
+                },
+                {
+                    driverId: String($('.contractSecondaryDriver', card)?.value || '').trim(),
+                    shiftId: String($('.contractSecondaryShift', card)?.value || '').trim(),
+                    label: 'Shift 2',
+                },
+            ];
+            const complete = rows.every((row) => row.driverId && row.shiftId);
+            const hasAnyAssignment = rows.some((row) => row.driverId || row.shiftId);
+            const parts = rows.map((row) => {
+                const shift = shiftDisplayName(row.shiftId, row.label);
+                const driver = driverDisplayName(row.driverId) || 'Select driver';
+                return `${shift}: ${driver}`;
+            });
+
+            text.textContent = hasAnyAssignment ? parts.join(' | ') : 'Assign both shift drivers';
+            if (hint) hint.textContent = complete ? 'Both shift drivers are ready.' : parts.join(' • ');
+            button.classList.toggle('is-complete', complete);
+            button.classList.toggle('is-incomplete', !complete);
+            if (complete) clearContractFieldError(button);
+        }
+
+        function openDoubleDriverModal(card) {
+            const modal = $('.contract-double-shift-modal', card);
+            if (!modal) return;
+            refreshAssignmentCard(card);
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('contract-shift-modal-open');
+            const firstEditable = $('.contract-double-shift-modal select:not(:disabled)', card)
+                || $('[data-close-double-driver-modal]', modal);
+            firstEditable?.focus?.({ preventScroll: true });
+        }
+
+        function closeDoubleDriverModal(card) {
+            const modal = $('.contract-double-shift-modal', card);
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('contract-shift-modal-open');
+            updateDoubleDriverSummary(card);
+            $('.contractDoubleDriverOpen', card)?.focus?.({ preventScroll: true });
+        }
+
+        function configureDriverSelect(select, assignedId, placeholder) {
+            if (!select) return;
+            const current = String(select.value || '').trim();
+            const lockedId = String(assignedId || '').trim();
+            const keepIds = [current, lockedId].filter(Boolean);
+            const source = lockedId
+                ? (masters.drivers || []).filter((driver) => String(driver.id || '') === lockedId)
+                : availableDrivers(keepIds);
+
+            replaceSelectOptions(select, driverItemsForSelect(select, source), placeholder, lockedId || current);
+            if (lockedId) select.value = lockedId;
+            if (!lockedId && !Array.from(select.options).some((option) => option.value === current)) select.value = '';
+            select.disabled = Boolean(lockedId);
+            select.dataset.lockedAssignedDriver = lockedId;
+            select.closest('.field')?.classList.toggle('contract-driver-locked', Boolean(lockedId));
+        }
+
+        function refreshAssignmentCard(card) {
+            if (!card) return;
+
+            const vehicleSelect = $('.contractAsgVehicle', card);
+            replaceSelectOptions(vehicleSelect, assignmentVehicleItems(card), 'Select vehicle');
+
+            const vehicle = vehicleById(vehicleSelect?.value || '');
+            const shiftType = vehicle && isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
+            card.dataset.shiftType = shiftType;
+
+            const usageBadge = $('.contractVehicleUsageBadge', card);
+            if (usageBadge) {
+                usageBadge.textContent = vehicle ? `${shiftType} Shift` : '';
+                usageBadge.hidden = !vehicle;
+            }
+
+            const singleFields = $$('.contract-single-shift-fields', card);
+            const doubleFields = $$('.contract-double-shift-fields', card);
+            singleFields.forEach((field) => field.classList.toggle('hidden', Boolean(vehicle) && shiftType !== 'Single'));
+            doubleFields.forEach((field) => field.classList.toggle('hidden', !vehicle || shiftType !== 'Double'));
+
+            updateAssignedDriverSummary(card, vehicle);
+            if (!vehicle) {
+                const driverSelect = $('.contractSingleDriver', card);
+                replaceSelectOptions(driverSelect, [], 'Select vehicle first', '');
+                if (driverSelect) {
+                    driverSelect.value = '';
+                    driverSelect.disabled = true;
+                    driverSelect.dataset.lockedAssignedDriver = '';
+                }
+                $$('.contractDoubleDriver, .contractAsgShift', card).forEach((field) => {
+                    field.value = '';
+                    field.disabled = true;
+                    field.dataset.lockedAssignedDriver = '';
+                });
+                updateDoubleDriverSummary(card);
+                return;
+            }
+
+            if (shiftType === 'Single') {
+                configureDriverSelect(
+                    $('.contractSingleDriver', card),
+                    vehicle?.assignedDriverId,
+                    vehicle?.assignedDriverId ? 'Assigned vehicle driver' : 'Select available driver'
+                );
+                $$('.contractDoubleDriver, .contractAsgShift', card).forEach((field) => {
+                    field.disabled = true;
+                    field.dataset.lockedAssignedDriver = '';
+                });
+                updateDoubleDriverSummary(card);
+                return;
+            }
+
+            $$('.contractAsgShift', card).forEach((field) => { field.disabled = false; });
+            configureDriverSelect(
+                $('.contractPrimaryDriver', card),
+                vehicle?.assignedDriverId,
+                vehicle?.assignedDriverId ? 'Assigned vehicle driver' : 'Select available driver'
+            );
+            configureDriverSelect(
+                $('.contractSecondaryDriver', card),
+                vehicle?.assignedSecondDriverId,
+                vehicle?.assignedSecondDriverId ? 'Assigned vehicle driver' : 'Select available driver'
+            );
+            refreshShiftSelects(card);
+            updateDoubleDriverSummary(card);
+        }
+
         function refreshContractAssignmentOptions() {
-            refreshUniqueAssignmentSelects('.contractAsgDriver', masters.drivers || [], 'Select driver');
-            refreshUniqueAssignmentSelects('.contractAsgVehicle', masters.vehicles || [], 'Select vehicle');
+            $$('.contract-assignment-card').forEach((card) => refreshAssignmentCard(card));
         }
 
         function addAssignment(row = {}) {
             assignmentCounter += 1;
             const wrapper = $('#contractAssignments');
             if (!wrapper) return;
+
+            const nestedDrivers = Array.isArray(row.drivers) ? row.drivers : [];
+            const inferredDouble = nestedDrivers.length > 1 || row.secondDriverId || row.secondShiftId;
+            const vehicleId = row.vehicleId || row.vehicle || '';
+            const selectedVehicle = vehicleById(vehicleId);
+            const shiftType = selectedVehicle
+                ? (isDoubleShiftVehicle(selectedVehicle) ? 'Double' : 'Single')
+                : normalizeShiftType(row.shiftType || row.shiftMode || (inferredDouble ? 'Double' : 'Single'));
+            const primaryDriverId = nestedDrivers[0]?.driverId || row.driverId || row.driver || '';
+            const secondaryDriverId = nestedDrivers[1]?.driverId || row.secondDriverId || row.secondDriver || '';
+            const primaryShiftId = nestedDrivers[0]?.shiftId || row.shiftId || '';
+            const secondaryShiftId = nestedDrivers[1]?.shiftId || row.secondShiftId || '';
+
             const card = document.createElement('div');
             card.className = 'contract-assignment-card';
-            const driverId = row.driverId || row.driver || '';
-            const vehicleId = row.vehicleId || row.vehicle || '';
+            card.dataset.shiftType = shiftType;
             card.innerHTML = `
                 <div class="contract-card-head">
                     <div>
@@ -9477,14 +10055,23 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     </div>
                     <button class="btn light small remove-contract-card" type="button">Remove</button>
                 </div>
-                <div class="contract-grid">
-                    <div class="field contract-col-3">
-                        <label>Driver <span class="req">*</span></label>
-                        <select class="contractAsgDriver" required aria-required="true">${optionHtml(masters.drivers || [], driverId, 'Select driver')}</select>
-                    </div>
+                <div class="contract-grid contract-assignment-main-grid">
                     <div class="field contract-col-3">
                         <label>Vehicle <span class="req">*</span></label>
                         <select class="contractAsgVehicle" required aria-required="true">${optionHtml(masters.vehicles || [], vehicleId, 'Select vehicle')}</select>
+                        <small class="badge soft contractVehicleUsageBadge" ${vehicleId ? '' : 'hidden'}>${vehicleId ? escapeHtml(shiftType + ' Shift') : ''}</small>
+                    </div>
+                    <div class="field contract-col-3 contract-single-shift-fields ${vehicleId && shiftType === 'Double' ? 'hidden' : ''}">
+                        <label>Driver <span class="req">*</span></label>
+                        <select class="contractAsgDriver contractSingleDriver" aria-required="true" ${vehicleId ? '' : 'disabled'}>${optionHtml(masters.drivers || [], primaryDriverId, vehicleId ? 'Select driver' : 'Select vehicle first')}</select>
+                    </div>
+                    <div class="field contract-col-3 contract-double-shift-fields ${vehicleId && shiftType === 'Double' ? '' : 'hidden'}">
+                        <label>Driver <span class="req">*</span></label>
+                        <button class="contract-double-driver-open contractDoubleDriverOpen" type="button" ${vehicleId && shiftType === 'Double' ? '' : 'disabled'}>
+                            <span class="contractDoubleDriverSummaryText">Assign both shift drivers</span>
+                            <small class="contractDoubleDriverSummaryHint"></small>
+                            <b>Assign</b>
+                        </button>
                     </div>
                     <div class="field contract-col-3">
                         <label>Vehicle Hourly Rate <span class="req">*</span></label>
@@ -9493,6 +10080,42 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     <div class="field contract-col-3">
                         <label>Vehicle Duty Hour/Daily <span class="req">*</span></label>
                         <input class="contractAsgDuty" type="number" min="0.01" step="0.01" value="${escapeHtml(row.duty ?? '')}" placeholder="0" required aria-required="true">
+                    </div>
+                </div>
+                <div class="contract-assigned-driver-summary contractAssignedDriverSummary" hidden></div>
+                <div class="contract-double-shift-modal hidden" aria-hidden="true">
+                    <div class="contract-double-shift-modal-backdrop" data-close-double-driver-modal></div>
+                    <div class="contract-double-shift-modal-panel" role="dialog" aria-modal="true" aria-label="Assign double shift drivers">
+                        <div class="contract-double-shift-modal-head">
+                            <div>
+                                <b>Double Shift Driver Assignment</b>
+                                <small>Select one active driver and one master shift for each shift.</small>
+                            </div>
+                            <button class="btn light small" type="button" data-close-double-driver-modal>Close</button>
+                        </div>
+                        <div class="contract-double-shift-modal-body">
+                            <div class="contract-double-shift-modal-grid">
+                                <div class="field">
+                                    <label>Shift 1 <span class="req">*</span></label>
+                                    <select class="contractAsgShift contractPrimaryShift" aria-required="true">${optionHtml(masters.shifts || [], primaryShiftId, 'Select shift')}</select>
+                                </div>
+                                <div class="field">
+                                    <label>Driver 1 <span class="req">*</span></label>
+                                    <select class="contractAsgDriver contractDoubleDriver contractPrimaryDriver" aria-required="true">${optionHtml(masters.drivers || [], primaryDriverId, 'Select driver')}</select>
+                                </div>
+                                <div class="field">
+                                    <label>Shift 2 <span class="req">*</span></label>
+                                    <select class="contractAsgShift contractSecondaryShift" aria-required="true">${optionHtml(masters.shifts || [], secondaryShiftId, 'Select shift')}</select>
+                                </div>
+                                <div class="field">
+                                    <label>Driver 2 <span class="req">*</span></label>
+                                    <select class="contractAsgDriver contractDoubleDriver contractSecondaryDriver" aria-required="true">${optionHtml(availableDrivers(), secondaryDriverId, 'Select available driver')}</select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="contract-double-shift-modal-actions">
+                            <button class="btn primary small" type="button" data-close-double-driver-modal>Done</button>
+                        </div>
                     </div>
                 </div>`;
             wrapper.appendChild(card);
@@ -9583,16 +10206,46 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         function collectAssignments() {
             return $$('.contract-assignment-card').map((card) => {
                 const vehicleId = $('.contractAsgVehicle', card)?.value || '';
-                const driverId = $('.contractAsgDriver', card)?.value || '';
                 const vehicle = vehicleById(vehicleId);
-                const driver = driverById(driverId);
+                const shiftType = vehicle && isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
+                const driverRows = shiftType === 'Double'
+                    ? [
+                        { driverId: $('.contractPrimaryDriver', card)?.value || '', shiftId: $('.contractPrimaryShift', card)?.value || '' },
+                        { driverId: $('.contractSecondaryDriver', card)?.value || '', shiftId: $('.contractSecondaryShift', card)?.value || '' },
+                    ]
+                    : [{ driverId: $('.contractSingleDriver', card)?.value || '', shiftId: '' }];
+                const drivers = driverRows.map((driverRow) => {
+                    const driver = driverById(driverRow.driverId);
+                    const shift = shiftById(driverRow.shiftId);
+                    return {
+                        driverId: driverRow.driverId,
+                        driver: driver ? driver.label : driverRow.driverId,
+                        driverName: driver?.name || '',
+                        shiftId: driverRow.shiftId,
+                        shift: shift ? shift.label : driverRow.shiftId,
+                        shiftName: shift?.name || '',
+                    };
+                });
+                const primary = drivers[0] || {};
+                const secondary = drivers[1] || {};
+
                 return {
-                    driverId,
-                    driver: driver ? driver.label : driverId,
-                    driverName: driver?.name || '',
+                    shiftType,
+                    driverId: primary.driverId || '',
+                    driver: primary.driver || '',
+                    driverName: primary.driverName || '',
+                    shiftId: primary.shiftId || '',
+                    shift: primary.shift || '',
+                    secondDriverId: secondary.driverId || '',
+                    secondDriver: secondary.driver || '',
+                    secondDriverName: secondary.driverName || '',
+                    secondShiftId: secondary.shiftId || '',
+                    secondShift: secondary.shift || '',
+                    drivers,
                     vehicleId,
                     vehicle: vehicle ? vehicle.label : vehicleId,
                     vehicleName: vehicle?.name || '',
+                    vehicleUsage: vehicle?.usage || '',
                     rate: Number($('.contractAsgRate', card)?.value || 0),
                     duty: Number($('.contractAsgDuty', card)?.value || 0),
                 };
@@ -9675,6 +10328,12 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             const invalidate = (element, message) => {
                 valid = false;
                 invalidateContractField(element, message);
+                const modal = element?.closest?.('.contract-double-shift-modal');
+                const card = modal?.closest?.('.contract-assignment-card');
+                const summaryButton = card ? $('.contractDoubleDriverOpen', card) : null;
+                if (summaryButton) {
+                    invalidateContractField(summaryButton, 'Complete both double-shift drivers and shifts.');
+                }
             };
 
             if (!String(row.contractId || '').trim()) invalidate($('#contractId'), 'Contract ID is required.');
@@ -9693,15 +10352,70 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 valid = false;
                 toast('Please add at least one vehicle and driver assignment.');
             }
+            const seenVehicleIds = new Map();
+            const seenDriverIds = new Map();
             assignmentCards.forEach((card) => {
-                const driver = $('.contractAsgDriver', card);
-                const vehicle = $('.contractAsgVehicle', card);
+                const vehicleSelect = $('.contractAsgVehicle', card);
+                const vehicleId = String(vehicleSelect?.value || '').trim();
+                const vehicle = vehicleById(vehicleId);
+                const shiftType = vehicle && isDoubleShiftVehicle(vehicle) ? 'Double' : 'Single';
                 const rate = $('.contractAsgRate', card);
                 const duty = $('.contractAsgDuty', card);
-                if (!driver?.value) invalidate(driver, 'Driver is required.');
-                if (!vehicle?.value) invalidate(vehicle, 'Vehicle is required.');
+
+                if (!vehicleId) invalidate(vehicleSelect, 'Vehicle is required.');
+                if (vehicleId && seenVehicleIds.has(vehicleId.toLowerCase())) {
+                    invalidate(vehicleSelect, 'Each vehicle can be assigned only once in a contract.');
+                    invalidate(seenVehicleIds.get(vehicleId.toLowerCase()), 'Each vehicle can be assigned only once in a contract.');
+                } else if (vehicleId) {
+                    seenVehicleIds.set(vehicleId.toLowerCase(), vehicleSelect);
+                }
                 if (!Number.isFinite(Number(rate?.value)) || Number(rate?.value) <= 0) invalidate(rate, 'Vehicle Hourly Rate must be greater than zero.');
                 if (!Number.isFinite(Number(duty?.value)) || Number(duty?.value) <= 0) invalidate(duty, 'Vehicle Duty Hour/Daily must be greater than zero.');
+
+                const driverSelects = shiftType === 'Double'
+                    ? [$('.contractPrimaryDriver', card), $('.contractSecondaryDriver', card)]
+                    : [$('.contractSingleDriver', card)];
+                const shiftSelects = shiftType === 'Double'
+                    ? [$('.contractPrimaryShift', card), $('.contractSecondaryShift', card)]
+                    : [];
+
+                const reserved = reservedDriverIds();
+                driverSelects.forEach((driverSelect, index) => {
+                    const driverId = String(driverSelect?.value || '').trim();
+                    if (!driverId) invalidate(driverSelect, shiftType === 'Double' ? `Driver ${index + 1} is required.` : 'Driver is required.');
+                    if (driverId && reserved.has(driverId.toLowerCase())) {
+                        invalidate(driverSelect, 'This driver is already assigned to another active contract.');
+                    } else if (driverId && seenDriverIds.has(driverId.toLowerCase())) {
+                        invalidate(driverSelect, 'This driver is already assigned elsewhere in this contract.');
+                        invalidate(seenDriverIds.get(driverId.toLowerCase()), 'This driver is already assigned elsewhere in this contract.');
+                    } else if (driverId) {
+                        seenDriverIds.set(driverId.toLowerCase(), driverSelect);
+                    }
+                });
+
+                const assignedPrimaryId = String(vehicle?.assignedDriverId || '').trim();
+                if (assignedPrimaryId && String(driverSelects[0]?.value || '') !== assignedPrimaryId) {
+                    invalidate(driverSelects[0], 'Use the driver currently assigned to this vehicle.');
+                }
+
+                if (shiftType === 'Double') {
+                    if (!(masters.shifts || []).length) {
+                        shiftSelects.forEach((shiftSelect) => invalidate(shiftSelect, 'Add active shifts from Master Data → Shifts first.'));
+                    }
+                    shiftSelects.forEach((shiftSelect, index) => {
+                        if (!String(shiftSelect?.value || '').trim()) invalidate(shiftSelect, `Shift ${index + 1} is required.`);
+                    });
+                    if (driverSelects[0]?.value && driverSelects[0].value === driverSelects[1]?.value) {
+                        invalidate(driverSelects[1], 'The two shifts must use different drivers.');
+                    }
+                    if (shiftSelects[0]?.value && shiftSelects[0].value === shiftSelects[1]?.value) {
+                        invalidate(shiftSelects[1], 'Select a different shift for each driver.');
+                    }
+                    const assignedSecondDriverId = String(vehicle?.assignedSecondDriverId || '').trim();
+                    if (assignedSecondDriverId && String(driverSelects[1]?.value || '') !== assignedSecondDriverId) {
+                        invalidate(driverSelects[1], 'Use the second driver currently assigned to this vehicle.');
+                    }
+                }
             });
 
             const documentCards = $$('.contract-doc-card');
@@ -9827,6 +10541,47 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             return 'soft';
         }
 
+        function contractDriverCount(row) {
+            const driverIds = [];
+            (row.assignments || []).forEach((assignment) => {
+                if (Array.isArray(assignment.drivers) && assignment.drivers.length) {
+                    assignment.drivers.forEach((driver) => {
+                        const id = driver?.driverId || driver?.driver;
+                        if (id) driverIds.push(String(id));
+                    });
+                } else {
+                    const id = assignment.driverId || assignment.driver;
+                    if (id) driverIds.push(String(id));
+                    const secondId = assignment.secondDriverId || assignment.secondDriver;
+                    if (secondId) driverIds.push(String(secondId));
+                }
+            });
+            return new Set(driverIds.map((id) => id.toLowerCase())).size;
+        }
+
+        function contractAssignmentSummary(row) {
+            const assignments = Array.isArray(row?.assignments) ? row.assignments : [];
+            if (!assignments.length) return '<span class="hint">Not assigned</span>';
+
+            return `<div class="contract-list-assignment-summary">${assignments.map((assignment) => {
+                const vehicleName = assignment.vehicleName || vehicleById(assignment.vehicleId)?.name || assignment.vehicle || assignment.vehicleId || '-';
+                const vehicleCode = assignment.vehicleId || '';
+                const drivers = Array.isArray(assignment.drivers) && assignment.drivers.length
+                    ? assignment.drivers
+                    : [
+                        { driverId: assignment.driverId, driverName: assignment.driverName, driver: assignment.driver, shiftName: assignment.shiftName, shift: assignment.shift },
+                        { driverId: assignment.secondDriverId, driverName: assignment.secondDriverName, driver: assignment.secondDriver, shiftName: assignment.secondShiftName, shift: assignment.secondShift },
+                    ].filter((driver) => driver.driverId || driver.driverName || driver.driver);
+                const driverText = drivers.map((driver) => {
+                    const name = driver.driverName || driverById(driver.driverId)?.name || driver.driver || driver.driverId || '-';
+                    const shift = driver.shiftName || driver.shift || '';
+                    return `${escapeHtml(name)}${shift ? ` <small>(${escapeHtml(shift)})</small>` : ''}`;
+                }).join('<br>');
+
+                return `<div class="contract-list-assignment-item"><b>${escapeHtml(vehicleName)}</b>${vehicleCode ? `<small>${escapeHtml(vehicleCode)}</small>` : ''}<span>${driverText || 'No driver'}</span></div>`;
+            }).join('')}</div>`;
+        }
+
         function renderList() {
             const items = filteredContracts();
             const totalVehicles = items.reduce((sum, row) => sum + (row.assignments || []).length, 0);
@@ -9854,12 +10609,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                         <td>${formatDate(row.contractStart)}</td>
                         <td>${formatDate(row.contractEnd)}</td>
                         <td>${(row.assignments || []).length}</td>
-                        <td>${new Set((row.assignments || []).map((item) => item.driverId || item.driver)).size}</td>
+                        <td>${contractDriverCount(row)}</td>
+                        <td>${contractAssignmentSummary(row)}</td>
                         <td>${(row.documents || []).length}</td>
                         <td>${window.FleetmanExpiringDocuments.html(row.documents || [])}</td>
                         <td><span class="badge ${badgeClass(row.savedAs)}">${escapeHtml(row.savedAs || '-')}</span></td>
                         <td><button class="mini-btn view-contract" type="button" data-id="${escapeHtml(row.contractId)}">View</button><button class="mini-btn edit-contract" type="button" data-id="${escapeHtml(row.contractId)}">Edit</button><button class="mini-btn danger delete-contract" type="button" data-id="${escapeHtml(row.contractId)}">Delete</button></td>
-                    </tr>`).join('') : '<tr><td colspan="14"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
+                    </tr>`).join('') : '<tr><td colspan="15"><div class="contract-empty">No contract found for the selected filters.</div></td></tr>';
             }
 
             const cards = $('#contractMobileCards');
@@ -9874,6 +10630,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                             <div><b>Start</b><br>${formatDate(row.contractStart)}</div>
                             <div><b>End</b><br>${formatDate(row.contractEnd)}</div>
                             <div><b>Assignments</b><br>${(row.assignments || []).length}</div>
+                            <div class="contract-mobile-assignment-summary"><b>Vehicle &amp; Driver</b>${contractAssignmentSummary(row)}</div>
                             <div><b>Documents</b><br>${(row.documents || []).length}</div>
                             <div class="contract-expiring-mobile"><b>Expiring Documents</b>${window.FleetmanExpiringDocuments.html(row.documents || [], { limit: 2 })}</div>
                         </div>
@@ -9948,8 +10705,8 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         function exportContracts() {
             downloadCsv('fleetman-contract-list.csv', [
-                ['Contract ID', 'Contract With', 'Party Name', 'Amount', 'Status', 'Start Date', 'End Date', 'Assignments', 'Documents', 'Saved As', 'Details'],
-                ...contracts.map((row) => [row.contractId, row.contractWith, row.partyName, row.amount, row.status, row.contractStart, row.contractEnd, (row.assignments || []).length, (row.documents || []).length, row.savedAs, row.details]),
+                ['Contract ID', 'Contract With', 'Party Name', 'Amount', 'Status', 'Start Date', 'End Date', 'Assignments', 'Assigned Vehicles & Drivers', 'Documents', 'Saved As', 'Details'],
+                ...contracts.map((row) => [row.contractId, row.contractWith, row.partyName, row.amount, row.status, row.contractStart, row.contractEnd, (row.assignments || []).length, (row.assignments || []).map((assignment) => `${assignment.vehicleName || assignment.vehicle || assignment.vehicleId}: ${(assignment.drivers || []).map((driver) => driver.driverName || driver.driver || driver.driverId).join(' / ') || assignment.driverName || assignment.driver || assignment.driverId}`).join(' | '), (row.documents || []).length, row.savedAs, row.details]),
             ]);
         }
 
@@ -9977,6 +10734,18 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 if (documentCard) refreshContractDocumentOptions();
             }
 
+            const doubleDriverOpen = event.target.closest('.contractDoubleDriverOpen');
+            if (doubleDriverOpen) {
+                const card = doubleDriverOpen.closest('.contract-assignment-card');
+                if (card && !doubleDriverOpen.disabled) openDoubleDriverModal(card);
+            }
+
+            const doubleDriverClose = event.target.closest('[data-close-double-driver-modal]');
+            if (doubleDriverClose) {
+                const card = doubleDriverClose.closest('.contract-assignment-card');
+                if (card) closeDoubleDriverModal(card);
+            }
+
             const pageBtn = event.target.closest('[data-contract-page]');
             if (pageBtn) {
                 currentPage = Number(pageBtn.dataset.contractPage || 1);
@@ -9991,6 +10760,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
             const del = event.target.closest('.delete-contract');
             if (del) deleteContract(del.dataset.id, del);
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            const openModal = $('.contract-double-shift-modal:not(.hidden)');
+            const card = openModal?.closest('.contract-assignment-card');
+            if (card) closeDoubleDriverModal(card);
         });
 
         $('#contractParty')?.addEventListener('change', () => {
@@ -10014,14 +10790,22 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         $('#contractCreatePage')?.addEventListener('input', (event) => {
             const changedField = event.target.closest('input, select, textarea');
             if (changedField) clearContractFieldError(changedField);
+            if (changedField?.matches('#contractStart, #contractEnd')) refreshContractAssignmentOptions();
         });
 
         document.addEventListener('change', (event) => {
             const changedField = event.target.closest('#contractCreatePage input, #contractCreatePage select, #contractCreatePage textarea');
             if (changedField) clearContractFieldError(changedField);
 
-            const assignmentSelect = event.target.closest('#contractAssignments .contractAsgDriver, #contractAssignments .contractAsgVehicle');
-            if (assignmentSelect) refreshContractAssignmentOptions();
+            const assignmentSelect = event.target.closest('#contractAssignments .contractAsgDriver, #contractAssignments .contractAsgVehicle, #contractAssignments .contractAsgShift');
+            if (assignmentSelect) {
+                const isVehicle = assignmentSelect.classList.contains('contractAsgVehicle');
+                if (isVehicle) {
+                    const card = assignmentSelect.closest('.contract-assignment-card');
+                    $$('.contractAsgDriver, .contractAsgShift', card).forEach((field) => { field.value = ''; field.disabled = false; });
+                }
+                refreshContractAssignmentOptions();
+            }
 
             const documentName = event.target.closest('#contractDocuments .contractDocName');
             if (documentName) refreshContractDocumentOptions();

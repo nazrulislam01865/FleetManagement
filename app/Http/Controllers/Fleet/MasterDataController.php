@@ -9,6 +9,7 @@ use App\Models\Fleet\FleetDriverContactType;
 use App\Models\Fleet\FleetLicenceType;
 use App\Models\Fleet\FleetPartyType;
 use App\Models\Fleet\FleetPaymentType;
+use App\Models\Fleet\FleetShift;
 use App\Models\Fleet\FleetVendorContractorType;
 use App\Models\Fleet\FleetVehicleCategory;
 use App\Models\Fleet\FleetVehicleSubCategory;
@@ -155,6 +156,28 @@ class MasterDataController extends FleetBaseController
         ]));
     }
 
+    public function shifts(Request $request): View
+    {
+        $editingShift = null;
+        $editingId = $request->integer('edit');
+
+        if ($editingId > 0) {
+            $editingShift = FleetShift::query()->find($editingId);
+        }
+
+        return view('fleetman.master-data.shifts', $this->masterViewData('master-data-shifts', [
+            'page' => 'master-data',
+            'masterSection' => 'shifts',
+            'masterTitle' => 'Shift Master',
+            'masterSubtitle' => 'Manage the duty shifts used for double-shift vehicle assignments in contracts.',
+            'shiftRows' => $this->modelsWithCreator(
+                FleetShift::query()->orderBy('sort_order')->orderBy('name')->get(),
+                'master.shifts'
+            ),
+            'editingShift' => $editingShift,
+        ]));
+    }
+
     public function vendorContractorTypes(Request $request): View
     {
         $editingVendorContractorType = null;
@@ -265,6 +288,51 @@ class MasterDataController extends FleetBaseController
         return redirect()
             ->route('fleet.master-data.payment-types')
             ->with('success', 'Payment type deleted successfully.');
+    }
+
+    public function storeShift(Request $request): RedirectResponse
+    {
+        $validated = $this->validateShift($request);
+
+        $record = FleetShift::query()->create($validated);
+        app(FleetRecordOwnershipService::class)->claimRecord(
+            'master.shifts',
+            (string) $record->code,
+            (int) $request->user()->id
+        );
+
+        return redirect()
+            ->route('fleet.master-data.shifts')
+            ->with('success', 'Shift created successfully.');
+    }
+
+    public function updateShift(Request $request, FleetShift $shift): RedirectResponse
+    {
+        $oldCode = (string) $shift->code;
+        $validated = $this->validateShift($request, $shift);
+
+        $shift->update($validated);
+        app(FleetRecordOwnershipService::class)->moveRecord(
+            'master.shifts',
+            $oldCode,
+            (string) $shift->code,
+            (int) $request->user()->id
+        );
+
+        return redirect()
+            ->route('fleet.master-data.shifts')
+            ->with('success', 'Shift updated successfully.');
+    }
+
+    public function destroyShift(FleetShift $shift): RedirectResponse
+    {
+        $code = (string) $shift->code;
+        $shift->delete();
+        app(FleetRecordOwnershipService::class)->forgetRecord('master.shifts', $code);
+
+        return redirect()
+            ->route('fleet.master-data.shifts')
+            ->with('success', 'Shift deleted successfully.');
     }
 
     public function saveDocumentName(Request $request): JsonResponse
@@ -459,6 +527,7 @@ class MasterDataController extends FleetBaseController
             'fuel_types' => $this->masterRows(FleetFuelType::class),
             'fuel_units' => $this->masterRows(FleetFuelUnit::class),
             'payment_types' => $this->masterRows(FleetPaymentType::class),
+            'shifts' => Schema::hasTable('fleet_shifts') ? $this->masterRows(FleetShift::class) : [],
             'vendor_contractor_types' => Schema::hasTable('fleet_vendor_contractor_types') ? $this->masterRows(FleetVendorContractorType::class) : [],
         ];
     }
@@ -570,6 +639,7 @@ class MasterDataController extends FleetBaseController
             FleetFuelType::class => 'master.fuel_types',
             FleetFuelUnit::class => 'master.fuel_units',
             FleetPaymentType::class => 'master.payment_types',
+            FleetShift::class => 'master.shifts',
             FleetVendorContractorType::class => 'master.vendor_contractor_types',
             default => 'master.unknown',
         };
@@ -908,6 +978,46 @@ class MasterDataController extends FleetBaseController
         return [
             'name' => trim($validated['name']),
             'code' => $validated['code'],
+            'sort_order' => max(0, (int) ($validated['sort_order'] ?? 0)),
+            'is_active' => $validated['status'] === 'Active',
+            'description' => trim((string) ($validated['description'] ?? '')) ?: null,
+        ];
+    }
+
+    private function validateShift(Request $request, ?FleetShift $shift = null): array
+    {
+        $normalizedCode = $this->codeFrom((string) ($request->input('code') ?: $request->input('name', '')));
+        $request->merge(['code' => $normalizedCode]);
+
+        $uniqueCode = Rule::unique('fleet_shifts', 'code');
+        if ($shift !== null) {
+            $uniqueCode->ignore($shift->id);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'code' => [
+                'required',
+                'string',
+                'max:120',
+                'regex:/^[A-Z0-9_]+$/',
+                $uniqueCode,
+            ],
+            'start_time' => ['nullable', 'date_format:H:i'],
+            'end_time' => ['nullable', 'date_format:H:i'],
+            'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'status' => ['required', Rule::in(['Active', 'Inactive'])],
+            'description' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'code.unique' => 'This shift code is already in use.',
+            'code.regex' => 'The code may contain only letters, numbers, and underscores.',
+        ]);
+
+        return [
+            'name' => trim($validated['name']),
+            'code' => $validated['code'],
+            'start_time' => $validated['start_time'] ?? null,
+            'end_time' => $validated['end_time'] ?? null,
             'sort_order' => max(0, (int) ($validated['sort_order'] ?? 0)),
             'is_active' => $validated['status'] === 'Active',
             'description' => trim((string) ($validated['description'] ?? '')) ?: null,

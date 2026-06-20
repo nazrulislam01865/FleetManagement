@@ -61,6 +61,11 @@
                 >
                 <datalist id="vehicleSelectList"></datalist>
             </div>
+            <div class="field">
+                <label for="assignedFuelDriver">Assigned Driver (Current Shift)</label>
+                <input id="assignedFuelDriver" readonly value="" placeholder="Select contract and vehicle">
+                <small class="upload-meta" id="assignedFuelDriverShift">The assigned driver will appear automatically.</small>
+            </div>
         </div>
         <div class="vehicle-note" id="vehicleSetupNote">Select a contract first. Vehicle, driver, fuel setup and latest ODO will load from saved records.</div>
     </section>

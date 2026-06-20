@@ -217,13 +217,33 @@ class VehicleController extends FleetBaseController
             $row['id'] = trim((string) $row['id']);
             $row['regNo'] = strtoupper(trim((string) ($row['regNo'] ?? '')));
             $row['engineNo'] = strtoupper(trim((string) ($row['engineNo'] ?? '')));
-            $driver = trim((string) ($row['driver'] ?? ''));
+            $driver = trim((string) ($row['driver'] ?? $row['mainDriver'] ?? ''));
+            $secondDriver = trim((string) ($row['secondDriver'] ?? $row['driver2'] ?? $row['secondaryDriver'] ?? ''));
             $row['driver'] = $driver !== '' ? $driver : null;
             $row['rentalType'] = trim((string) ($row['rentalType'] ?? ''));
-            $row['driverPaymentAmount'] = round((float) ($row['driverPaymentAmount'] ?? 0), 2);
+            $isWithDriver = strcasecmp($row['rentalType'], 'With Driver') === 0;
+            $isDoubleShift = strcasecmp(trim((string) ($row['usage'] ?? '')), 'Double shift') === 0;
+            $row['secondDriver'] = $isWithDriver && $isDoubleShift && $secondDriver !== '' ? $secondDriver : null;
+            $driverPaymentAmount = $row['driverPaymentAmount'] ?? null;
+            $row['driverPaymentAmount'] = $isWithDriver && $driverPaymentAmount !== null && trim((string) $driverPaymentAmount) !== ''
+                ? round((float) $driverPaymentAmount, 2)
+                : null;
+            $row['driverPaymentCycle'] = $isWithDriver
+                ? (trim((string) ($row['driverPaymentCycle'] ?? '')) ?: null)
+                : null;
+            $secondDriverPaymentAmount = $row['secondDriverPaymentAmount'] ?? null;
+            $row['secondDriverPaymentAmount'] = $isWithDriver && $isDoubleShift
+                && $secondDriverPaymentAmount !== null && trim((string) $secondDriverPaymentAmount) !== ''
+                ? round((float) $secondDriverPaymentAmount, 2)
+                : null;
+            $row['secondDriverPaymentCycle'] = $isWithDriver && $isDoubleShift
+                ? (trim((string) ($row['secondDriverPaymentCycle'] ?? '')) ?: null)
+                : null;
             $row['vehicleRentalAmount'] = round((float) ($row['vehicleRentalAmount'] ?? $row['rent'] ?? 0), 2);
             $row['totalRentalAmount'] = round(
-                $row['vehicleRentalAmount'] + ($row['rentalType'] === 'With Driver' ? $row['driverPaymentAmount'] : 0),
+                $row['vehicleRentalAmount']
+                    + ($isWithDriver ? (float) $row['driverPaymentAmount'] : 0)
+                    + ($isWithDriver && $isDoubleShift ? (float) $row['secondDriverPaymentAmount'] : 0),
                 2
             );
             $row['rent'] = $row['totalRentalAmount'];
@@ -263,6 +283,9 @@ class VehicleController extends FleetBaseController
                 continue;
             }
 
+            $isWithDriver = strcasecmp(trim((string) ($row['rentalType'] ?? '')), 'With Driver') === 0;
+            $isDoubleShift = strcasecmp(trim((string) ($row['usage'] ?? '')), 'Double shift') === 0;
+
             $rules = [
                 'id' => ['required', 'string', 'max:100'],
                 'name' => ['required', 'string', 'max:255'],
@@ -277,9 +300,12 @@ class VehicleController extends FleetBaseController
                 'subCategory' => ['nullable', 'string', 'max:255'],
                 'usage' => ['required', Rule::in($usageTypes)],
                 'rentalType' => ['required', Rule::in(['With Driver', 'Without Driver'])],
-                'driver' => ['nullable', Rule::in($drivers)],
-                'driverPaymentAmount' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', 'numeric', 'min:0'],
-                'driverPaymentCycle' => [Rule::requiredIf(($row['rentalType'] ?? '') === 'With Driver'), 'nullable', Rule::in($paymentCycles)],
+                'driver' => [Rule::requiredIf($isWithDriver), 'nullable', Rule::in($drivers)],
+                'secondDriver' => [Rule::requiredIf($isWithDriver && $isDoubleShift), 'nullable', Rule::in($drivers)],
+                'driverPaymentAmount' => [Rule::requiredIf($isWithDriver), 'nullable', 'numeric', 'min:0'],
+                'driverPaymentCycle' => [Rule::requiredIf($isWithDriver), 'nullable', Rule::in($paymentCycles)],
+                'secondDriverPaymentAmount' => [Rule::requiredIf($isWithDriver && $isDoubleShift), 'nullable', 'numeric', 'min:0'],
+                'secondDriverPaymentCycle' => [Rule::requiredIf($isWithDriver && $isDoubleShift), 'nullable', Rule::in($paymentCycles)],
                 'vehicleRentalAmount' => ['required', 'numeric', 'min:0'],
                 'vehiclePaymentCycle' => ['required', Rule::in($paymentCycles)],
                 'totalRentalAmount' => ['required', 'numeric', 'min:0'],
@@ -297,11 +323,24 @@ class VehicleController extends FleetBaseController
                 'regNo.max' => 'Registration Number cannot be more than 25 characters.',
                 'regNo.not_regex' => 'Registration Number cannot contain these special characters: @ # $ % ^ & * ( ) ! ` ~.',
                 'vendor.in' => 'Select an active vehicle or driver service vendor / owner.',
-                'driver.in' => 'Select a valid driver.',
+                'driver.required' => 'Driver 1 is required when Rental Type is With Driver.',
+                'driver.in' => 'Select a valid Driver 1.',
+                'secondDriver.required' => 'Driver 2 is required for a double-shift vehicle rented With Driver.',
+                'secondDriver.in' => 'Select a valid Driver 2.',
+                'driverPaymentAmount.required' => 'Driver 1 Payment Amount is required.',
+                'driverPaymentCycle.required' => 'Driver 1 Payment Cycle is required.',
+                'secondDriverPaymentAmount.required' => 'Driver 2 Payment Amount is required.',
+                'secondDriverPaymentCycle.required' => 'Driver 2 Payment Cycle is required.',
             ]);
 
             foreach ($validator->errors()->messages() as $key => $messages) {
                 $errors["rows.{$index}.{$key}"] = $messages;
+            }
+
+            $primaryDriver = mb_strtolower(trim((string) ($row['driver'] ?? '')));
+            $secondaryDriver = mb_strtolower(trim((string) ($row['secondDriver'] ?? '')));
+            if ($primaryDriver !== '' && $secondaryDriver !== '' && $primaryDriver === $secondaryDriver) {
+                $errors["rows.{$index}.secondDriver"] = 'Driver 1 and Driver 2 must be different drivers.';
             }
 
             $fuelRows = collect($row['fuels'] ?? [])->filter(fn ($fuel) => is_array($fuel));
