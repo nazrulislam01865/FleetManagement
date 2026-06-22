@@ -1330,7 +1330,7 @@
         }
 
         function editTrip(id) {
-            const trip = trips.find((item) => item.tripId === id);
+            const trip = trips.find((item) => item.tripId === id || item._recordCode === id);
             if (!trip) return;
             loadTripIntoForm(trip);
             setVisible('tripAddPage');
@@ -1491,8 +1491,18 @@
         resetForm();
         renderList();
         window.FleetmanRecordApi?.registerInfinite('trips', () => trips, (rows) => { trips = rows; }, renderList);
-        if (window.location.search.includes('action=add')) setVisible('tripAddPage');
-        else setVisible('tripListPage');
+        const tripUrlParams = new URLSearchParams(window.location.search);
+        const requestedTripAction = tripUrlParams.get('action');
+        const requestedTripCode = tripUrlParams.get('code');
+        if (requestedTripAction === 'edit' && requestedTripCode) {
+            const requestedTrip = trips.find((trip) => String(trip._recordCode || trip.tripId || '') === requestedTripCode);
+            if (requestedTrip) editTrip(requestedTripCode);
+            else setVisible('tripListPage');
+        } else if (requestedTripAction === 'add') {
+            setVisible('tripAddPage');
+        } else {
+            setVisible('tripListPage');
+        }
     }
 
     function initDrivers() {

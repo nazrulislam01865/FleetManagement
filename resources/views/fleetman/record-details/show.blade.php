@@ -131,9 +131,10 @@
         'employees' => 'Single table-style detail view with clearer label and value separation, especially on mobile.',
         'contracts' => 'Clean contract view with grouped line-item tables, vertical assignment details, and document records.',
     ];
+    $showPageSubtitle = ! in_array($detailResource, ['vehicles', 'trips'], true);
 @endphp
 
-<div class="page-section fleet-record-detail-page">
+<div class="page-section fleet-record-detail-page fleet-record-detail-page-{{ str_replace('_', '-', $detailResource) }}">
     <x-fleetman.topbar :items="[
         ['label' => $detail['list_label'] ?? 'List', 'route' => $listRoute],
         ['label' => $detail['title'] ?? 'Record Details'],
@@ -142,7 +143,9 @@
     <div class="record-detail-page-header">
         <div class="record-detail-page-title">
             <h1>{{ $detail['title'] ?? 'Record Details' }}</h1>
-            <p>{{ $pageSubtitles[$detailResource] ?? 'Read-only details for the selected record.' }}</p>
+            @if ($showPageSubtitle)
+                <p>{{ $pageSubtitles[$detailResource] ?? 'Read-only details for the selected record.' }}</p>
+            @endif
         </div>
         <div class="record-detail-page-actions">
             <a href="{{ $listUrl }}" class="record-detail-secondary-btn">← {{ $detail['list_label'] ?? 'Back to List' }}</a>

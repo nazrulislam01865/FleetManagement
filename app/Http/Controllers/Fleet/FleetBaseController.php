@@ -94,7 +94,7 @@ abstract class FleetBaseController extends Controller
             'detailResource' => $this->resource,
         ];
 
-        $view = in_array($this->resource, ['drivers', 'employees', 'contracts'], true)
+        $view = in_array($this->resource, ['vehicles', 'trips', 'drivers', 'employees', 'contracts'], true)
             ? 'fleetman.record-details.show'
             : 'fleetman.record-view';
 
@@ -1539,6 +1539,8 @@ abstract class FleetBaseController extends Controller
         }
 
         $map = [
+            'vehicles' => ['vehicles', FleetVehicle::class, 'vehicles'],
+            'trips' => ['trips', FleetTrip::class, 'trips'],
             'drivers' => ['drivers', FleetDriver::class, 'drivers'],
             'employees' => ['employees', FleetEmployee::class, 'employees'],
             'contracts' => ['contracts', FleetContract::class, 'contracts'],

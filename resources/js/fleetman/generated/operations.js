@@ -905,7 +905,7 @@
         }
 
         function editVehicle(id) {
-            const vehicle = vehicles.find((item) => item.id === id);
+            const vehicle = vehicles.find((item) => item.id === id || item._recordCode === id);
             if (!vehicle) return;
             resetForm(false);
             setValue('#vehicleId', vehicle.id);
@@ -1185,7 +1185,13 @@
 
         renderTable();
         window.FleetmanRecordApi?.registerInfinite('vehicles', () => vehicles, (rows) => { vehicles = rows; }, renderTable);
-        if (vehicleUrlParams.get('action') === 'add') {
+        const requestedVehicleAction = vehicleUrlParams.get('action');
+        const requestedVehicleCode = vehicleUrlParams.get('code');
+        if (requestedVehicleAction === 'edit' && requestedVehicleCode) {
+            const requestedVehicle = vehicles.find((vehicle) => String(vehicle._recordCode || vehicle.id || '') === requestedVehicleCode);
+            if (requestedVehicle) editVehicle(requestedVehicleCode);
+            else setVisible('vehicleListPage');
+        } else if (requestedVehicleAction === 'add') {
             setVisible('vehicleAddPage');
         } else {
             setVisible('vehicleListPage');

@@ -1931,3 +1931,92 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
 .contract-double-shift-modal-actions{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid #e7edf5;background:#fbfcfe}
 .contract-double-shift-modal .field{margin:0}
 @media(max-width:700px){.contract-double-shift-modal{padding:0;align-items:stretch}.contract-double-shift-modal-panel{min-height:100vh;border-radius:0}.contract-double-shift-modal-head{padding:18px 16px}.contract-double-shift-modal-body{padding:18px 16px}.contract-double-shift-modal-grid{grid-template-columns:1fr}.contract-double-shift-modal-actions{position:sticky;bottom:0;padding:14px 16px}.contract-double-shift-modal-actions .btn{flex:1}}
+
+/* Exact full-width Vehicle and Trip detail templates. */
+.fleet-record-detail-page-vehicles,
+.fleet-record-detail-page-trips{--record-surface:#fff;--record-surface-soft:#f8fafc;--record-label-bg:#eaf3ff;--record-border:#e5edf6;--record-border-strong:#d5e2ef;--record-text:#102033;--record-muted:#66758a;--record-primary:#0066cc;--record-primary-soft:#eaf3ff;--record-success:#0f8a57;--record-success-soft:#e8f8ef;--record-warning:#b7791f;--record-warning-soft:#fff7e6;--record-danger:#b42318;--record-danger-soft:#fff1f0;--record-shadow:0 12px 28px rgba(15,23,42,.06);--record-radius-lg:18px}
+.fleet-record-detail-page-vehicles .record-detail-page-header,
+.fleet-record-detail-page-trips .record-detail-page-header{gap:14px;margin-bottom:14px}
+.fleet-record-detail-page-vehicles .record-detail-page-title h1,
+.fleet-record-detail-page-trips .record-detail-page-title h1{margin:0 0 5px;font-size:25px;letter-spacing:-.5px}
+.fleet-record-detail-page-vehicles .record-detail-page-title p,
+.fleet-record-detail-page-trips .record-detail-page-title p{font-size:13px}
+.fleet-record-detail-page-vehicles .record-detail-primary-btn,
+.fleet-record-detail-page-vehicles .record-detail-secondary-btn,
+.fleet-record-detail-page-trips .record-detail-primary-btn,
+.fleet-record-detail-page-trips .record-detail-secondary-btn{min-height:38px;border-radius:11px;padding:0 15px}
+.fleet-record-detail-page-vehicles .record-profile-summary,
+.fleet-record-detail-page-trips .record-profile-summary{grid-template-columns:70px minmax(0,1fr) auto;gap:16px;padding:16px;margin-bottom:16px;border-radius:18px;box-shadow:var(--record-shadow)}
+.fleet-record-detail-page-vehicles .record-profile-photo,
+.fleet-record-detail-page-trips .record-profile-photo{width:70px;height:70px;border-radius:16px}
+.fleet-record-detail-page-vehicles .record-vehicle-icon,
+.fleet-record-detail-page-trips .record-trip-icon{display:grid;place-items:center;font-size:32px;overflow:visible}
+.fleet-record-detail-page-vehicles .record-vehicle-icon{background:linear-gradient(135deg,#eaf3ff,#ecfff2)}
+.fleet-record-detail-page-trips .record-trip-icon{background:linear-gradient(135deg,#eaf3ff,#fff7e6)}
+.fleet-record-detail-page-vehicles .record-summary-main h2,
+.fleet-record-detail-page-trips .record-summary-main h2{font-size:22px;letter-spacing:-.35px}
+.fleet-record-detail-page-vehicles .record-summary-main p,
+.fleet-record-detail-page-trips .record-summary-main p{margin-bottom:9px;font-size:13px}
+.fleet-record-detail-page-vehicles .record-tags,
+.fleet-record-detail-page-trips .record-tags{gap:7px}
+.fleet-record-detail-page-vehicles .record-tag,
+.fleet-record-detail-page-trips .record-tag{min-height:25px;padding:0 9px;font-size:11px}
+.record-tag.danger{background:var(--record-danger-soft,#fff1f0);color:var(--record-danger,#b42318)}
+.fleet-record-detail-page-vehicles .record-summary-stats,
+.fleet-record-detail-page-trips .record-summary-stats{grid-template-columns:repeat(2,minmax(135px,1fr));gap:9px;min-width:350px}
+.fleet-record-detail-page-vehicles .record-summary-stat,
+.fleet-record-detail-page-trips .record-summary-stat{border-radius:12px;padding:9px 11px}
+.fleet-record-detail-page-vehicles .record-summary-stat label,
+.fleet-record-detail-page-trips .record-summary-stat label{font-size:10px;margin-bottom:5px}
+.fleet-record-detail-page-vehicles .record-summary-stat div,
+.fleet-record-detail-page-trips .record-summary-stat div{font-size:13px}
+.fleet-record-detail-page-vehicles .record-detail-card,
+.fleet-record-detail-page-trips .record-detail-card{border-radius:18px;box-shadow:0 10px 22px rgba(15,23,42,.04);margin-bottom:14px}
+.fleet-record-detail-page-vehicles .record-card-header,
+.fleet-record-detail-page-trips .record-card-header{padding:14px 18px}
+.fleet-record-detail-page-vehicles .record-card-icon,
+.fleet-record-detail-page-trips .record-card-icon{width:34px;height:34px;border-radius:11px;font-size:16px}
+.fleet-record-detail-page-vehicles .record-card-header h3,
+.fleet-record-detail-page-trips .record-card-header h3{font-size:16px}
+.fleet-record-detail-page-vehicles .record-card-header p,
+.fleet-record-detail-page-trips .record-card-header p{font-size:12px}
+.fleet-record-detail-page-vehicles .record-table-section,
+.fleet-record-detail-page-trips .record-table-section{padding:14px 18px 16px}
+.fleet-record-detail-page-vehicles .record-sub-title,
+.fleet-record-detail-page-trips .record-sub-title{margin-bottom:9px;font-size:13px}
+.fleet-record-detail-page-vehicles .record-sub-title::before,
+.fleet-record-detail-page-trips .record-sub-title::before{height:14px}
+.fleet-record-detail-page-vehicles .record-info-table,
+.fleet-record-detail-page-trips .record-info-table{border-radius:14px;margin-bottom:14px}
+.fleet-record-detail-page-vehicles .record-info-table th,
+.fleet-record-detail-page-vehicles .record-info-table td,
+.fleet-record-detail-page-trips .record-info-table th,
+.fleet-record-detail-page-trips .record-info-table td{padding:11px 14px;font-size:13px;line-height:1.42}
+.fleet-record-detail-page-vehicles .record-info-table th,
+.fleet-record-detail-page-trips .record-info-table th{width:235px;font-size:11px}
+.fleet-record-detail-page-vehicles .record-assignment-card,
+.fleet-record-detail-page-trips .record-assignment-card{border-radius:14px}
+.fleet-record-detail-page-vehicles .record-fuel-card{margin-bottom:12px}
+.fleet-record-detail-page-vehicles .record-fuel-card:last-child{margin-bottom:0}
+.fleet-record-detail-page-vehicles .record-assignment-title,
+.fleet-record-detail-page-trips .record-assignment-title{padding:11px 14px;font-size:13px}
+.fleet-record-detail-page-vehicles .record-file-table,
+.fleet-record-detail-page-trips .record-file-table{border-radius:14px}
+.fleet-record-detail-page-vehicles .record-file-table th,
+.fleet-record-detail-page-trips .record-file-table th{padding:11px 13px;font-size:11px}
+.fleet-record-detail-page-vehicles .record-file-table td,
+.fleet-record-detail-page-trips .record-file-table td{padding:12px 13px;font-size:13px}
+.fleet-record-detail-page-vehicles .record-open-btn,
+.fleet-record-detail-page-trips .record-open-btn{min-height:32px;padding:0 12px;border-radius:10px}
+.record-payment-pill{display:inline-flex;align-items:center;min-height:24px;padding:0 9px;border-radius:999px;font-size:11px;font-weight:800}
+.record-payment-pill.success{background:var(--record-success-soft);color:var(--record-success)}
+.record-payment-pill.warning{background:var(--record-warning-soft);color:var(--record-warning)}
+.record-payment-pill.danger{background:var(--record-danger-soft,#fff1f0);color:var(--record-danger,#b42318)}
+.record-template-empty-state{border:1px dashed #cbd5e1;border-radius:14px;padding:20px;color:var(--record-muted);background:var(--record-surface-soft);text-align:center;font-weight:500}
+.record-vehicle-image-panel{display:grid;grid-template-columns:minmax(220px,440px) minmax(0,1fr);gap:16px;align-items:center;border:1px solid var(--record-border-strong);border-radius:14px;padding:14px;background:var(--record-surface-soft)}
+.record-vehicle-image-panel>a{display:block;border-radius:12px;overflow:hidden;background:#fff;border:1px solid var(--record-border)}
+.record-vehicle-image-panel img{display:block;width:100%;max-height:340px;object-fit:contain;background:#fff}
+.record-vehicle-image-panel>div{display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-width:0}
+.record-vehicle-image-panel strong{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+@media(max-width:1180px){.fleet-record-detail-page-vehicles .record-profile-summary,.fleet-record-detail-page-trips .record-profile-summary{grid-template-columns:70px minmax(0,1fr)}.fleet-record-detail-page-vehicles .record-summary-stats,.fleet-record-detail-page-trips .record-summary-stats{grid-column:1/-1;width:100%;min-width:0}}
+@media(max-width:700px){.fleet-record-detail-page-vehicles .record-profile-summary,.fleet-record-detail-page-trips .record-profile-summary{grid-template-columns:1fr}.fleet-record-detail-page-vehicles .record-profile-photo,.fleet-record-detail-page-trips .record-profile-photo{width:70px;height:70px}.fleet-record-detail-page-vehicles .record-summary-stats,.fleet-record-detail-page-trips .record-summary-stats{grid-template-columns:1fr}.fleet-record-detail-page-vehicles .record-table-section,.fleet-record-detail-page-trips .record-table-section{padding:14px}.record-vehicle-image-panel{grid-template-columns:1fr}.record-vehicle-image-panel>div{align-items:stretch}.record-vehicle-image-panel .record-open-btn{width:100%}}

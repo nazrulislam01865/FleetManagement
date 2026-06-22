@@ -1994,7 +1994,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function editVehicle(id) {
-            const vehicle = vehicles.find((item) => item.id === id);
+            const vehicle = vehicles.find((item) => item.id === id || item._recordCode === id);
             if (!vehicle) return;
             resetForm(false);
             setValue('#vehicleId', vehicle.id);
@@ -2274,7 +2274,13 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
 
         renderTable();
         window.FleetmanRecordApi?.registerInfinite('vehicles', () => vehicles, (rows) => { vehicles = rows; }, renderTable);
-        if (vehicleUrlParams.get('action') === 'add') {
+        const requestedVehicleAction = vehicleUrlParams.get('action');
+        const requestedVehicleCode = vehicleUrlParams.get('code');
+        if (requestedVehicleAction === 'edit' && requestedVehicleCode) {
+            const requestedVehicle = vehicles.find((vehicle) => String(vehicle._recordCode || vehicle.id || '') === requestedVehicleCode);
+            if (requestedVehicle) editVehicle(requestedVehicleCode);
+            else setVisible('vehicleListPage');
+        } else if (requestedVehicleAction === 'add') {
             setVisible('vehicleAddPage');
         } else {
             setVisible('vehicleListPage');
@@ -5595,7 +5601,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         }
 
         function editTrip(id) {
-            const trip = trips.find((item) => item.tripId === id);
+            const trip = trips.find((item) => item.tripId === id || item._recordCode === id);
             if (!trip) return;
             loadTripIntoForm(trip);
             setVisible('tripAddPage');
@@ -5756,8 +5762,18 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
         resetForm();
         renderList();
         window.FleetmanRecordApi?.registerInfinite('trips', () => trips, (rows) => { trips = rows; }, renderList);
-        if (window.location.search.includes('action=add')) setVisible('tripAddPage');
-        else setVisible('tripListPage');
+        const tripUrlParams = new URLSearchParams(window.location.search);
+        const requestedTripAction = tripUrlParams.get('action');
+        const requestedTripCode = tripUrlParams.get('code');
+        if (requestedTripAction === 'edit' && requestedTripCode) {
+            const requestedTrip = trips.find((trip) => String(trip._recordCode || trip.tripId || '') === requestedTripCode);
+            if (requestedTrip) editTrip(requestedTripCode);
+            else setVisible('tripListPage');
+        } else if (requestedTripAction === 'add') {
+            setVisible('tripAddPage');
+        } else {
+            setVisible('tripListPage');
+        }
     }
 
     function initDrivers() {
