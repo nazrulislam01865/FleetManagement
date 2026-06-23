@@ -2020,3 +2020,66 @@ a.mini-btn{display:inline-flex;align-items:center;justify-content:center;text-de
 .record-vehicle-image-panel strong{font-size:13px;line-height:1.5;overflow-wrap:anywhere}
 @media(max-width:1180px){.fleet-record-detail-page-vehicles .record-profile-summary,.fleet-record-detail-page-trips .record-profile-summary{grid-template-columns:70px minmax(0,1fr)}.fleet-record-detail-page-vehicles .record-summary-stats,.fleet-record-detail-page-trips .record-summary-stats{grid-column:1/-1;width:100%;min-width:0}}
 @media(max-width:700px){.fleet-record-detail-page-vehicles .record-profile-summary,.fleet-record-detail-page-trips .record-profile-summary{grid-template-columns:1fr}.fleet-record-detail-page-vehicles .record-profile-photo,.fleet-record-detail-page-trips .record-profile-photo{width:70px;height:70px}.fleet-record-detail-page-vehicles .record-summary-stats,.fleet-record-detail-page-trips .record-summary-stats{grid-template-columns:1fr}.fleet-record-detail-page-vehicles .record-table-section,.fleet-record-detail-page-trips .record-table-section{padding:14px}.record-vehicle-image-panel{grid-template-columns:1fr}.record-vehicle-image-panel>div{align-items:stretch}.record-vehicle-image-panel .record-open-btn{width:100%}}
+
+/* Template-matched Fuel Recharge details page with square evidence photos. */
+.fleet-record-detail-page-fuel-recharges .record-detail-page-title h1{margin:0 0 5px;font-size:25px;letter-spacing:-.5px}
+.fleet-record-detail-page-fuel-recharges .record-detail-page-title p{font-size:13px}
+.fleet-record-detail-page-fuel-recharges .record-detail-primary-btn,
+.fleet-record-detail-page-fuel-recharges .record-detail-secondary-btn{min-height:38px;border-radius:11px;padding:0 15px}
+.fleet-record-detail-page-fuel-recharges .record-profile-summary{grid-template-columns:70px minmax(0,1fr) auto;gap:16px;padding:16px;margin-bottom:16px;border-radius:18px;box-shadow:var(--record-shadow)}
+.fleet-record-detail-page-fuel-recharges .record-profile-photo{width:70px;height:70px;border-radius:16px}
+.fleet-record-detail-page-fuel-recharges .record-fuel-icon{display:grid;place-items:center;font-size:32px;overflow:visible;background:linear-gradient(135deg,#eaf3ff,#fff7e6)}
+.fleet-record-detail-page-fuel-recharges .record-summary-main h2{font-size:22px;letter-spacing:-.35px}
+.fleet-record-detail-page-fuel-recharges .record-summary-main p{margin-bottom:9px;font-size:13px}
+.fleet-record-detail-page-fuel-recharges .record-tags{gap:7px}
+.fleet-record-detail-page-fuel-recharges .record-tag{min-height:25px;padding:0 9px;font-size:11px}
+.fleet-record-detail-page-fuel-recharges .record-summary-stats{grid-template-columns:repeat(2,minmax(135px,1fr));gap:9px;min-width:350px}
+.fleet-record-detail-page-fuel-recharges .record-summary-stat{border-radius:12px;padding:9px 11px}
+.fleet-record-detail-page-fuel-recharges .record-summary-stat label{font-size:10px;margin-bottom:5px}
+.fleet-record-detail-page-fuel-recharges .record-summary-stat div{font-size:13px}
+.fleet-record-detail-page-fuel-recharges .record-detail-card{border-radius:18px;box-shadow:0 10px 22px rgba(15,23,42,.04);margin-bottom:14px}
+.fleet-record-detail-page-fuel-recharges .record-card-header{padding:14px 18px}
+.fleet-record-detail-page-fuel-recharges .record-card-icon,
+.fleet-record-detail-page-fuel-recharges .record-step-no{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:var(--record-primary-soft);color:var(--record-primary);font-size:12px;font-weight:900;flex:0 0 auto}
+.fleet-record-detail-page-fuel-recharges .record-step-no{border-radius:999px}
+.fleet-record-detail-page-fuel-recharges .record-card-header h3{font-size:16px}
+.fleet-record-detail-page-fuel-recharges .record-card-header p{font-size:12px}
+.fleet-record-detail-page-fuel-recharges .record-table-section{padding:14px 18px 16px}
+.fleet-record-detail-page-fuel-recharges .record-sub-title{margin-bottom:9px;font-size:13px}
+.fleet-record-detail-page-fuel-recharges .record-sub-title::before{height:14px}
+.fleet-record-detail-page-fuel-recharges .record-info-table{border-radius:14px;margin-bottom:14px}
+.fleet-record-detail-page-fuel-recharges .record-info-table th,
+.fleet-record-detail-page-fuel-recharges .record-info-table td{padding:11px 14px;font-size:13px;line-height:1.42}
+.fleet-record-detail-page-fuel-recharges .record-info-table th{width:235px;font-size:11px}
+.record-fuel-photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.record-fuel-photo-card{border:1px solid var(--record-border-strong);border-radius:14px;overflow:hidden;background:#fff;min-width:0}
+.record-fuel-photo-title{padding:11px 14px;background:var(--record-primary-soft);color:var(--record-primary);font-size:13px;font-weight:850;border-bottom:1px solid var(--record-border)}
+.record-fuel-photo-table{width:100%;border-collapse:separate;border-spacing:0;table-layout:auto}
+.record-fuel-photo-table th,.record-fuel-photo-table td{padding:10px 12px;text-align:left;vertical-align:top;line-height:1.4;border-bottom:1px solid var(--record-border)}
+.record-fuel-photo-table th{width:120px;background:var(--record-label-bg);color:#3f5572;font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.5px;border-right:1px solid var(--record-border);white-space:nowrap}
+.record-fuel-photo-table td{color:var(--record-text);font-size:12.5px;font-weight:500;background:#fff;overflow-wrap:anywhere}
+.record-fuel-photo-preview{padding:12px;background:var(--record-surface-soft);display:grid;grid-template-columns:180px minmax(0,1fr);gap:12px;align-items:start}
+.record-fuel-photo-link{display:block;width:180px;aspect-ratio:1/1;border-radius:12px;overflow:hidden;background:#fff;border:1px solid var(--record-border-strong)}
+.record-fuel-photo-link img{display:block;width:100%;height:100%;object-fit:cover}
+.record-fuel-photo-meta{font-size:12px;color:var(--record-muted);line-height:1.5;padding-top:4px;display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0}
+.record-fuel-photo-meta strong{color:var(--record-text);font-size:12px;overflow-wrap:anywhere}
+.record-fuel-photo-preview>.record-template-empty-state{grid-column:1/-1;width:100%}
+@media(max-width:1180px){
+    .fleet-record-detail-page-fuel-recharges .record-profile-summary{grid-template-columns:70px minmax(0,1fr)}
+    .fleet-record-detail-page-fuel-recharges .record-summary-stats{grid-column:1/-1;width:100%;min-width:0}
+}
+@media(max-width:700px){
+    .fleet-record-detail-page-fuel-recharges .record-profile-summary{grid-template-columns:1fr}
+    .fleet-record-detail-page-fuel-recharges .record-profile-photo{width:70px;height:70px}
+    .fleet-record-detail-page-fuel-recharges .record-summary-stats{grid-template-columns:1fr}
+    .fleet-record-detail-page-fuel-recharges .record-table-section{padding:14px}
+    .record-fuel-photo-grid{grid-template-columns:1fr}
+    .record-fuel-photo-preview{grid-template-columns:1fr}
+    .record-fuel-photo-link{width:100%;aspect-ratio:1/1}
+    .record-fuel-photo-meta{align-items:stretch}
+    .record-fuel-photo-meta .record-open-btn{width:100%}
+    .record-fuel-photo-table,.record-fuel-photo-table tbody,.record-fuel-photo-table tr,.record-fuel-photo-table th,.record-fuel-photo-table td{display:block;width:100%}
+    .record-fuel-photo-table tr{border-bottom:1px solid var(--record-border)}
+    .record-fuel-photo-table th{border-right:0;border-bottom:1px solid #d9e6f3;background:var(--record-primary-soft);color:#0059b3;font-size:10.5px;font-weight:900;letter-spacing:.6px}
+    .record-fuel-photo-table td{font-size:14.5px;color:var(--record-text)}
+}

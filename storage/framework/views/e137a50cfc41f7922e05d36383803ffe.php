@@ -128,6 +128,7 @@
         'drivers' => 'Clean driver profile view with grouped information and table-style line items.',
         'employees' => 'Single table-style detail view with clearer label and value separation, especially on mobile.',
         'contracts' => 'Clean contract view with grouped line-item tables, vertical assignment details, and document records.',
+        'fuel_recharges' => 'Detail view organized following the fuel recharge input form sequence.',
     ];
     $showPageSubtitle = ! in_array($detailResource, ['vehicles', 'trips'], true);
 ?>
