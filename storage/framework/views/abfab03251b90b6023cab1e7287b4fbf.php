@@ -78,13 +78,13 @@
     $driverId = $recordPayload['driverId'] ?? $record->driver_code ?? null;
     $rechargeDate = $recordPayload['date'] ?? $record->recharge_date ?? null;
 
+    $photos = is_array($recordPayload['photos'] ?? null) ? $recordPayload['photos'] : [];
     $photoDefinitions = [
         'vehicle' => 'Vehicle Photo',
-        'fuel' => 'Fuel / Dispenser Photo',
-        'odo' => 'ODO Meter Photo',
+        'odo' => 'Odometer Photo',
+        'fuel' => 'Fuel Dispenser Photo',
         'other' => 'Other Photo',
     ];
-    $photos = is_array($recordPayload['photos'] ?? null) ? $recordPayload['photos'] : [];
 ?>
 
 <section class="record-profile-summary record-fuel-recharge-summary">
@@ -146,7 +146,7 @@
 
 <section class="record-detail-card">
     <div class="record-card-header">
-        <div class="record-card-header-left"><div class="record-step-no">02</div><div><h3>Photo Evidence</h3><p>Captured vehicle, fuel, ODO meter and other photo evidence.</p></div></div>
+        <div class="record-card-header-left"><div class="record-step-no">02</div><div><h3>Photo Evidence</h3><p>Captured vehicle, odometer, fuel dispenser and other photo evidence.</p></div></div>
     </div>
     <div class="record-table-section">
         <div class="record-fuel-photo-grid">

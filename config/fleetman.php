@@ -422,9 +422,9 @@ return [
     ],
 
     'photo_requirements' => [
-        ['key' => 'vehicle', 'title' => '1. Vehicle Photo', 'description' => 'Take a photo of the vehicle.', 'icon' => '🚗', 'required' => true],
-        ['key' => 'fuel', 'title' => '2. Fuel / Dispenser Photo', 'description' => 'Take a photo of the fuel dispenser or fueling.', 'icon' => '⛽', 'required' => true],
-        ['key' => 'odo', 'title' => '3. ODO Meter Photo', 'description' => 'Take a clear photo of the meter reading.', 'icon' => '📟', 'required' => true],
+        ['key' => 'vehicle', 'title' => '1. Vehicle Photo', 'description' => 'Take a clear photo of the vehicle.', 'icon' => '🚗', 'required' => true],
+        ['key' => 'odo', 'title' => '2. Odometer Photo', 'description' => 'Take a clear photo of the odometer reading.', 'icon' => '📟', 'required' => true],
+        ['key' => 'fuel', 'title' => '3. Fuel Dispenser Photo', 'description' => 'Take a clear photo of the fuel dispenser.', 'icon' => '⛽', 'required' => true],
         ['key' => 'other', 'title' => '4. Other Photo', 'description' => 'Optional. Use only if extra proof is needed.', 'icon' => '📎', 'required' => false],
     ],
 

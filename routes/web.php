@@ -485,6 +485,8 @@ Route::prefix('fleet')->name('fleet.')->middleware(['auth', EnsureFleetDeleteAcc
             ->name('release-tracker.form');
         Route::post('/release-tracker', [ReleaseTrackerController::class, 'store'])
             ->name('release-tracker.store');
+        Route::get('/release-tracker/{release}/edit', [ReleaseTrackerController::class, 'edit'])
+            ->name('release-tracker.edit');
         Route::put('/release-tracker/{release}', [ReleaseTrackerController::class, 'update'])
             ->name('release-tracker.update');
         Route::delete('/release-tracker/{release}', [ReleaseTrackerController::class, 'destroy'])

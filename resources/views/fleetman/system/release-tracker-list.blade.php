@@ -25,6 +25,8 @@
         ]];
     });
 
+    $isSuperAdmin = auth()->user()?->isFleetSuperAdmin() ?? false;
+
     $statusBadge = static fn (string $status): string => match ($status) {
         'released' => 'ok',
         'scheduled' => 'soft',
@@ -36,8 +38,8 @@
 <div class="page-section release-tracker-page">
     <x-fleetman.topbar :items="[['label' => 'System'], ['label' => 'Release Tracker / Notes'], ['label' => 'Release List']]">
         <x-slot:actions>
-            <span class="badge soft">Read Only</span>
-            @if(auth()->user()?->isFleetSuperAdmin())
+            <span class="badge {{ $isSuperAdmin ? 'danger' : 'soft' }}">{{ $isSuperAdmin ? 'Super Admin Management' : 'Read Only' }}</span>
+            @if($isSuperAdmin)
                 <a href="{{ route('fleet.release-tracker.form') }}" class="btn primary">Add Release</a>
             @endif
         </x-slot:actions>
@@ -63,7 +65,7 @@
         <div class="section-head">
             <div>
                 <h2>Release History</h2>
-                <p>Newest release date appears first. This page is view-only for every user.</p>
+                <p>{{ $isSuperAdmin ? 'Newest release date appears first. Super Admin can add and edit release entries.' : 'Newest release date appears first. This page is view-only for your account.' }}</p>
             </div>
             <span class="badge soft">{{ $releases->count() }} result{{ $releases->count() === 1 ? '' : 's' }}</span>
         </div>
@@ -140,7 +142,12 @@
                             <td>{{ optional($release->release_date)->format('d M Y') }}</td>
                             <td><span class="badge soft">{{ $release->environmentLabel() }}</span></td>
                             <td><span class="badge {{ $statusBadge($release->status) }}">{{ $release->statusLabel() }}</span></td>
-                            <td><button type="button" class="mini-btn" data-release-view="{{ $release->id }}">View</button></td>
+                            <td>
+                                <button type="button" class="mini-btn" data-release-view="{{ $release->id }}">View</button>
+                                @if($isSuperAdmin)
+                                    <a href="{{ route('fleet.release-tracker.edit', $release) }}" class="mini-btn">Edit</a>
+                                @endif
+                            </td>
                         </tr>
                     @empty
                         <tr><td colspan="9" class="empty">No release entries found.</td></tr>
@@ -168,6 +175,9 @@
                     </div>
                     <div class="release-mobile-actions">
                         <button type="button" class="mini-btn" data-release-view="{{ $release->id }}">View</button>
+                        @if($isSuperAdmin)
+                            <a href="{{ route('fleet.release-tracker.edit', $release) }}" class="mini-btn">Edit</a>
+                        @endif
                     </div>
                 </article>
             @empty

@@ -64,22 +64,12 @@ class ReleaseTrackerController extends FleetBaseController
 
     public function create(): View
     {
-        $activeUsers = User::query()
-            ->with('fleetRole:id,name,slug,is_active')
-            ->where('account_status', User::ACCOUNT_STATUS_ACTIVE)
-            ->whereHas('fleetRole', fn ($query) => $query->where('is_active', true))
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'fleet_role_id']);
+        return $this->releaseFormView();
+    }
 
-        return view('fleetman.system.release-tracker-form', array_merge($this->shared('release-tracker-form', [
-            'page' => $this->page,
-        ]), [
-            'counts' => $this->releaseCounts(),
-            'activeUsers' => $activeUsers,
-            'issueTypeOptions' => FleetRelease::issueTypeOptions(),
-            'statusOptions' => FleetRelease::statusOptions(),
-            'environmentOptions' => FleetRelease::environmentOptions(),
-        ]));
+    public function edit(FleetRelease $release): View
+    {
+        return $this->releaseFormView($release);
     }
 
     public function store(Request $request): RedirectResponse
@@ -118,6 +108,27 @@ class ReleaseTrackerController extends FleetBaseController
         return redirect()
             ->route('fleet.release-tracker')
             ->with('status', "Release {$version} deleted successfully.");
+    }
+
+    private function releaseFormView(?FleetRelease $release = null): View
+    {
+        $activeUsers = User::query()
+            ->with('fleetRole:id,name,slug,is_active')
+            ->where('account_status', User::ACCOUNT_STATUS_ACTIVE)
+            ->whereHas('fleetRole', fn ($query) => $query->where('is_active', true))
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'fleet_role_id']);
+
+        return view('fleetman.system.release-tracker-form', array_merge($this->shared('release-tracker-form', [
+            'page' => $this->page,
+        ]), [
+            'release' => $release,
+            'counts' => $this->releaseCounts(),
+            'activeUsers' => $activeUsers,
+            'issueTypeOptions' => FleetRelease::issueTypeOptions(),
+            'statusOptions' => FleetRelease::statusOptions(),
+            'environmentOptions' => FleetRelease::environmentOptions(),
+        ]));
     }
 
     private function releaseCounts(): array
