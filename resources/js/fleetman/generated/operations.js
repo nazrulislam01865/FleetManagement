@@ -2086,6 +2086,92 @@
             }
         }
 
+        const fuelPhotoUploadSettings = {
+            maxDimension: 1600,
+            jpegQuality: 0.72,
+            maxBytes: 8 * 1024 * 1024,
+        };
+
+        function fuelPhotoDimensions(width, height, maxDimension = fuelPhotoUploadSettings.maxDimension) {
+            const safeWidth = Math.max(1, Number(width || 0));
+            const safeHeight = Math.max(1, Number(height || 0));
+            const longest = Math.max(safeWidth, safeHeight);
+            const scale = longest > maxDimension ? maxDimension / longest : 1;
+
+            return {
+                width: Math.max(1, Math.round(safeWidth * scale)),
+                height: Math.max(1, Math.round(safeHeight * scale)),
+            };
+        }
+
+        function canvasToJpegBlob(canvas, quality = fuelPhotoUploadSettings.jpegQuality) {
+            return new Promise((resolve) => {
+                if (!canvas?.toBlob) {
+                    resolve(null);
+                    return;
+                }
+                canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality);
+            });
+        }
+
+        function imageElementFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(file);
+                const image = new Image();
+                image.onload = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(image);
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('The captured photo could not be prepared. Please retake it.'));
+                };
+                image.src = url;
+            });
+        }
+
+        function optimizedFuelPhotoName(file, key = 'fuel-photo') {
+            const baseName = String(file?.name || key || 'fuel-photo')
+                .replace(/\.[^.]+$/, '')
+                .replace(/[^a-zA-Z0-9_-]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'fuel-photo';
+
+            return `${baseName}-${Date.now()}.jpg`;
+        }
+
+        async function optimizeFuelRechargePhoto(file, key = 'fuel-photo') {
+            if (!file || !String(file.type || '').toLowerCase().startsWith('image/')) return file;
+            if (String(file.type || '').toLowerCase() === 'image/svg+xml') return file;
+
+            try {
+                const image = await imageElementFromFile(file);
+                const sourceWidth = image.naturalWidth || image.width;
+                const sourceHeight = image.naturalHeight || image.height;
+                if (!sourceWidth || !sourceHeight) return file;
+
+                const dimensions = fuelPhotoDimensions(sourceWidth, sourceHeight);
+                const canvas = document.createElement('canvas');
+                canvas.width = dimensions.width;
+                canvas.height = dimensions.height;
+                const context = canvas.getContext('2d', { alpha: false });
+                if (!context) return file;
+
+                context.drawImage(image, 0, 0, dimensions.width, dimensions.height);
+                const blob = await canvasToJpegBlob(canvas);
+                if (!blob) return file;
+
+                const optimizedFile = new File([blob], optimizedFuelPhotoName(file, key), {
+                    type: 'image/jpeg',
+                    lastModified: Date.now(),
+                });
+
+                return optimizedFile.size > 0 ? optimizedFile : file;
+            } catch (error) {
+                console.warn('Fuel recharge photo optimization failed. Uploading original file.', error);
+                return file;
+            }
+        }
+
         function requestCurrentPlace() {
             return new Promise((resolve) => {
                 if (!navigator.geolocation) {
@@ -2383,12 +2469,23 @@
             if (!card) return;
             if (photoState[key]?.preview) URL.revokeObjectURL(photoState[key].preview);
 
+            const hidden = $('.photoTempFile', card);
+            const info = $('.photo-upload-info', card);
+            const progress = $('.photoUploadProgress', card);
+            uploadManager.render({
+                info,
+                progress,
+                file: { uploading: true, progress: 0 },
+                message: 'Optimizing photo for faster mobile upload...',
+            });
+
+            const uploadFile = await optimizeFuelRechargePhoto(file, key);
             const capturedAt = new Date();
-            const preview = URL.createObjectURL(file);
+            const preview = URL.createObjectURL(uploadFile);
             photoState[key] = {
                 ...(photoState[key] || {}),
                 captured: true,
-                file,
+                file: uploadFile,
                 fileData: {},
                 preview,
                 capturedAt: capturedAt.toISOString(),
@@ -2399,16 +2496,20 @@
             updateCounter();
             clearRechargePhotoError(key);
 
-            const hidden = $('.photoTempFile', card);
             const uploadPromise = uploadManager.upload(null, {
-                file,
+                file: uploadFile,
+                kind: 'image',
+                queue: true,
+                queueKey: 'fuel-recharge-photos',
+                queueConcurrency: 2,
+                timeoutMs: 120000,
                 promiseTarget: card,
                 hidden,
-                info: $('.photo-upload-info', card),
-                progress: $('.photoUploadProgress', card),
+                info,
+                progress,
                 extensions: ['jpg', 'jpeg', 'png', 'webp'],
                 imageOnly: true,
-                maxBytes: 8 * 1024 * 1024,
+                maxBytes: fuelPhotoUploadSettings.maxBytes,
                 showPreview: false,
                 onSuccess: (uploaded) => {
                     photoState[key] = { ...(photoState[key] || {}), fileData: uploaded };
@@ -2443,9 +2544,10 @@
             }
 
             const key = activeCameraKey;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const context = canvas.getContext('2d');
+            const dimensions = fuelPhotoDimensions(video.videoWidth, video.videoHeight);
+            canvas.width = dimensions.width;
+            canvas.height = dimensions.height;
+            const context = canvas.getContext('2d', { alpha: false });
             if (!context) {
                 toast('Could not prepare the camera image. Please try the device camera option.');
                 return;
@@ -2456,10 +2558,10 @@
                     toast('Could not capture photo. Please try again.');
                     return;
                 }
-                const file = new File([blob], `${key}-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                const file = new File([blob], `${key}-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
                 closeCamera();
                 await saveCapturedPhoto(key, file);
-            }, 'image/jpeg', 0.9);
+            }, 'image/jpeg', fuelPhotoUploadSettings.jpegQuality);
         }
 
         function updatePhotoCard(key) {
@@ -2514,6 +2616,7 @@
                 $('.retake-btn', card)?.addEventListener('click', () => openCamera(key));
                 $('.clear-btn', card)?.addEventListener('click', () => {
                     if (photoState[key]?.preview) URL.revokeObjectURL(photoState[key].preview);
+                    card._fleetUploadSequence = Number(card._fleetUploadSequence || 0) + 1;
                     const hidden = $('.photoTempFile', card);
                     const previous = uploadManager.readHidden(hidden);
                     if (previous.tempToken) uploadManager.destroy(previous.tempToken).catch(() => {});
@@ -2584,6 +2687,7 @@
             Object.keys(photoState).forEach((key) => {
                 if (photoState[key]?.preview) URL.revokeObjectURL(photoState[key].preview);
                 const card = $(`.photo-card[data-key="${String(key).replace(/[^a-zA-Z0-9_-]/g, '')}"]`);
+                if (card) card._fleetUploadSequence = Number(card._fleetUploadSequence || 0) + 1;
                 const hidden = $('.photoTempFile', card);
                 const previous = uploadManager.readHidden(hidden);
                 if (previous.tempToken) uploadManager.destroy(previous.tempToken).catch(() => {});

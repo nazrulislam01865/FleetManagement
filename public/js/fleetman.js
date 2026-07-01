@@ -778,6 +778,50 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         return response.message || Object.values(response.errors || {}).flat().join(' ') || fallback;
     }
 
+    function uploadStatusMessage(status, fallback) {
+        if (status === 0) return 'The upload failed because the server could not be reached. Please check the mobile network and try again.';
+        if (status === 413) return 'The photo is too large for the server. Please retake the photo a little closer and try again.';
+        if (status === 419) return 'Your secure session expired while uploading. Please refresh the page and try again.';
+        if (status === 422) return fallback || 'The selected file was rejected by the server. Please retake the photo and try again.';
+        if (status === 429) return 'Too many uploads are happening right now. Please wait a moment and try again.';
+        if ([500, 502, 503, 504].includes(Number(status))) return 'The server was busy while receiving the photo. Please try again.';
+        return fallback || 'The file could not be uploaded.';
+    }
+
+    function createUploadError(status, message) {
+        const error = new Error(uploadStatusMessage(Number(status || 0), message));
+        error.status = Number(status || 0);
+        return error;
+    }
+
+    const uploadQueues = Object.create(null);
+
+    function enqueueUpload(queueKey, task, concurrency = 1) {
+        const key = String(queueKey || 'default');
+        const limit = Math.max(1, Math.min(4, Number(concurrency || 1)));
+        const state = uploadQueues[key] || (uploadQueues[key] = { active: 0, pending: [], limit });
+        state.limit = limit;
+
+        return new Promise((resolve, reject) => {
+            const runNext = () => {
+                while (state.active < state.limit && state.pending.length) {
+                    const next = state.pending.shift();
+                    state.active += 1;
+                    Promise.resolve()
+                        .then(next.task)
+                        .then(next.resolve, next.reject)
+                        .finally(() => {
+                            state.active = Math.max(0, state.active - 1);
+                            runNext();
+                        });
+                }
+            };
+
+            state.pending.push({ task, resolve, reject });
+            runNext();
+        });
+    }
+
     function randomUploadId() {
         if (window.crypto?.randomUUID) return window.crypto.randomUUID().toLowerCase();
         return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`.toLowerCase();
@@ -840,21 +884,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 formData.append('upload_scope', uploadScope());
                 formData.append('chunk', chunk, `${file.name}.part${index}`);
 
-                let lastError = null;
-                for (let attempt = 0; attempt < 2; attempt += 1) {
-                    try {
-                        await requestChunk(formData, (loaded) => {
-                            payload.progress = ((start + loaded) / file.size) * 100;
-                            render({ info: options.info, progress: options.progress, file: payload });
-                        });
-                        lastError = null;
-                        break;
-                    } catch (error) {
-                        lastError = error;
-                        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
-                    }
-                }
-                if (lastError) throw lastError;
+                await requestChunk(formData, (loaded) => {
+                    payload.progress = ((start + loaded) / file.size) * 100;
+                    render({ info: options.info, progress: options.progress, file: payload });
+                });
 
                 payload.progress = (end / file.size) * 100;
                 render({ info: options.info, progress: options.progress, file: payload });
@@ -882,13 +915,14 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
     }
 
-    function uploadSingle(file, options, payload) {
+    function uploadSingleAttempt(file, options, payload) {
         const endpoint = resources().store;
         if (!endpoint) return Promise.reject(new Error('Temporary upload service is unavailable.'));
 
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', endpoint, true);
+            xhr.timeout = Number(options.timeoutMs || 120000);
             xhr.setRequestHeader('Accept', 'application/json');
             xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken());
             xhr.setRequestHeader('X-Fleet-Upload-Scope', uploadScope());
@@ -901,18 +935,24 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 let response = {};
                 try { response = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
                 if (xhr.status < 200 || xhr.status >= 300 || !response.file) {
-                    reject(new Error(responseMessage(response, 'The file could not be uploaded.')));
+                    reject(createUploadError(xhr.status, responseMessage(response, 'The file could not be uploaded.')));
                     return;
                 }
                 resolve(response.file);
             });
-            xhr.addEventListener('error', () => reject(new Error('The upload failed because the server could not be reached.')));
+            xhr.addEventListener('error', () => reject(createUploadError(0, '')));
+            xhr.addEventListener('timeout', () => reject(createUploadError(0, 'The upload timed out. Please check the mobile network and try again.')));
+            xhr.addEventListener('abort', () => reject(createUploadError(0, 'The upload was cancelled before it finished.')));
             const formData = new FormData();
             formData.append('file', file);
             formData.append('upload_kind', options.kind || 'generic');
             formData.append('upload_scope', uploadScope());
             xhr.send(formData);
         });
+    }
+
+    function uploadSingle(file, options, payload) {
+        return uploadSingleAttempt(file, options, payload);
     }
 
     function upload(input, options = {}) {
@@ -929,8 +969,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             return Promise.resolve(null);
         }
 
-        const sequence = input ? Number(input._fleetUploadSequence || 0) + 1 : 1;
-        if (input) input._fleetUploadSequence = sequence;
+        const sequenceTarget = input || options.promiseTarget || null;
+        const sequence = sequenceTarget ? Number(sequenceTarget._fleetUploadSequence || 0) + 1 : 1;
+        if (sequenceTarget) sequenceTarget._fleetUploadSequence = sequence;
 
         const previous = readHidden(hidden);
         if (previous.tempToken) destroy(previous.tempToken).catch(() => {});
@@ -942,11 +983,13 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             && Boolean(resources().chunk_store)
             && Boolean(resources().chunk_complete);
 
-        const promise = (useChunkedDocumentUpload
+        const startUpload = () => (useChunkedDocumentUpload
             ? uploadInChunks(file, options, payload)
-            : uploadSingle(file, options, payload))
+            : uploadSingle(file, options, payload));
+
+        const promise = (options.queue ? enqueueUpload(options.queueKey || options.kind || 'temporary-upload', startUpload, options.queueConcurrency || options.concurrency || 1) : startUpload())
             .then((uploaded) => {
-                if (input && input._fleetUploadSequence !== sequence) {
+                if (sequenceTarget && sequenceTarget._fleetUploadSequence !== sequence) {
                     if (uploaded?.tempToken) destroy(uploaded.tempToken).catch(() => {});
                     return null;
                 }
@@ -956,7 +999,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 return uploaded;
             })
             .catch((error) => {
-                if (input && input._fleetUploadSequence !== sequence) return null;
+                if (sequenceTarget && sequenceTarget._fleetUploadSequence !== sequence) return null;
                 const message = error?.message || 'The file could not be uploaded.';
                 writeHidden(hidden, {});
                 render({ info, progress, message, error: true });
@@ -3175,6 +3218,92 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
         }
 
+        const fuelPhotoUploadSettings = {
+            maxDimension: 1600,
+            jpegQuality: 0.72,
+            maxBytes: 8 * 1024 * 1024,
+        };
+
+        function fuelPhotoDimensions(width, height, maxDimension = fuelPhotoUploadSettings.maxDimension) {
+            const safeWidth = Math.max(1, Number(width || 0));
+            const safeHeight = Math.max(1, Number(height || 0));
+            const longest = Math.max(safeWidth, safeHeight);
+            const scale = longest > maxDimension ? maxDimension / longest : 1;
+
+            return {
+                width: Math.max(1, Math.round(safeWidth * scale)),
+                height: Math.max(1, Math.round(safeHeight * scale)),
+            };
+        }
+
+        function canvasToJpegBlob(canvas, quality = fuelPhotoUploadSettings.jpegQuality) {
+            return new Promise((resolve) => {
+                if (!canvas?.toBlob) {
+                    resolve(null);
+                    return;
+                }
+                canvas.toBlob((blob) => resolve(blob), 'image/jpeg', quality);
+            });
+        }
+
+        function imageElementFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(file);
+                const image = new Image();
+                image.onload = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(image);
+                };
+                image.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('The captured photo could not be prepared. Please retake it.'));
+                };
+                image.src = url;
+            });
+        }
+
+        function optimizedFuelPhotoName(file, key = 'fuel-photo') {
+            const baseName = String(file?.name || key || 'fuel-photo')
+                .replace(/\.[^.]+$/, '')
+                .replace(/[^a-zA-Z0-9_-]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'fuel-photo';
+
+            return `${baseName}-${Date.now()}.jpg`;
+        }
+
+        async function optimizeFuelRechargePhoto(file, key = 'fuel-photo') {
+            if (!file || !String(file.type || '').toLowerCase().startsWith('image/')) return file;
+            if (String(file.type || '').toLowerCase() === 'image/svg+xml') return file;
+
+            try {
+                const image = await imageElementFromFile(file);
+                const sourceWidth = image.naturalWidth || image.width;
+                const sourceHeight = image.naturalHeight || image.height;
+                if (!sourceWidth || !sourceHeight) return file;
+
+                const dimensions = fuelPhotoDimensions(sourceWidth, sourceHeight);
+                const canvas = document.createElement('canvas');
+                canvas.width = dimensions.width;
+                canvas.height = dimensions.height;
+                const context = canvas.getContext('2d', { alpha: false });
+                if (!context) return file;
+
+                context.drawImage(image, 0, 0, dimensions.width, dimensions.height);
+                const blob = await canvasToJpegBlob(canvas);
+                if (!blob) return file;
+
+                const optimizedFile = new File([blob], optimizedFuelPhotoName(file, key), {
+                    type: 'image/jpeg',
+                    lastModified: Date.now(),
+                });
+
+                return optimizedFile.size > 0 ? optimizedFile : file;
+            } catch (error) {
+                console.warn('Fuel recharge photo optimization failed. Uploading original file.', error);
+                return file;
+            }
+        }
+
         function requestCurrentPlace() {
             return new Promise((resolve) => {
                 if (!navigator.geolocation) {
@@ -3472,12 +3601,23 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             if (!card) return;
             if (photoState[key]?.preview) URL.revokeObjectURL(photoState[key].preview);
 
+            const hidden = $('.photoTempFile', card);
+            const info = $('.photo-upload-info', card);
+            const progress = $('.photoUploadProgress', card);
+            uploadManager.render({
+                info,
+                progress,
+                file: { uploading: true, progress: 0 },
+                message: 'Optimizing photo for faster mobile upload...',
+            });
+
+            const uploadFile = await optimizeFuelRechargePhoto(file, key);
             const capturedAt = new Date();
-            const preview = URL.createObjectURL(file);
+            const preview = URL.createObjectURL(uploadFile);
             photoState[key] = {
                 ...(photoState[key] || {}),
                 captured: true,
-                file,
+                file: uploadFile,
                 fileData: {},
                 preview,
                 capturedAt: capturedAt.toISOString(),
@@ -3488,16 +3628,20 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             updateCounter();
             clearRechargePhotoError(key);
 
-            const hidden = $('.photoTempFile', card);
             const uploadPromise = uploadManager.upload(null, {
-                file,
+                file: uploadFile,
+                kind: 'image',
+                queue: true,
+                queueKey: 'fuel-recharge-photos',
+                queueConcurrency: 2,
+                timeoutMs: 120000,
                 promiseTarget: card,
                 hidden,
-                info: $('.photo-upload-info', card),
-                progress: $('.photoUploadProgress', card),
+                info,
+                progress,
                 extensions: ['jpg', 'jpeg', 'png', 'webp'],
                 imageOnly: true,
-                maxBytes: 8 * 1024 * 1024,
+                maxBytes: fuelPhotoUploadSettings.maxBytes,
                 showPreview: false,
                 onSuccess: (uploaded) => {
                     photoState[key] = { ...(photoState[key] || {}), fileData: uploaded };
@@ -3532,9 +3676,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             }
 
             const key = activeCameraKey;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const context = canvas.getContext('2d');
+            const dimensions = fuelPhotoDimensions(video.videoWidth, video.videoHeight);
+            canvas.width = dimensions.width;
+            canvas.height = dimensions.height;
+            const context = canvas.getContext('2d', { alpha: false });
             if (!context) {
                 toast('Could not prepare the camera image. Please try the device camera option.');
                 return;
@@ -3545,10 +3690,10 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                     toast('Could not capture photo. Please try again.');
                     return;
                 }
-                const file = new File([blob], `${key}-${Date.now()}.jpg`, { type: 'image/jpeg' });
+                const file = new File([blob], `${key}-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
                 closeCamera();
                 await saveCapturedPhoto(key, file);
-            }, 'image/jpeg', 0.9);
+            }, 'image/jpeg', fuelPhotoUploadSettings.jpegQuality);
         }
 
         function updatePhotoCard(key) {
@@ -3603,6 +3748,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
                 $('.retake-btn', card)?.addEventListener('click', () => openCamera(key));
                 $('.clear-btn', card)?.addEventListener('click', () => {
                     if (photoState[key]?.preview) URL.revokeObjectURL(photoState[key].preview);
+                    card._fleetUploadSequence = Number(card._fleetUploadSequence || 0) + 1;
                     const hidden = $('.photoTempFile', card);
                     const previous = uploadManager.readHidden(hidden);
                     if (previous.tempToken) uploadManager.destroy(previous.tempToken).catch(() => {});
@@ -3673,6 +3819,7 @@ window.FleetmanDocumentRows = window.FleetmanDocumentRows || (() => {
             Object.keys(photoState).forEach((key) => {
                 if (photoState[key]?.preview) URL.revokeObjectURL(photoState[key].preview);
                 const card = $(`.photo-card[data-key="${String(key).replace(/[^a-zA-Z0-9_-]/g, '')}"]`);
+                if (card) card._fleetUploadSequence = Number(card._fleetUploadSequence || 0) + 1;
                 const hidden = $('.photoTempFile', card);
                 const previous = uploadManager.readHidden(hidden);
                 if (previous.tempToken) uploadManager.destroy(previous.tempToken).catch(() => {});

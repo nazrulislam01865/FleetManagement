@@ -778,6 +778,50 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         return response.message || Object.values(response.errors || {}).flat().join(' ') || fallback;
     }
 
+    function uploadStatusMessage(status, fallback) {
+        if (status === 0) return 'The upload failed because the server could not be reached. Please check the mobile network and try again.';
+        if (status === 413) return 'The photo is too large for the server. Please retake the photo a little closer and try again.';
+        if (status === 419) return 'Your secure session expired while uploading. Please refresh the page and try again.';
+        if (status === 422) return fallback || 'The selected file was rejected by the server. Please retake the photo and try again.';
+        if (status === 429) return 'Too many uploads are happening right now. Please wait a moment and try again.';
+        if ([500, 502, 503, 504].includes(Number(status))) return 'The server was busy while receiving the photo. Please try again.';
+        return fallback || 'The file could not be uploaded.';
+    }
+
+    function createUploadError(status, message) {
+        const error = new Error(uploadStatusMessage(Number(status || 0), message));
+        error.status = Number(status || 0);
+        return error;
+    }
+
+    const uploadQueues = Object.create(null);
+
+    function enqueueUpload(queueKey, task, concurrency = 1) {
+        const key = String(queueKey || 'default');
+        const limit = Math.max(1, Math.min(4, Number(concurrency || 1)));
+        const state = uploadQueues[key] || (uploadQueues[key] = { active: 0, pending: [], limit });
+        state.limit = limit;
+
+        return new Promise((resolve, reject) => {
+            const runNext = () => {
+                while (state.active < state.limit && state.pending.length) {
+                    const next = state.pending.shift();
+                    state.active += 1;
+                    Promise.resolve()
+                        .then(next.task)
+                        .then(next.resolve, next.reject)
+                        .finally(() => {
+                            state.active = Math.max(0, state.active - 1);
+                            runNext();
+                        });
+                }
+            };
+
+            state.pending.push({ task, resolve, reject });
+            runNext();
+        });
+    }
+
     function randomUploadId() {
         if (window.crypto?.randomUUID) return window.crypto.randomUUID().toLowerCase();
         return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`.toLowerCase();
@@ -840,21 +884,10 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 formData.append('upload_scope', uploadScope());
                 formData.append('chunk', chunk, `${file.name}.part${index}`);
 
-                let lastError = null;
-                for (let attempt = 0; attempt < 2; attempt += 1) {
-                    try {
-                        await requestChunk(formData, (loaded) => {
-                            payload.progress = ((start + loaded) / file.size) * 100;
-                            render({ info: options.info, progress: options.progress, file: payload });
-                        });
-                        lastError = null;
-                        break;
-                    } catch (error) {
-                        lastError = error;
-                        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
-                    }
-                }
-                if (lastError) throw lastError;
+                await requestChunk(formData, (loaded) => {
+                    payload.progress = ((start + loaded) / file.size) * 100;
+                    render({ info: options.info, progress: options.progress, file: payload });
+                });
 
                 payload.progress = (end / file.size) * 100;
                 render({ info: options.info, progress: options.progress, file: payload });
@@ -882,13 +915,14 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
         }
     }
 
-    function uploadSingle(file, options, payload) {
+    function uploadSingleAttempt(file, options, payload) {
         const endpoint = resources().store;
         if (!endpoint) return Promise.reject(new Error('Temporary upload service is unavailable.'));
 
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', endpoint, true);
+            xhr.timeout = Number(options.timeoutMs || 120000);
             xhr.setRequestHeader('Accept', 'application/json');
             xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken());
             xhr.setRequestHeader('X-Fleet-Upload-Scope', uploadScope());
@@ -901,18 +935,24 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 let response = {};
                 try { response = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
                 if (xhr.status < 200 || xhr.status >= 300 || !response.file) {
-                    reject(new Error(responseMessage(response, 'The file could not be uploaded.')));
+                    reject(createUploadError(xhr.status, responseMessage(response, 'The file could not be uploaded.')));
                     return;
                 }
                 resolve(response.file);
             });
-            xhr.addEventListener('error', () => reject(new Error('The upload failed because the server could not be reached.')));
+            xhr.addEventListener('error', () => reject(createUploadError(0, '')));
+            xhr.addEventListener('timeout', () => reject(createUploadError(0, 'The upload timed out. Please check the mobile network and try again.')));
+            xhr.addEventListener('abort', () => reject(createUploadError(0, 'The upload was cancelled before it finished.')));
             const formData = new FormData();
             formData.append('file', file);
             formData.append('upload_kind', options.kind || 'generic');
             formData.append('upload_scope', uploadScope());
             xhr.send(formData);
         });
+    }
+
+    function uploadSingle(file, options, payload) {
+        return uploadSingleAttempt(file, options, payload);
     }
 
     function upload(input, options = {}) {
@@ -929,8 +969,9 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             return Promise.resolve(null);
         }
 
-        const sequence = input ? Number(input._fleetUploadSequence || 0) + 1 : 1;
-        if (input) input._fleetUploadSequence = sequence;
+        const sequenceTarget = input || options.promiseTarget || null;
+        const sequence = sequenceTarget ? Number(sequenceTarget._fleetUploadSequence || 0) + 1 : 1;
+        if (sequenceTarget) sequenceTarget._fleetUploadSequence = sequence;
 
         const previous = readHidden(hidden);
         if (previous.tempToken) destroy(previous.tempToken).catch(() => {});
@@ -942,11 +983,13 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
             && Boolean(resources().chunk_store)
             && Boolean(resources().chunk_complete);
 
-        const promise = (useChunkedDocumentUpload
+        const startUpload = () => (useChunkedDocumentUpload
             ? uploadInChunks(file, options, payload)
-            : uploadSingle(file, options, payload))
+            : uploadSingle(file, options, payload));
+
+        const promise = (options.queue ? enqueueUpload(options.queueKey || options.kind || 'temporary-upload', startUpload, options.queueConcurrency || options.concurrency || 1) : startUpload())
             .then((uploaded) => {
-                if (input && input._fleetUploadSequence !== sequence) {
+                if (sequenceTarget && sequenceTarget._fleetUploadSequence !== sequence) {
                     if (uploaded?.tempToken) destroy(uploaded.tempToken).catch(() => {});
                     return null;
                 }
@@ -956,7 +999,7 @@ window.FleetmanTemporaryUploads = window.FleetmanTemporaryUploads || (() => {
                 return uploaded;
             })
             .catch((error) => {
-                if (input && input._fleetUploadSequence !== sequence) return null;
+                if (sequenceTarget && sequenceTarget._fleetUploadSequence !== sequence) return null;
                 const message = error?.message || 'The file could not be uploaded.';
                 writeHidden(hidden, {});
                 render({ info, progress, message, error: true });
